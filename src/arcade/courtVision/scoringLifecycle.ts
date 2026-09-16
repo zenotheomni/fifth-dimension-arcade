@@ -187,4 +187,3 @@ export function makeLifecycle(d: LifecycleDeps) {
 
   return { resetBall, endRun, resolveShot }
 }
-
