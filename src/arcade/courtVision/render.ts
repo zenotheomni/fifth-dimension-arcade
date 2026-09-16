@@ -1,3 +1,4 @@
+import { COURT_VISION_PLACEMENT } from '../brandPlacement'
 import {
   PALETTE,
   clamp,
@@ -61,7 +62,7 @@ export function drawCourt(
   ctx.fill()
 
   ctx.save()
-  ctx.globalAlpha = 0.17
+  ctx.globalAlpha = COURT_VISION_PLACEMENT.centerCourtOpacity
   ctx.strokeStyle = PALETTE.soft
   ctx.lineWidth = 2
   const ccx = w * 0.5
@@ -74,7 +75,7 @@ export function drawCourt(
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   ctx.fillStyle = PALETTE.soft
-  ctx.fillText('5D', ccx, ccy)
+  ctx.fillText(COURT_VISION_PLACEMENT.centerCourtMark, ccx, ccy)
   ctx.restore()
 
   ctx.save()
@@ -89,12 +90,14 @@ export function drawCourt(
   ctx.fillStyle = PALETTE.signal
   ctx.font = `600 ${Math.max(9, Math.floor(w * 0.022))}px Oswald, Impact, sans-serif`
   ctx.textAlign = 'right'
-  ctx.fillText('5D', w * 0.94, h * 0.52)
+  ctx.fillText(COURT_VISION_PLACEMENT.rimPlateMark, w * 0.94, h * 0.52)
   ctx.restore()
 
   drawCrowd(ctx, w, h)
 
   const bb = L.backboard
+  // Faint geometry only — COURT_VISION_PLACEMENT.backboardBigLogo must stay false
+  void COURT_VISION_PLACEMENT.backboardBigLogo
   ctx.save()
   ctx.fillStyle = 'rgba(242,240,234,0.08)'
   ctx.strokeStyle = 'rgba(242,240,234,0.28)'
@@ -137,7 +140,7 @@ export function drawCourt(
   ctx.font = `700 ${Math.max(9, Math.floor(L.rimR * 0.28))}px Oswald, Impact, sans-serif`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  ctx.fillText('5D', L.rimCx, L.rimCy + L.rimR * 0.02)
+  ctx.fillText(COURT_VISION_PLACEMENT.rimPlateMark, L.rimCx, L.rimCy + L.rimR * 0.02)
   ctx.restore()
 
   if (flash.mint > 0) {
@@ -182,7 +185,7 @@ export function drawBall(ctx: CanvasRenderingContext2D, ball: BallState) {
   ctx.font = `700 ${Math.max(7, Math.floor(r * 0.38))}px Oswald, Impact, sans-serif`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  ctx.fillText('5D', 0, r * 0.15)
+  ctx.fillText(COURT_VISION_PLACEMENT.ballSeamStamp, 0, r * 0.15)
 
   ctx.restore()
 }
