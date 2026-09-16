@@ -5,10 +5,16 @@ export type Cabinet = {
   title: string
   tagline: string
   status: CabinetStatus
+  /** Shown on cabinet glass when set (e.g. NEW) */
   badge?: string
+  /** React Router path relative to basename /arcade */
   route?: string
 }
 
+/**
+ * Lobby cabinets — Creative Brief order.
+ * Lit = playable shell / glow. COMING UP = dimmed teaser.
+ */
 export const cabinets: Cabinet[] = [
   {
     id: 'court-vision',
@@ -40,5 +46,5 @@ export const cabinets: Cabinet[] = [
 ]
 
 export function statusLabel(status: CabinetStatus): string {
-  return status === 'lit' ? '' : 'COMING UP'
+  return status === 'lit' ? 'LIT' : 'COMING UP'
 }
