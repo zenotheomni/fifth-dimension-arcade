@@ -1,0 +1,11 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/api/scores", "destination": "/api/scores" },
+    { "source": "/api/challenges", "destination": "/api/challenges" },
+    { "source": "/api/challenges/:id", "destination": "/api/challenges/[id]" },
+    { "source": "/arcade", "destination": "/arcade/index.html" },
+    { "source": "/arcade/(.*)", "destination": "/arcade/index.html" }
+  ]
+}
