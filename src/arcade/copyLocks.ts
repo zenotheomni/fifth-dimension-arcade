@@ -1,3 +1,4 @@
+/** Shared copy locks — Creative Brief. Use in UI strings where relevant. */
 export const COPY = {
   FLOW_STATE: 'Flow state.',
   FIFTH_STATE_UNLOCKED: 'Fifth State unlocked.',
@@ -7,6 +8,7 @@ export const COPY = {
 
 export type CopyLock = (typeof COPY)[keyof typeof COPY]
 
+/** Court Vision moment lines (M2+) */
 export const COURT_VISION_COPY = {
   FIRST_MAKE: "You're in.",
   STREAK_X5: COPY.FLOW_STATE,
@@ -16,6 +18,7 @@ export const COURT_VISION_COPY = {
   WON_CHALLENGE: 'You shifted the scoreboard.',
 } as const
 
+/** Fifth Run moment lines (M4+) */
 export const FIFTH_RUN_COPY = {
   START: "You're already moving.",
   FIRST_KEY: 'Key acquired.',
