@@ -1,0 +1,233 @@
+/* —— Court Vision Endless (M2) —— */
+
+
+.arcade-root--game {
+  overflow: hidden;
+  height: 100dvh;
+  max-height: 100dvh;
+}
+
+.cv-root {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  max-height: 100dvh;
+  background: var(--void);
+}
+
+.cv-hud {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.65rem 0.9rem calc(0.35rem + env(safe-area-inset-top));
+  padding-top: calc(0.65rem + env(safe-area-inset-top));
+  font-family: Oswald, Impact, sans-serif;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  /* No giant brand watermark on HUD */
+}
+
+.cv-hud__left {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 4.5rem;
+}
+
+.cv-hud__back {
+  color: var(--mint);
+  text-decoration: none;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  opacity: 0.85;
+  text-transform: none;
+  font-family: Inter, system-ui, sans-serif;
+}
+
+.cv-hud__mode {
+  font-size: 0.65rem;
+  color: var(--muted);
+}
+
+.cv-hud__scoreblock {
+  text-align: center;
+}
+
+.cv-hud__score {
+  display: block;
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: var(--soft);
+  line-height: 1;
+}
+
+.cv-hud__meta {
+  font-size: 0.7rem;
+  color: var(--signal);
+}
+
+.cv-hud__pb {
+  min-width: 4.5rem;
+  text-align: right;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.cv-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0 0.5rem;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(242, 240, 234, 0.1);
+  box-shadow: 0 0 0 1px rgba(255, 90, 31, 0.08), 0 16px 40px rgba(0, 0, 0, 0.4);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.cv-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.cv-toasts {
+  pointer-events: none;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 12%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  z-index: 3;
+}
+
+.cv-toast {
+  padding: 0.35rem 0.85rem;
+  border-radius: 999px;
+  background: rgba(10, 10, 12, 0.72);
+  border: 1px solid rgba(242, 240, 234, 0.18);
+  color: var(--soft);
+  font-family: Oswald, Impact, sans-serif;
+  font-size: 0.8rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  animation: cv-toast-in 0.25s ease-out;
+}
+
+.cv-toast--mint {
+  border-color: rgba(125, 255, 195, 0.55);
+  color: var(--mint);
+  text-shadow: 0 0 12px rgba(125, 255, 195, 0.35);
+}
+
+@keyframes cv-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.cv-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 1.5rem;
+  text-align: center;
+  background: rgba(10, 10, 12, 0.72);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.cv-overlay--end {
+  background: rgba(10, 10, 12, 0.82);
+}
+
+.cv-overlay__title {
+  font-family: Oswald, Impact, sans-serif;
+  font-weight: 600;
+  font-size: clamp(2.2rem, 10vw, 3.4rem);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin: 0;
+  color: var(--soft);
+}
+
+.cv-overlay__copy {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.45;
+  max-width: 28ch;
+}
+
+.cv-overlay__whisper {
+  margin: 0;
+  color: var(--mint);
+  font-size: 0.9rem;
+  letter-spacing: 0.04em;
+}
+
+.cv-end-doors {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.arcade-soft-cta--ghost {
+  border-color: rgba(107, 107, 115, 0.55);
+  background: transparent;
+  color: var(--soft);
+}
+
+.arcade-soft-cta--ghost:hover,
+.arcade-soft-cta--ghost:focus-visible {
+  border-color: var(--mint);
+  background: rgba(125, 255, 195, 0.08);
+}
+
+button.arcade-soft-cta {
+  appearance: none;
+  cursor: pointer;
+  font: inherit;
+}
+
+.cv-hint {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0.55rem 1rem calc(0.75rem + env(safe-area-inset-bottom));
+  text-align: center;
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+@media (min-width: 768px) {
+  /* Court Vision is playable on desktop for builders; lobby still gates */
+  .cv-stage {
+    max-width: 420px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
