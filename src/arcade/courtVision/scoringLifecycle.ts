@@ -26,6 +26,9 @@ export type LifecycleDeps = {
   perfectReleaseRef: MutableRefObject<boolean>
   scoreRef: MutableRefObject<number>
   streakRef: MutableRefObject<number>
+  peakStreakRef: MutableRefObject<number>
+  shotsRef: MutableRefObject<number>
+  missesRef: MutableRefObject<number>
   flashRef: MutableRefObject<HudFlash>
   firstMakeRef: MutableRefObject<boolean>
   announcedX5: MutableRefObject<boolean>
@@ -65,6 +68,7 @@ export function makeLifecycle(d: LifecycleDeps) {
   }
 
   const endRun = async (finalScore: number) => {
+    if (d.phaseRef.current === 'ended') return
     d.syncPhase('ended')
     const prevPb = d.pb
     const best = savePersonalBest(finalScore)
@@ -75,6 +79,9 @@ export function makeLifecycle(d: LifecycleDeps) {
     track('arcade_court_vision_run_end', {
       score: finalScore,
       streak: d.streakRef.current,
+      streakPeak: d.peakStreakRef.current,
+      shots: d.shotsRef.current,
+      misses: d.missesRef.current,
       pb: best,
       newPb: isNew,
     })
@@ -85,7 +92,9 @@ export function makeLifecycle(d: LifecycleDeps) {
         score: finalScore,
         meta: {
           playerId: getOrCreatePlayerId(),
-          streakPeak: d.streakRef.current,
+          streakPeak: d.peakStreakRef.current,
+          shots: d.shotsRef.current,
+          misses: d.missesRef.current,
           pb: best,
         },
       })
@@ -105,18 +114,32 @@ export function makeLifecycle(d: LifecycleDeps) {
       banked5d: banked5d && kind !== 'miss',
     })
     d.setLastShot(result)
+    d.shotsRef.current += 1
 
     if (kind === 'miss') {
       playMiss()
       d.streakRef.current = 0
+      d.missesRef.current += 1
       d.setStreak(0)
-      d.pushToast('Miss — run over')
-      void endRun(d.scoreRef.current)
+      d.pushToast('Miss · multiplier reset')
+      track('arcade_court_vision_shot', {
+        kind,
+        points: 0,
+        streak: 0,
+        swish: false,
+        banked5d: false,
+        perfect: false,
+      })
+      window.setTimeout(() => {
+        if (d.phaseRef.current === 'ended') return
+        resetBall()
+      }, 650)
       return
     }
 
     d.scoreRef.current += result.points
     d.streakRef.current = result.streakAfter
+    d.peakStreakRef.current = Math.max(d.peakStreakRef.current, result.streakAfter)
     d.setScore(d.scoreRef.current)
     d.setStreak(result.streakAfter)
 
@@ -130,7 +153,7 @@ export function makeLifecycle(d: LifecycleDeps) {
     if (banked5d) {
       playBounce5d()
       d.flashRef.current.mint = Math.max(d.flashRef.current.mint, 0.85)
-      d.pushToast('5D bounce', true)
+      d.pushToast('5D bounce +2', true)
     }
 
     if (!d.firstMakeRef.current) {

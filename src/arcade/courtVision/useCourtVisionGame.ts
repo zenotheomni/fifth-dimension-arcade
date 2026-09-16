@@ -35,6 +35,9 @@ export function useCourtVisionGame() {
   const perfectReleaseRef = useRef(false)
   const scoreRef = useRef(0)
   const streakRef = useRef(0)
+  const peakStreakRef = useRef(0)
+  const shotsRef = useRef(0)
+  const missesRef = useRef(0)
   const flashRef = useRef<HudFlash>({ mint: 0, shake: 0 })
   const toastIdRef = useRef(0)
   const firstMakeRef = useRef(false)
@@ -67,7 +70,7 @@ export function useCourtVisionGame() {
     setPhase(p)
   }, [])
 
-  const { resetBall, resolveShot } = useMemo(() => makeLifecycle({
+  const { resetBall, resolveShot, endRun } = useMemo(() => makeLifecycle({
     phaseRef,
     ballRef,
     layoutRef,
@@ -76,6 +79,9 @@ export function useCourtVisionGame() {
     perfectReleaseRef,
     scoreRef,
     streakRef,
+    peakStreakRef,
+    shotsRef,
+    missesRef,
     flashRef,
     firstMakeRef,
     announcedX5,
@@ -118,6 +124,9 @@ export function useCourtVisionGame() {
     unlockAudio()
     scoreRef.current = 0
     streakRef.current = 0
+    peakStreakRef.current = 0
+    shotsRef.current = 0
+    missesRef.current = 0
     firstMakeRef.current = false
     announcedX5.current = false
     announcedX10.current = false
@@ -157,6 +166,7 @@ export function useCourtVisionGame() {
     started,
     mult: streakMultiplier(streak),
     startRun,
+    endRun: () => void endRun(scoreRef.current),
     onPointerDown,
     onPointerMove,
     onPointerUp,

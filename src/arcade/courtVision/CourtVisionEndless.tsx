@@ -19,7 +19,13 @@ export default function CourtVisionEndless({ onExit }: CourtVisionEndlessProps) 
           <Link to="/" className="cv-hud__back" onClick={onExit}>
             ← Floor
           </Link>
-          <span className="cv-hud__mode">Endless</span>
+          {g.started && g.phase !== 'ended' ? (
+            <button type="button" className="cv-hud__end" onClick={g.endRun}>
+              End run
+            </button>
+          ) : (
+            <span className="cv-hud__mode">Endless</span>
+          )}
         </div>
         <div className="cv-hud__scoreblock">
           <span className="cv-hud__score">{g.score}</span>
@@ -58,7 +64,7 @@ export default function CourtVisionEndless({ onExit }: CourtVisionEndlessProps) 
             <h1 className="cv-overlay__title">Endless</h1>
             <p className="cv-overlay__copy">
               Hold the ball, pull to aim and power, release. One mid-air nudge.
-              Miss ends the run.
+              Misses reset your multiplier. End the run whenever you're ready.
             </p>
             <button
               type="button"
