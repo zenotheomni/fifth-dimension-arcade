@@ -148,7 +148,76 @@ export function drawCourt(
     ctx.globalAlpha = clamp(flash.mint, 0, 1) * 0.35
     ctx.fillStyle = PALETTE.mint
     ctx.fillRect(0, 0, w, h)
+    ctx.restore()
   }
+}
 
-  // NOTE: incomplete - will fix
+export function drawBall(ctx: CanvasRenderingContext2D, ball: BallState) {
+  const { pos, radius: r, spinning } = ball
+  ctx.save()
+  ctx.translate(pos.x, pos.y)
+  ctx.rotate(spinning)
+
+  const grad = ctx.createRadialGradient(-r * 0.35, -r * 0.35, r * 0.1, 0, 0, r)
+  grad.addColorStop(0, '#FF8A4C')
+  grad.addColorStop(0.55, PALETTE.signal)
+  grad.addColorStop(1, '#B83810')
+  ctx.fillStyle = grad
+  ctx.beginPath()
+  ctx.arc(0, 0, r, 0, Math.PI * 2)
+  ctx.fill()
+
+  ctx.strokeStyle = 'rgba(10,10,12,0.55)'
+  ctx.lineWidth = 1.2
+  ctx.beginPath()
+  ctx.arc(0, 0, r * 0.92, 0, Math.PI * 2)
+  ctx.stroke()
+  ctx.beginPath()
+  ctx.moveTo(-r * 0.9, 0)
+  ctx.quadraticCurveTo(0, -r * 0.35, r * 0.9, 0)
+  ctx.stroke()
+  ctx.beginPath()
+  ctx.moveTo(-r * 0.9, 0)
+  ctx.quadraticCurveTo(0, r * 0.35, r * 0.9, 0)
+  ctx.stroke()
+
+  ctx.fillStyle = 'rgba(242,240,234,0.55)'
+  ctx.font = `700 ${Math.max(7, Math.floor(r * 0.38))}px Oswald, Impact, sans-serif`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(COURT_VISION_PLACEMENT.ballSeamStamp, 0, r * 0.15)
+
+  ctx.restore()
+}
+
+export function drawAim(
+  ctx: CanvasRenderingContext2D,
+  rest: Vec,
+  pull: Vec,
+  power: number,
+  perfect: boolean,
+) {
+  const aim = {
+    x: rest.x - (pull.x - rest.x),
+    y: rest.y - (pull.y - rest.y),
+  }
+  ctx.save()
+  ctx.strokeStyle = perfect
+    ? 'rgba(125,255,195,0.85)'
+    : 'rgba(242,240,234,0.55)'
+  ctx.lineWidth = 2
+  ctx.setLineDash([6, 6])
+  ctx.beginPath()
+  ctx.moveTo(rest.x, rest.y)
+  ctx.lineTo(aim.x, aim.y)
+  ctx.stroke()
+  ctx.setLineDash([])
+
+  const ang = Math.atan2(aim.y - rest.y, aim.x - rest.x)
+  ctx.strokeStyle = perfect ? PALETTE.mint : PALETTE.signal
+  ctx.lineWidth = 4
+  ctx.beginPath()
+  ctx.arc(rest.x, rest.y, 28, ang - 0.9, ang - 0.9 + power * 1.8)
+  ctx.stroke()
+  ctx.restore()
 }
