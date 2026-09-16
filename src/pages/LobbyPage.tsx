@@ -74,9 +74,15 @@ export default function LobbyPage() {
               const inner = (
                 <>
                   <div className="arcade-cabinet__glass" aria-hidden />
-                  {label ? (
-                    <span className="arcade-cabinet__status">{label}</span>
-                  ) : null}
+                  <span
+                    className={
+                      cabinet.status === 'lit'
+                        ? 'arcade-cabinet__status arcade-cabinet__status--lit'
+                        : 'arcade-cabinet__status'
+                    }
+                  >
+                    {label}
+                  </span>
                   {cabinet.badge ? (
                     <span className="arcade-cabinet__badge">{cabinet.badge}</span>
                   ) : null}

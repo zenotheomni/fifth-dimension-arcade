@@ -46,5 +46,5 @@ export const cabinets: Cabinet[] = [
 ]
 
 export function statusLabel(status: CabinetStatus): string {
-  return status === 'lit' ? '' : 'COMING UP'
+  return status === 'lit' ? 'LIT' : 'COMING UP'
 }
