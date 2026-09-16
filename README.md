@@ -12,7 +12,7 @@ Mobile-web arcade for [5Dimperial](https://5dimperial.com) — **The Fifth Floor
 - Arcade-core: identity, cabinet config, analytics stub
 - API stubs: `POST /scores`, `POST /challenges`, `GET /challenges/:id`
 
-See `CREATIVE_BRIEF.md` (source of truth) and `BRAND_PLACEMENT.md`.
+See `CREATIVE_BRIEF.md` (source of truth), `BRAND_PLACEMENT.md`, and **`DEPLOY.md`** for Vercel + `5Dimperial.com` linking.
 
 ## Develop
 
@@ -31,7 +31,9 @@ npm run preview
 
 ## Deploy (Vercel)
 
-Root of this repo. `vercel.json` rewrites `/arcade` SPA + `/api` serverless. Output builds to `dist/arcade` so assets resolve under `/arcade/`.
+Import this GitHub repo in Vercel (root of the project). `vercel.json` rewrites `/arcade` SPA + `/api` serverless. Output builds to `dist/arcade` so assets resolve under `/arcade/`.
+
+Full steps: [DEPLOY.md](./DEPLOY.md).
 
 ## Routes
 
