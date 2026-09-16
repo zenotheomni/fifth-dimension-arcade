@@ -1,5 +1,5 @@
 # package-lock
 
-`package-lock.json` on `main` is the full lockfile (lockfileVersion 3) committed for reproducible installs.
+Full lock is materialized by `.github/workflows/materialize-lockfile.yml` from `scripts/lock.b64.part0`–`part3` (gzip+base64 of the builder lock).
 
-Vercel / CI should use `npm ci` (or `npm install` with this lock) so dependency versions match the builder box. See DEPLOY.md for deploy notes.
+After that workflow commits `package-lock.json` on `main`, Vercel / CI should use `npm ci` (or `npm install` with this lock). See DEPLOY.md.
