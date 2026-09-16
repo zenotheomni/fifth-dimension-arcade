@@ -28,3 +28,12 @@ export const END_DOORS = {
     { id: 'record-store', label: 'Enter record store' },
   ],
 } as const
+
+/** In-world placement knobs used by Court Vision canvas (M2) */
+export const COURT_VISION_PLACEMENT = {
+  centerCourtOpacity: 0.17, // ~15–20%
+  centerCourtMark: '5D',
+  rimPlateMark: '5D',
+  ballSeamStamp: '5D',
+  backboardBigLogo: false,
+} as const
