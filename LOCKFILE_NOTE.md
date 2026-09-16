@@ -1,13 +1,5 @@
 # package-lock
 
-There is **no** `package-lock.json` on `main` right now.
+`package-lock.json` on `main` is the full lockfile (lockfileVersion 3) committed for reproducible installs.
 
-A stub lock was briefly committed and **broke** `npm install` (`Cannot create property 'name' on boolean 'true'`). It was removed so Vercel / local installs can resolve from `package.json` alone.
-
-To add a full lock later (lockfileVersion 3, ~100KB):
-- Push from a local clone with authenticated git, or
-- Drop the file via GitHub UI
-
-The MCP `push_files` / `create_or_update_file` path cannot carry a file that large.
-
-Vercel: Install command `npm install` (see DEPLOY.md).
+Vercel / CI should use `npm ci` (or `npm install` with this lock) so dependency versions match the builder box. See DEPLOY.md for deploy notes.
