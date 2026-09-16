@@ -1,33 +1,6 @@
-/*
- * The Fifth Floor — M1 lobby + shell
- *
- * CSS tokens (Creative Brief):
- *   Void  #0A0A0C | Ink #1A1028 | Signal #FF5A1F
- *   Soft  #F2F0EA | Mint #7DFFC3 | Muted #6B6B73
- *
- * Brand placement: rim / world-object marks only — NO giant HUD watermarks.
- * See BRAND_PLACEMENT.md and src/arcade/brandPlacement.ts
- */
-
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
-
-html,
-body,
-#root {
-  margin: 0;
-  min-height: 100%;
-}
-
-body {
-  background: #0a0a0c;
-}
+/* The Fifth Floor — M1 lobby + shell */
 
 .arcade-root {
-  /* Palette tokens — day one */
   --void: #0a0a0c;
   --ink: #1a1028;
   --signal: #ff5a1f;
@@ -38,9 +11,15 @@ body {
   min-height: 100dvh;
   background: var(--void);
   color: var(--soft);
-  font-family: Inter, system-ui, sans-serif;
+  font-family: var(--font-inter), Inter, system-ui, sans-serif;
   position: relative;
   overflow-x: hidden;
+}
+
+.arcade-root *,
+.arcade-root *::before,
+.arcade-root *::after {
+  box-sizing: border-box;
 }
 
 .arcade-glow {
@@ -103,7 +82,7 @@ body {
     rgba(26, 16, 40, 0.6),
     rgba(10, 10, 12, 0.8)
   );
-  font-family: Oswald, Impact, sans-serif;
+  font-family: var(--font-oswald), Oswald, Impact, sans-serif;
   font-weight: 500;
   font-size: 0.85rem;
   letter-spacing: 0.22em;
@@ -160,20 +139,16 @@ body {
   transition: transform 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
 }
 
-.arcade-cabinet--lit {
+.arcade-cabinet--live {
   border-color: rgba(255, 90, 31, 0.35);
   cursor: pointer;
-  box-shadow:
-    0 0 0 1px rgba(255, 90, 31, 0.2),
-    0 0 28px rgba(255, 90, 31, 0.12),
-    0 20px 40px rgba(0, 0, 0, 0.45);
 }
 
-.arcade-cabinet--lit:active {
+.arcade-cabinet--live:active {
   transform: scale(0.98);
 }
 
-.arcade-cabinet--coming-up {
+.arcade-cabinet--coming {
   opacity: 0.48;
   filter: grayscale(0.35);
   pointer-events: none;
@@ -194,7 +169,7 @@ body {
   background-size: 200% 100%;
 }
 
-.arcade-cabinet--lit .arcade-cabinet__glass {
+.arcade-cabinet--live .arcade-cabinet__glass {
   animation: arcade-glass-sweep 3s ease-in-out infinite;
 }
 
@@ -214,7 +189,7 @@ body {
   position: absolute;
   top: 1rem;
   right: 1rem;
-  font-family: Oswald, Impact, sans-serif;
+  font-family: var(--font-oswald), Oswald, Impact, sans-serif;
   font-size: 0.65rem;
   letter-spacing: 0.14em;
   padding: 0.2rem 0.45rem;
@@ -224,7 +199,7 @@ body {
 }
 
 .arcade-cabinet__title {
-  font-family: Oswald, Impact, sans-serif;
+  font-family: var(--font-oswald), Oswald, Impact, sans-serif;
   font-weight: 600;
   font-size: 1.65rem;
   letter-spacing: 0.04em;
@@ -247,13 +222,12 @@ body {
   font-size: 0.65rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--muted);
-  font-family: Oswald, Impact, sans-serif;
+  color: var(--mint);
+  font-family: var(--font-oswald), Oswald, Impact, sans-serif;
 }
 
-.arcade-cabinet__status--lit {
-  color: var(--mint);
-  text-shadow: 0 0 10px rgba(125, 255, 195, 0.45);
+.arcade-cabinet--coming .arcade-cabinet__status {
+  color: var(--muted);
 }
 
 .arcade-teaser {
@@ -270,10 +244,6 @@ body {
 .arcade-teaser strong {
   color: var(--signal);
   font-weight: 600;
-}
-
-.arcade-teaser__hint {
-  color: var(--muted);
 }
 
 .arcade-dock {
@@ -297,6 +267,8 @@ body {
 }
 
 .arcade-dock__btn {
+  appearance: none;
+  cursor: pointer;
   flex: 1;
   max-width: 120px;
   text-align: center;
@@ -305,7 +277,7 @@ body {
   border: 1px solid rgba(242, 240, 234, 0.1);
   background: rgba(26, 16, 40, 0.5);
   color: var(--soft);
-  font-family: Oswald, Impact, sans-serif;
+  font-family: var(--font-oswald), Oswald, Impact, sans-serif;
   font-size: 0.7rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -320,7 +292,7 @@ body {
   outline: none;
 }
 
-/* Desktop gate — Open on your phone + QR */
+/* Desktop gate */
 
 .arcade-desktop-gate {
   display: none;
@@ -336,7 +308,7 @@ body {
 }
 
 .arcade-desktop-gate__title {
-  font-family: Oswald, Impact, sans-serif;
+  font-family: var(--font-oswald), Oswald, Impact, sans-serif;
   font-size: clamp(1.75rem, 3vw, 2.4rem);
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -358,14 +330,6 @@ body {
   padding: 10px;
   background: var(--soft);
   box-shadow: 0 0 40px rgba(255, 90, 31, 0.15);
-}
-
-.arcade-desktop-gate__whisper {
-  margin: 0;
-  color: var(--mint);
-  font-size: 0.85rem;
-  letter-spacing: 0.08em;
-  opacity: 0.8;
 }
 
 @media (min-width: 768px) {
@@ -393,7 +357,7 @@ body {
 }
 
 .arcade-shell__title {
-  font-family: Oswald, Impact, sans-serif;
+  font-family: var(--font-oswald), Oswald, Impact, sans-serif;
   font-weight: 600;
   font-size: clamp(2rem, 8vw, 3rem);
   letter-spacing: 0.1em;
@@ -403,18 +367,11 @@ body {
 }
 
 .arcade-shell__copy {
-  margin: 0 0 1rem;
+  margin: 0 0 1.75rem;
   color: var(--muted);
   font-size: 1rem;
   line-height: 1.5;
   max-width: 28ch;
-}
-
-.arcade-shell__whisper {
-  margin: 0 0 1.75rem;
-  color: var(--mint);
-  font-size: 0.9rem;
-  letter-spacing: 0.04em;
 }
 
 .arcade-shell__actions {
@@ -446,7 +403,7 @@ body {
   border: 1px solid rgba(255, 90, 31, 0.45);
   color: var(--soft);
   text-decoration: none;
-  font-family: Oswald, Impact, sans-serif;
+  font-family: var(--font-oswald), Oswald, Impact, sans-serif;
   font-size: 0.8rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
