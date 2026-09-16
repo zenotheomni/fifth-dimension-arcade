@@ -1,0 +1,478 @@
+/*
+ * The Fifth Floor — M1 lobby + shell
+ *
+ * CSS tokens (Creative Brief):
+ *   Void  #0A0A0C | Ink #1A1028 | Signal #FF5A1F
+ *   Soft  #F2F0EA | Mint #7DFFC3 | Muted #6B6B73
+ *
+ * Brand placement: rim / world-object marks only — NO giant HUD watermarks.
+ * See BRAND_PLACEMENT.md and src/arcade/brandPlacement.ts
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  background: #0a0a0c;
+}
+
+.arcade-root {
+  /* Palette tokens — day one */
+  --void: #0a0a0c;
+  --ink: #1a1028;
+  --signal: #ff5a1f;
+  --soft: #f2f0ea;
+  --mint: #7dffc3;
+  --muted: #6b6b73;
+
+  min-height: 100dvh;
+  background: var(--void);
+  color: var(--soft);
+  font-family: Inter, system-ui, sans-serif;
+  position: relative;
+  overflow-x: hidden;
+}
+
+.arcade-glow {
+  pointer-events: none;
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.35;
+  z-index: 0;
+}
+
+.arcade-glow--ink {
+  width: 280px;
+  height: 280px;
+  background: var(--ink);
+  top: -60px;
+  left: -40px;
+}
+
+.arcade-glow--signal {
+  width: 220px;
+  height: 220px;
+  background: var(--signal);
+  bottom: 20%;
+  right: -60px;
+  opacity: 0.22;
+}
+
+.arcade-glow--mint {
+  width: 160px;
+  height: 160px;
+  background: var(--mint);
+  bottom: 8%;
+  left: 10%;
+  opacity: 0.12;
+}
+
+/* —— Lobby —— */
+
+.arcade-lobby {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  padding: 1.25rem 0 5.5rem;
+}
+
+.arcade-ticket {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 1rem;
+  margin-bottom: 1.5rem;
+  border: 1px dashed rgba(242, 240, 234, 0.35);
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    rgba(26, 16, 40, 0.6),
+    rgba(10, 10, 12, 0.8)
+  );
+  font-family: Oswald, Impact, sans-serif;
+  font-weight: 500;
+  font-size: 0.85rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--soft);
+}
+
+.arcade-ticket::before,
+.arcade-ticket::after {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--signal);
+  box-shadow: 0 0 8px var(--signal);
+}
+
+.arcade-cabinets {
+  display: flex;
+  gap: 1rem;
+  padding: 0 1.25rem 0.75rem;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.arcade-cabinets::-webkit-scrollbar {
+  display: none;
+}
+
+.arcade-cabinet {
+  flex: 0 0 min(78vw, 280px);
+  scroll-snap-align: center;
+  position: relative;
+  border-radius: 16px;
+  padding: 1.25rem 1.1rem 1.4rem;
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  text-decoration: none;
+  color: inherit;
+  overflow: hidden;
+  border: 1px solid rgba(242, 240, 234, 0.12);
+  background:
+    linear-gradient(160deg, rgba(26, 16, 40, 0.55), rgba(10, 10, 12, 0.92)),
+    rgba(10, 10, 12, 0.9);
+  box-shadow:
+    0 0 0 1px rgba(255, 90, 31, 0.08),
+    0 20px 40px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: transform 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+}
+
+.arcade-cabinet--lit {
+  border-color: rgba(255, 90, 31, 0.35);
+  cursor: pointer;
+  box-shadow:
+    0 0 0 1px rgba(255, 90, 31, 0.2),
+    0 0 28px rgba(255, 90, 31, 0.12),
+    0 20px 40px rgba(0, 0, 0, 0.45);
+}
+
+.arcade-cabinet--lit:active {
+  transform: scale(0.98);
+}
+
+.arcade-cabinet--coming-up {
+  opacity: 0.48;
+  filter: grayscale(0.35);
+  pointer-events: none;
+  border-color: rgba(107, 107, 115, 0.35);
+}
+
+.arcade-cabinet__glass {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    120deg,
+    transparent 30%,
+    rgba(125, 255, 195, 0.08) 48%,
+    transparent 62%
+  );
+  background-size: 200% 100%;
+}
+
+.arcade-cabinet--lit .arcade-cabinet__glass {
+  animation: arcade-glass-sweep 3s ease-in-out infinite;
+}
+
+@keyframes arcade-glass-sweep {
+  0%,
+  100% {
+    background-position: 120% 0;
+    opacity: 0.55;
+  }
+  50% {
+    background-position: -20% 0;
+    opacity: 1;
+  }
+}
+
+.arcade-cabinet__badge {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  font-family: Oswald, Impact, sans-serif;
+  font-size: 0.65rem;
+  letter-spacing: 0.14em;
+  padding: 0.2rem 0.45rem;
+  border-radius: 3px;
+  background: var(--signal);
+  color: var(--void);
+}
+
+.arcade-cabinet__title {
+  font-family: Oswald, Impact, sans-serif;
+  font-weight: 600;
+  font-size: 1.65rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin: 0 0 0.35rem;
+  position: relative;
+}
+
+.arcade-cabinet__tagline {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+  position: relative;
+}
+
+.arcade-cabinet__status {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  font-size: 0.65rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-family: Oswald, Impact, sans-serif;
+}
+
+.arcade-cabinet__status--lit {
+  color: var(--mint);
+  text-shadow: 0 0 10px rgba(125, 255, 195, 0.45);
+}
+
+.arcade-teaser {
+  margin: 1rem 1.25rem 0;
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 90, 31, 0.25);
+  background: rgba(26, 16, 40, 0.45);
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  color: var(--soft);
+}
+
+.arcade-teaser strong {
+  color: var(--signal);
+  font-weight: 600;
+}
+
+.arcade-teaser__hint {
+  color: var(--muted);
+}
+
+.arcade-dock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+  display: flex;
+  justify-content: space-around;
+  gap: 0.25rem;
+  padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom));
+  background: linear-gradient(
+    180deg,
+    transparent,
+    rgba(10, 10, 12, 0.92) 28%
+  );
+  border-top: 1px solid rgba(242, 240, 234, 0.08);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.arcade-dock__btn {
+  flex: 1;
+  max-width: 120px;
+  text-align: center;
+  padding: 0.55rem 0.4rem;
+  border-radius: 8px;
+  border: 1px solid rgba(242, 240, 234, 0.1);
+  background: rgba(26, 16, 40, 0.5);
+  color: var(--soft);
+  font-family: Oswald, Impact, sans-serif;
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-decoration: none;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.arcade-dock__btn:hover,
+.arcade-dock__btn:focus-visible {
+  border-color: rgba(125, 255, 195, 0.4);
+  color: var(--mint);
+  outline: none;
+}
+
+/* Desktop gate — Open on your phone + QR */
+
+.arcade-desktop-gate {
+  display: none;
+  position: relative;
+  z-index: 1;
+  min-height: 100dvh;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  padding: 2rem;
+  text-align: center;
+}
+
+.arcade-desktop-gate__title {
+  font-family: Oswald, Impact, sans-serif;
+  font-size: clamp(1.75rem, 3vw, 2.4rem);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.arcade-desktop-gate__copy {
+  margin: 0;
+  color: var(--muted);
+  max-width: 28ch;
+  line-height: 1.5;
+}
+
+.arcade-desktop-gate__qr {
+  width: 220px;
+  height: 220px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 90, 31, 0.35);
+  padding: 10px;
+  background: var(--soft);
+  box-shadow: 0 0 40px rgba(255, 90, 31, 0.15);
+}
+
+.arcade-desktop-gate__whisper {
+  margin: 0;
+  color: var(--mint);
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  opacity: 0.8;
+}
+
+@media (min-width: 768px) {
+  .arcade-lobby-mobile {
+    display: none;
+  }
+
+  .arcade-desktop-gate {
+    display: flex;
+  }
+}
+
+/* —— Shell pages —— */
+
+.arcade-shell {
+  position: relative;
+  z-index: 1;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1.5rem;
+  text-align: center;
+}
+
+.arcade-shell__title {
+  font-family: Oswald, Impact, sans-serif;
+  font-weight: 600;
+  font-size: clamp(2rem, 8vw, 3rem);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin: 0 0 0.75rem;
+  color: var(--soft);
+}
+
+.arcade-shell__copy {
+  margin: 0 0 1rem;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1.5;
+  max-width: 28ch;
+}
+
+.arcade-shell__whisper {
+  margin: 0 0 1.75rem;
+  color: var(--mint);
+  font-size: 0.9rem;
+  letter-spacing: 0.04em;
+}
+
+.arcade-shell__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.arcade-back {
+  color: var(--mint);
+  text-decoration: none;
+  font-size: 0.85rem;
+  letter-spacing: 0.06em;
+  opacity: 0.85;
+  transition: opacity 0.2s ease;
+}
+
+.arcade-back:hover,
+.arcade-back:focus-visible {
+  opacity: 1;
+  outline: none;
+}
+
+.arcade-soft-cta {
+  display: inline-block;
+  padding: 0.65rem 1.25rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 90, 31, 0.45);
+  color: var(--soft);
+  text-decoration: none;
+  font-family: Oswald, Impact, sans-serif;
+  font-size: 0.8rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  background: rgba(255, 90, 31, 0.08);
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.arcade-soft-cta:hover,
+.arcade-soft-cta:focus-visible {
+  background: rgba(255, 90, 31, 0.16);
+  border-color: var(--signal);
+  outline: none;
+}
+
+.arcade-soft-cta--muted {
+  border-color: rgba(107, 107, 115, 0.5);
+  background: transparent;
+  color: var(--muted);
+  cursor: default;
+  pointer-events: none;
+}
+
+.arcade-shell__id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+  color: var(--signal);
+  margin-bottom: 1.25rem;
+  word-break: break-all;
+}
