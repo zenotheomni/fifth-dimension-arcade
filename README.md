@@ -1,49 +1,31 @@
-# Fifth Dimension Arcade
+# Fifth Floor Arcade
 
-Mobile-web arcade for [5Dimperial](https://5dimperial.com) — **The Fifth Floor** lobby, Court Vision, Fifth Run.
+Mobile-web arcade for [Fifth Dimension / 5D Imperial](https://5dimperial.com).
 
-**Stack:** Vite 7 · React 19 · TypeScript · react-router-dom  
-**Base path:** `/arcade/` (works on `*.vercel.app/arcade` and later `5Dimperial.com/arcade`)
+- **Stack:** Vite 7 + React 19 + TypeScript + Phaser 3
+- **Base path:** `/arcade/`
+- **Live:** https://fifth-dimension-arcade.vercel.app/arcade
 
-## M1 scope
-
-- Lobby shell (cabinets, dock, desktop QR gate)
-- Placeholder routes for Court Vision, Fifth Run, Challenge, NFC Key
-- Arcade-core: identity, cabinet config, analytics stub
-- API stubs: `POST /scores`, `POST /challenges`, `GET /challenges/:id`
-
-See `CREATIVE_BRIEF.md` (source of truth), `BRAND_PLACEMENT.md`, and **`DEPLOY.md`** for Vercel + `5Dimperial.com` linking.
-
-## Develop
+## Scripts
 
 ```bash
 npm install
-npm run dev
-# → http://127.0.0.1:5173/arcade/
-```
-
-## Build
-
-```bash
+npm run dev      # http://127.0.0.1:5173/arcade/
 npm run build
 npm run preview
 ```
 
-## Deploy (Vercel)
-
-Import this GitHub repo in Vercel (root of the project). `vercel.json` rewrites `/arcade` SPA + `/api` serverless. Output builds to `dist/arcade` so assets resolve under `/arcade/`.
-
-Full steps: [DEPLOY.md](./DEPLOY.md).
-
 ## Routes
 
-| Path | Page |
-|------|------|
-| `/arcade` | The Fifth Floor lobby |
-| `/arcade/court-vision` | Court Vision shell |
-| `/arcade/fifth-run` | Fifth Run shell |
-| `/arcade/challenge/:id` | Challenge placeholder |
-| `/arcade/key` | NFC key landing |
+| Path | Notes |
+|------|--------|
+| `/arcade` | Title screen → game select |
+| `/arcade/court-vision` | Phaser Court Vision |
+| `/arcade/fifth-run` | Shell (gameplay later) |
+| `/arcade/challenge/:id` | Friend challenge |
+| `/arcade/key` | NFC key shell |
+
+See `CREDITS.md` for music / engine / brand asset credits.
 
 Owner: 5Dimperial / Jenks · Builder: Fifth Floor
 

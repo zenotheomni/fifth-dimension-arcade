@@ -1,9 +1,9 @@
 import { challengePublicUrl } from './config'
 import { getOrCreateDeviceId, getSavedHandle } from './identity'
+import { toApiMode } from './scores'
 
 export type ChallengeCreatePayload = {
   game: string
-  /** Target score to beat (also accepted as `score` for M1 compat) */
   score: number
   mode?: string
   playerId?: string
@@ -33,7 +33,7 @@ export async function createChallenge(
     body: JSON.stringify({
       game: payload.game,
       score: payload.score,
-      mode: payload.mode ?? 'challenge',
+      mode: toApiMode(payload.mode ?? 'challenge'),
       deviceId,
       handle,
       seed: payload.seed ?? '',
@@ -76,3 +76,31 @@ export async function getChallengeJson(
 }
 
 export { challengePublicUrl }
+
+export function challengeShareText(score: number, url: string): string {
+  return `I just put up ${score} on Court Vision at the Fifth Floor Arcade. Beat it: ${url}`
+}
+
+export async function shareOrCopy(text: string, url: string): Promise<'shared' | 'copied' | 'failed'> {
+  try {
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      await navigator.share({
+        title: 'Court Vision Challenge',
+        text,
+        url,
+      })
+      return 'shared'
+    }
+  } catch {
+    /* user cancelled or share failed — fall through to copy */
+  }
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text.includes(url) ? text : `${text} ${url}`)
+      return 'copied'
+    }
+  } catch {
+    /* ignore */
+  }
+  return 'failed'
+}

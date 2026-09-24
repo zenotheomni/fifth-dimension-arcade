@@ -3,18 +3,24 @@
 ## Music
 
 - **ZENO 5** — from *ZENO RELOADED* by Jenks / Fifth Dimension Imperial
-- Source preview URL: `https://5dimperial.com/cdn/shop/t/6/assets/fd-preview-zeno-reloaded-01.mp3`
-- Bundled same-origin copy: `public/audio/zeno-5.mp3` (served at `/arcade/audio/zeno-5.mp3`)
+- Bundled: `public/audio/zeno-5.mp3` → `/arcade/audio/zeno-5.mp3`
 - Used with owner permission (Jenks / 5D Imperial).
 
-## 3D / runtime libraries
+## Engine / runtime
 
-- [three.js](https://threejs.org/) — MIT
-- [@react-three/fiber](https://docs.pmnd.rs/react-three-fiber) — MIT
-- [@react-three/drei](https://github.com/pmndrs/drei) — MIT
-- [@react-three/rapier](https://github.com/pmndrs/react-three-rapier) — MIT
-- [@react-three/postprocessing](https://github.com/pmndrs/react-postprocessing) — MIT
+- [Phaser 3](https://phaser.io/) — MIT
+- [React](https://react.dev/) / [Vite](https://vitejs.dev/) — MIT
 
-## Assets
+## Fonts
 
-All arcade geometry, materials, and shaders in this pass are procedural (no external paid models or textures). No Poly Haven / Kenney assets were bundled in this build.
+- [Bungee](https://fonts.google.com/specimen/Bungee) — SIL Open Font License 1.1 (display logotype)
+- [Inter](https://fonts.google.com/specimen/Inter) — SIL Open Font License 1.1 (UI)
+
+## Brand & art
+
+- Fifth Dimension emblem, wordmark, star-swirl — Jenks / 5D Imperial
+- Title / court / box backgrounds — original pixel plates generated for this arcade (no baked UI/text). Concept mockups are direction-only and are **not** shipped in-game.
+
+## SFX
+
+- Procedural Web Audio in `src/arcade/courtVision/sfx.ts` (original)

@@ -70,3 +70,14 @@ See `.env.example`. Set on Vercel for Production + Preview:
 
 - `src/arcade/core/{identity,scores,challenges,config}.ts`
 - `src/arcade/leaderboard/` — `useLeaderboard`, `useChallenge`, `usePersonalBest`, `useArcadeGames`
+
+## Challenge public base URL
+
+Until `5dimperial.com/arcade` is proxied to this Vercel project, set:
+
+```
+ARCADE_PUBLIC_BASE_URL=https://fifth-dimension-arcade.vercel.app/arcade
+VITE_ARCADE_PUBLIC_BASE_URL=https://fifth-dimension-arcade.vercel.app/arcade
+```
+
+Flip both back to `https://5dimperial.com/arcade` once DNS/proxy is live — code already reads the env var.

@@ -5,9 +5,7 @@ export type ScorePayload = {
   mode: string
   score: number
   meta?: Record<string, unknown>
-  /** Optional; defaults to local device id */
   deviceId?: string
-  /** Optional display handle; registers/updates player when set */
   handle?: string
   challengeId?: string
   contestId?: string
@@ -31,6 +29,13 @@ export type ScoreSubmitResult = {
   message?: string
 }
 
+/** Phaser uses timed/endless; backend uses timed60/endless/challenge */
+export function toApiMode(mode: string): string {
+  if (mode === 'timed' || mode === 'timed60') return 'timed60'
+  if (mode === 'challenge') return 'challenge'
+  return 'endless'
+}
+
 export async function postScore(payload: ScorePayload): Promise<Response> {
   const deviceId = payload.deviceId ?? getOrCreateDeviceId()
   const handle = payload.handle ?? getSavedHandle() ?? undefined
@@ -39,7 +44,7 @@ export async function postScore(payload: ScorePayload): Promise<Response> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       game: payload.game,
-      mode: payload.mode,
+      mode: toApiMode(payload.mode),
       score: payload.score,
       meta: payload.meta ?? {},
       deviceId,
