@@ -69,7 +69,7 @@ export default function LobbyCanvas() {
           powerPreference: 'high-performance',
           alpha: false,
         }}
-        camera={{ position: [0, 1.45, 4.9], fov: 42, near: 0.1, far: 40 }}
+        camera={{ position: [0, 1.65, 6.1], fov: 38, near: 0.1, far: 40 }}
         style={{ touchAction: 'none' }}
       >
         <Suspense fallback={null}>

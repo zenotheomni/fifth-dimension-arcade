@@ -391,7 +391,7 @@ export default function CourtVision3d() {
         <Canvas
           dpr={[1, 1.75]}
           gl={{ antialias: false, powerPreference: 'high-performance', alpha: false }}
-          camera={{ position: [0, 2.4, 5.2], fov: 44, near: 0.1, far: 50 }}
+          camera={{ position: [0, 2.55, 5.35], fov: 42, near: 0.1, far: 50 }}
           style={{ touchAction: 'none' }}
         >
           <Suspense fallback={null}>
