@@ -22,7 +22,7 @@ export const FLICK = {
   extremeSpeed: 2.05,
   /** Soft magnetism toward rim */
   assistRadius: 16,
-  assistPull: 0.45,
+  assistPull: 0.38,
   perfectSpeedMin: 0.82,
   perfectSpeedMax: 1.22,
   perfectAngleMax: 0.2,
@@ -31,11 +31,17 @@ export const FLICK = {
   peakBase: 55,
   peakPower: 42,
   bounceDuration: 280,
+  /** Make feel: brief hit-pause before sink continues */
+  hitPauseMs: 50,
+  /** Sink through net duration */
+  sinkDuration: 320,
+  /** Post-net floor fall */
+  floorFallDuration: 280,
   respawnMs: 400,
   ballStartSize: 56,
-  ballRimSize: 26,
+  ballRimSize: 28,
   /** Board half-width in px at game resolution (approx painted glass) */
-  boardHalfW: 78,
+  boardHalfW: 72,
   /** How far above rim the glass starts for collision (px) */
   boardClearAboveRim: 10,
   /** Front-rim short offset below hoop (px, screen +Y) */
@@ -134,20 +140,20 @@ export function analyzeFlick(
   lateral += windBias * 10
 
   const board = boardBounds(hoop.x, hoop.y, screenH)
-  const wide = Math.abs(lateral) > 24
+  const wide = Math.abs(lateral) > 18
 
   let outcome: ShotOutcome
   if (extreme && Math.abs(lateral) < 40) {
     outcome = 'over'
   } else if (wide) {
     outcome = 'wide'
-  } else if (power < 0.82) {
+  } else if (power < 0.86) {
     outcome = 'front_clank'
-  } else if (power > 1.16) {
+  } else if (power > 1.18) {
     outcome = 'bank'
   } else if (power >= 0.9 && power <= 1.1 && Math.abs(angle) < 0.12 && Math.abs(lateral) < 16) {
     outcome = 'swish'
-  } else if (Math.abs(lateral) > 20) {
+  } else if (Math.abs(lateral) > 14) {
     outcome = 'wide'
   } else {
     outcome = 'rim'
@@ -189,7 +195,7 @@ export function analyzeFlick(
     contactX = aimX
     contactY = board.contactY
     // Bank into rim if reasonably centered; else bounce out
-    if (Math.abs(lateral) < 16 && power <= 1.45) {
+    if (Math.abs(lateral) < 11 && power <= 1.38) {
       finalX = hoop.x + lateral * 0.2
       finalY = hoop.y
     } else {
