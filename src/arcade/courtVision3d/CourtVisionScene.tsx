@@ -4,14 +4,11 @@ import {
   Bloom,
   Vignette,
 } from '@react-three/postprocessing'
-import { Physics } from '@react-three/rapier'
 import { useCallback, useRef } from 'react'
 import * as THREE from 'three'
 import { PALETTE } from '../palette'
 import { Arena } from './Arena'
 import { Ball, type BallApi } from './Ball'
-import { HoopColliders } from './HoopColliders'
-import { COURT } from './courtMath'
 import type { Phase } from '../courtVision/types'
 
 export type ShotSignals = {
@@ -36,68 +33,31 @@ export function CourtVisionScene({
   signalsRef: React.MutableRefObject<ShotSignals>
   aimPos: THREE.Vector3 | null
 }) {
-  const hitRim = useRef(false)
-  const hitBoard = useRef(false)
-  const hitLogo = useRef(false)
   const scored = useRef(false)
   const resolved = useRef(false)
+  const fx = useRef({ swish: 0, rim: 0 })
 
-  useFrame(({ camera }) => {
-    const base = new THREE.Vector3(0, 2.4, 5.2)
+  useFrame(({ camera }, dt) => {
+    const base = new THREE.Vector3(0, 2.55, 5.35)
     if (shake > 0 && !reducedMotion) {
-      base.x += (Math.random() - 0.5) * 0.06 * shake
-      base.y += (Math.random() - 0.5) * 0.04 * shake
+      base.x += (Math.random() - 0.5) * 0.07 * shake
+      base.y += (Math.random() - 0.5) * 0.045 * shake
     }
     camera.position.lerp(base, 0.2)
-    camera.lookAt(0, 1.4, -1.2)
+    camera.lookAt(0, 1.55, -1.5)
 
     if (phase === 'aiming' && aimPos && ballApiRef.current) {
       ballApiRef.current.aimTo(aimPos)
     }
 
-    // Manual score / miss probe from ball position (more reliable than sensors alone)
-    if (phase === 'flight' && ballApiRef.current && !resolved.current) {
-      const p = ballApiRef.current.getPosition()
-      const rim = COURT.rim
-      const dx = p.x - rim.x
-      const dz = p.z - rim.z
-      const horizontal = Math.hypot(dx, dz)
-      // Through the hoop: near rim center, below rim, falling
-      if (
-        horizontal < COURT.rimRadius * 1.15 &&
-        p.y < rim.y + 0.05 &&
-        p.y > rim.y - 0.7
-      ) {
-        scored.current = true
-        resolved.current = true
-        const swish = !hitRim.current && !hitBoard.current
-        signalsRef.current.scored(swish, hitLogo.current)
-      }
-    }
-  })
+    fx.current.swish = Math.max(0, fx.current.swish - dt * 1.8)
+    fx.current.rim = Math.max(0, fx.current.rim - dt * 2.2)
 
-  const resetFlags = useCallback(() => {
-    hitRim.current = false
-    hitBoard.current = false
-    hitLogo.current = false
-    scored.current = false
-    resolved.current = false
-  }, [])
-
-  useFrame(() => {
     if ((phase === 'idle' || phase === 'aiming') && resolved.current) {
-      resetFlags()
+      resolved.current = false
+      scored.current = false
     }
   })
-
-  const tryResolveScore = useCallback(() => {
-    if (resolved.current || scored.current) return
-    if (phase !== 'flight') return
-    scored.current = true
-    resolved.current = true
-    const swish = !hitRim.current && !hitBoard.current
-    signalsRef.current.scored(swish, hitLogo.current)
-  }, [phase, signalsRef])
 
   const onMiss = useCallback(() => {
     if (resolved.current || scored.current) return
@@ -108,54 +68,33 @@ export function CourtVisionScene({
   return (
     <>
       <color attach="background" args={[PALETTE.void]} />
-      <fog attach="fog" args={[PALETTE.void, 10, 24]} />
-      <ambientLight intensity={0.35} />
-      <hemisphereLight args={['#2a1a3a', '#0a0a0c', 0.55]} />
+      <fog attach="fog" args={['#0c0a12', 9, 22]} />
 
-      <Physics gravity={[0, COURT.gravity, 0]} timeStep="vary">
-        <Arena mintFlash={mintFlash} />
-        <HoopColliders
-          onRim={() => {
-            if (phase === 'flight') hitRim.current = true
-          }}
-          onBackboard={(logo) => {
-            if (phase !== 'flight') return
-            hitBoard.current = true
-            if (logo) hitLogo.current = true
-          }}
-          onScoreSensor={() => {
-            if (phase === 'flight') tryResolveScore()
-          }}
-        />
-        <Ball
-          phase={phase}
-          apiRef={ballApiRef}
-          onSleepMiss={onMiss}
-          onArcScore={(swish, banked5d) => {
-            if (resolved.current || scored.current) return
-            scored.current = true
-            resolved.current = true
-            signalsRef.current.scored(swish, banked5d)
-          }}
-        />
-      </Physics>
+      <Arena mintFlash={mintFlash} fxRef={fx} />
+      <Ball
+        phase={phase}
+        apiRef={ballApiRef}
+        onSleepMiss={onMiss}
+        onRimHit={() => {
+          fx.current.rim = 1
+        }}
+        onArcScore={(swish, banked5d) => {
+          if (resolved.current || scored.current) return
+          scored.current = true
+          resolved.current = true
+          if (swish) fx.current.swish = 1
+          signalsRef.current.scored(swish, banked5d)
+        }}
+      />
 
-      {/* Always-on rest marker so thumb zone never feels empty before physics wakes */}
-      {phase === 'idle' ? (
-        <mesh position={[COURT.ballRest.x, COURT.ballRest.y, COURT.ballRest.z]}>
-          <sphereGeometry args={[COURT.ballRadius * 1.05, 24, 24]} />
-          <meshBasicMaterial color={PALETTE.signal} toneMapped={false} />
-        </mesh>
-      ) : null}
-
-      <EffectComposer multisampling={0} enabled={!reducedMotion}>
+      <EffectComposer multisampling={0}>
         <Bloom
-          intensity={0.85 + mintFlash * 1.1}
-          luminanceThreshold={0.22}
-          luminanceSmoothing={0.4}
+          intensity={reducedMotion ? 0.4 : 0.95 + mintFlash * 1.3}
+          luminanceThreshold={0.18}
+          luminanceSmoothing={0.45}
           mipmapBlur
         />
-        <Vignette offset={0.28} darkness={0.6} />
+        <Vignette offset={0.22} darkness={0.55} />
       </EffectComposer>
     </>
   )

@@ -7,7 +7,7 @@ import {
 export const COURT = {
   ballRest: { x: 0, y: 1.05, z: 2.55 },
   rim: { x: 0, y: 3.05, z: -3.0 },
-  rimRadius: 0.34,
+  rimRadius: 0.36,
   ballRadius: 0.16,
   backboard: { x: 0, y: 3.35, z: -3.32, w: 1.2, h: 0.8, d: 0.05 },
   logoZone: { yMin: 3.15, yMax: 3.45, xAbs: 0.25 },
@@ -25,10 +25,6 @@ export function isPerfectRelease(power01: number, aimDeg: number): boolean {
   )
 }
 
-/**
- * Convert pull into launch velocity.
- * Mid-power pulls solve a ballistic arc into the rim; soft/hard misses short/long.
- */
 export function pullToVelocity(pull: {
   x: number
   y: number
@@ -41,13 +37,13 @@ export function pullToVelocity(pull: {
     (Math.atan2(-pull.x, Math.max(0.01, pull.z + Math.max(0, -pull.y))) * 180) /
     Math.PI
 
-  // Ideal flight time — sweet spot around 0.55–0.72 power
-  const t = 0.72 + (power01 - 0.6) * 0.55
-  // Landing target: rim center, with lateral aim from pull + depth error from power
-  const lateral = (-pull.x / COURT.maxPull) * 0.85
-  const depthErr = (power01 - 0.62) * 1.6 // short if soft, long if hard
+  // Flight time — sweet band 0.4–0.85 lands near rim
+  const t = 0.78 + (power01 - 0.55) * 0.35
+  const lateral = (-pull.x / COURT.maxPull) * 0.55
+  // Soft pulls short, hard pulls long — but compressed so mid-pulls score
+  const depthErr = (power01 - 0.58) * 0.55
   const targetX = COURT.rim.x + lateral
-  const targetY = COURT.rim.y + 0.02
+  const targetY = COURT.rim.y + 0.05
   const targetZ = COURT.rim.z + depthErr
 
   const g = Math.abs(COURT.gravity)
