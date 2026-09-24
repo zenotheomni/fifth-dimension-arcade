@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { challengePublicUrl } from './_lib/config'
-import { handleOptions, rpcErrorResponse } from './_lib/http'
-import { getSupabase } from './_lib/supabase'
+import { challengePublicUrl } from './_lib/config.js'
+import { handleOptions, rpcErrorResponse } from './_lib/http.js'
+import { getSupabase } from './_lib/supabase.js'
 
 /**
  * POST /api/challenges
