@@ -7,10 +7,12 @@ import { useArcadeAudio } from '../arcade/audio/AudioProvider'
 import {
   DOCK_LINKS,
   GAMES,
-  SAMPLE_TOP_SCORES,
+  mergeGamesWithApi,
   statusLabel,
   type ArcadeGame,
+  type TickerScore,
 } from '../arcade/games/registry'
+import { fetchGames, fetchLeaderboard } from '../arcade/leaderboard/api'
 import {
   playCoinInsert,
   playSelect,
@@ -51,17 +53,53 @@ export default function LobbyPage() {
   const navigate = useNavigate()
   const [exiting, setExiting] = useState(false)
   const [selected, setSelected] = useState(0)
+  const [games, setGames] = useState<ArcadeGame[]>(GAMES)
+  const [tickerScores, setTickerScores] = useState<TickerScore[] | null>(null)
+
 
   const qrSrc = useMemo(() => {
     const data = encodeURIComponent(`${window.location.origin}/arcade`)
     return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${data}`
   }, [])
 
-  const game = GAMES[selected] ?? GAMES[0]
+  const game = games[selected] ?? games[0] ?? GAMES[0]
 
   useEffect(() => {
     getOrCreatePlayerId()
     track('arcade_lobby_view')
+    let cancelled = false
+    void (async () => {
+      try {
+        const [lb, remoteGames] = await Promise.all([
+          fetchLeaderboard({
+            game: 'court-vision',
+            window: 'weekly',
+            limit: 10,
+          }).catch(() => null),
+          fetchGames().catch(() => null),
+        ])
+        if (cancelled) return
+        if (remoteGames) {
+          setGames(mergeGamesWithApi(GAMES, remoteGames))
+        }
+        if (lb?.entries?.length) {
+          setTickerScores(
+            lb.entries.map((e) => ({
+              name: e.handle.toUpperCase(),
+              game: 'Court Vision',
+              score: e.score,
+            })),
+          )
+        } else {
+          setTickerScores([])
+        }
+      } catch {
+        if (!cancelled) setTickerScores([])
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   useEffect(() => {
@@ -91,10 +129,15 @@ export default function LobbyPage() {
     navigate(game.route)
   }
 
-  const tickerText = SAMPLE_TOP_SCORES.map(
-    (s) =>
-      `${s.sample ? '[SAMPLE] ' : ''}${s.name} · ${s.game} · ${s.score}`,
-  ).join('   ◆   ')
+  const lbReady = tickerScores !== null
+  const hasScores = (tickerScores?.length ?? 0) > 0
+  const tickerText = !lbReady
+    ? 'Loading weekly board…'
+    : hasScores
+      ? (tickerScores ?? [])
+          .map((s) => `${s.name} · ${s.game} · ${s.score}`)
+          .join('   ◆   ')
+      : 'Be the first on the board'
 
   return (
     <div className="ffa-root arcade-root">
@@ -199,18 +242,25 @@ export default function LobbyPage() {
               </button>
             </header>
 
-            <div className="ffa-ticker" aria-label="Top scores sample ticker">
+            <div
+              className={`ffa-ticker${lbReady && !hasScores ? ' is-empty' : ''}`}
+              aria-label="Weekly Court Vision leaderboard"
+            >
               <div className="ffa-ticker__track">
-                <span className="ffa-ticker__sample">SAMPLE SCORES</span>
+                <span className="ffa-ticker__label">
+                  {hasScores ? 'WEEKLY · COURT VISION' : 'WEEKLY BOARD'}
+                </span>
                 {tickerText}
                 {'   ◆   '}
-                <span className="ffa-ticker__sample">SAMPLE SCORES</span>
+                <span className="ffa-ticker__label">
+                  {hasScores ? 'WEEKLY · COURT VISION' : 'WEEKLY BOARD'}
+                </span>
                 {tickerText}
               </div>
             </div>
 
             <div className="ffa-cards" role="listbox" aria-label="Games">
-              {GAMES.map((g, i) => {
+              {games.map((g, i) => {
                 const locked = !g.route
                 const badgeClass =
                   g.status === 'live'

@@ -15,7 +15,7 @@ import {
   unlockAudio,
 } from '../courtVision/sfx'
 import { COURT_BG } from './bgLayout'
-import type { CvBridge, CvHudState, CvMode } from './types'
+import type { CvBridge, CvChallengeConfig, CvHudState, CvMode } from './types'
 
 const W = 390
 const H = 844
@@ -47,6 +47,7 @@ export function createCourtVisionGame(
     crowdFlash!: Phaser.GameObjects.Rectangle
 
     mode: CvMode = mode
+    challengeCfg: CvChallengeConfig | null = bridge.challenge ?? null
     score = 0
     streak = 0
     timeLeft = 60
@@ -150,7 +151,7 @@ export function createCourtVisionGame(
       this.phase = 'playing'
       this.emitHud()
 
-      if (this.mode === 'timed') {
+      if ((this.mode === 'timed' || this.mode === 'challenge')) {
         this.time.addEvent({
           delay: 1000,
           loop: true,
@@ -172,7 +173,7 @@ export function createCourtVisionGame(
         score: this.score,
         streak: this.streak,
         multiplier: streakMultiplier(this.streak),
-        timeLeft: this.mode === 'timed' ? this.timeLeft : null,
+        timeLeft: (this.mode === 'timed' || this.mode === 'challenge') ? this.timeLeft : null,
         phase: this.phase,
         callout,
         lastPoints: this.lastPoints,
@@ -405,13 +406,22 @@ export function createCourtVisionGame(
       const next = savePersonalBest(this.score)
       const newPb = next > prev
       this.pb = next
-      if (newPb) this.callout = COURT_VISION_COPY.NEW_PB
+      let beatChallenge: boolean | null = null
+      if (this.challengeCfg) {
+        beatChallenge = this.score >= this.challengeCfg.targetScore
+        this.callout = beatChallenge
+          ? COURT_VISION_COPY.WON_CHALLENGE
+          : COURT_VISION_COPY.LOST_CHALLENGE
+      } else if (newPb) {
+        this.callout = COURT_VISION_COPY.NEW_PB
+      }
       this.emitHud(this.callout)
       bridge.onEnded({
         score: this.score,
         pb: next,
         newPb,
         mode: this.mode,
+        beatChallenge,
       })
     }
 

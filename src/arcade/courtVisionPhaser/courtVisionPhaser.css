@@ -299,3 +299,116 @@
     transform: translate(-50%, -36px);
   }
 }
+
+.cvp-end__eyebrow {
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: #00c8c4;
+  margin: 0;
+  font-size: 0.7rem;
+}
+
+.cvp-end__target {
+  margin: 0.15rem 0 0.5rem;
+  color: rgba(242, 240, 234, 0.75);
+  font-size: 0.85rem;
+}
+
+.cvp-end__handle {
+  margin: 0.35rem 0 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  color: #ffc83c;
+}
+
+.cvp-end__share {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #00c8c4;
+  word-break: break-all;
+}
+
+.cvp-end__app {
+  margin: 1rem 0 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(242, 240, 234, 0.45);
+}
+
+.cvp-handle {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  width: min(100%, 280px);
+  margin: 0.5rem 0 0.85rem;
+}
+
+.cvp-handle__label {
+  font-family: Bungee, sans-serif;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  color: #ffc83c;
+}
+
+.cvp-handle__input {
+  appearance: none;
+  border: 2px solid #482078;
+  background: rgba(10, 10, 12, 0.9);
+  color: #f2f0ea;
+  font-family: Bungee, sans-serif;
+  font-size: 1rem;
+  letter-spacing: 0.08em;
+  text-transform: lowercase;
+  padding: 0.55rem 0.7rem;
+  border-radius: 6px;
+  outline: none;
+  box-shadow: 0 0 0 1px rgba(255, 200, 60, 0.25);
+}
+
+.cvp-handle__input:focus {
+  border-color: #00c8c4;
+}
+
+.cvp-handle__hint,
+.cvp-handle__error {
+  margin: 0;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+}
+
+.cvp-handle__hint {
+  color: rgba(242, 240, 234, 0.55);
+}
+
+.cvp-handle__error {
+  color: #ff5a3c;
+}
+
+.cvp-mode__challenge {
+  font-family: Bungee, sans-serif;
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  color: #ffc83c;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid rgba(255, 200, 60, 0.45);
+  border-radius: 4px;
+  background: rgba(10, 10, 12, 0.7);
+  max-width: 11rem;
+  text-align: center;
+  line-height: 1.25;
+}
+
+.cvp-challenge-shell {
+  text-align: center;
+}
+
+.cvp-challenge-target {
+  font-family: Bungee, sans-serif;
+  font-size: 3.2rem;
+  color: #ffc83c;
+  margin: 0.4rem 0 0.6rem;
+  text-shadow: 0 0 18px rgba(255, 200, 60, 0.35);
+  line-height: 1;
+}

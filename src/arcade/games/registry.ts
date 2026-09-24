@@ -1,5 +1,6 @@
 /**
  * Data-driven game list — add games / contests here without rewriting the lobby.
+ * Remote /api/games status overlays this local registry (local is the fallback).
  */
 export type GameStatus = 'live' | 'new' | 'coming-soon'
 
@@ -13,6 +14,12 @@ export type ArcadeGame = {
   accent: string
   accentAlt: string
   contest?: { label: string; endsAt?: string }
+}
+
+export type TickerScore = {
+  name: string
+  game: string
+  score: number
 }
 
 const art = (file: string) => `${import.meta.env.BASE_URL}art/${file}`
@@ -62,14 +69,6 @@ export const GAMES: ArcadeGame[] = [
   },
 ]
 
-export const SAMPLE_TOP_SCORES = [
-  { name: 'JENKS', game: 'Court Vision', score: 240, sample: true },
-  { name: 'ZENO', game: 'Court Vision', score: 198, sample: true },
-  { name: '5D', game: 'Fifth Run', score: 176, sample: true },
-  { name: 'FLOW', game: 'Court Vision', score: 165, sample: true },
-  { name: 'PALM', game: 'Court Vision', score: 142, sample: true },
-] as const
-
 export const DOCK_LINKS = [
   {
     id: 'boutique',
@@ -97,4 +96,26 @@ export function statusLabel(status: GameStatus): string {
     case 'coming-soon':
       return 'COMING UP'
   }
+}
+
+/** Map Supabase arcade_games.status → local GameStatus */
+export function mapApiStatus(raw: string | undefined | null): GameStatus | null {
+  if (!raw) return null
+  if (raw === 'coming_soon' || raw === 'coming-soon') return 'coming-soon'
+  if (raw === 'live' || raw === 'new') return raw
+  return null
+}
+
+export function mergeGamesWithApi(
+  local: ArcadeGame[],
+  remote: Array<{ id: string; status?: string; title?: string }> | null | undefined,
+): ArcadeGame[] {
+  if (!remote?.length) return local
+  const byId = new Map(remote.map((g) => [g.id, g]))
+  return local.map((g) => {
+    const api = byId.get(g.id)
+    if (!api) return g
+    const status = mapApiStatus(api.status) ?? g.status
+    return { ...g, status }
+  })
 }
