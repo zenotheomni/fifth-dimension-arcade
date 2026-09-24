@@ -2,17 +2,17 @@ import { COURT_BG } from './bgLayout'
 
 /** Tunable flick → shot mapping with rim/board-centric outcomes. */
 export const FLICK = {
-  homeYFrac: 0.58,
+  homeYFrac: 0.78,
   bobAmp: 3.5,
   bobPeriod: 1400,
   hitRadius: 90,
-  lowerTouchFrac: 0.72,
+  lowerTouchFrac: 0.82,
   sampleMs: 100,
   minUpPx: 30,
   minSpeed: 0.32,
   /** Map flick angle → lateral at rim (kept tight so misses stay near hoop) */
-  lateralScale: 72,
-  maxLateral: 52,
+  lateralScale: 80,
+  maxLateral: 58,
   /** Speed → power (1.0 = rim sweet spot) */
   speedRef: 1.05,
   powerMin: 0.55,
@@ -21,8 +21,8 @@ export const FLICK = {
   /** Only flicks at/above this speed may sail over the backboard */
   extremeSpeed: 2.05,
   /** Soft magnetism toward rim */
-  assistRadius: 16,
-  assistPull: 0.38,
+  assistRadius: 22,
+  assistPull: 0.42,
   perfectSpeedMin: 0.82,
   perfectSpeedMax: 1.22,
   perfectAngleMax: 0.2,
@@ -38,18 +38,18 @@ export const FLICK = {
   /** Post-net floor fall */
   floorFallDuration: 280,
   respawnMs: 400,
-  ballStartSize: 56,
-  ballRimSize: 28,
+  ballStartSize: 112,
+  ballRimSize: 56,
   /** Board half-width in px at game resolution (approx painted glass) */
-  boardHalfW: 72,
+  boardHalfW: 146,
   /** How far above rim the glass starts for collision (px) */
-  boardClearAboveRim: 10,
+  boardClearAboveRim: 8,
   /** Front-rim short offset below hoop (px, screen +Y) */
-  frontRimShort: 22,
+  frontRimShort: 26,
   /** Bank contact sits on glass this far above rim */
-  bankContactAboveRim: 36,
+  bankContactAboveRim: 42,
   /** Near-rim finish radius for harness */
-  nearRimRadius: 55,
+  nearRimRadius: 70,
 } as const
 
 export type FlickSample = { x: number; y: number; t: number }
@@ -140,20 +140,20 @@ export function analyzeFlick(
   lateral += windBias * 10
 
   const board = boardBounds(hoop.x, hoop.y, screenH)
-  const wide = Math.abs(lateral) > 18
+  const wide = Math.abs(lateral) > 22
 
   let outcome: ShotOutcome
   if (extreme && Math.abs(lateral) < 40) {
     outcome = 'over'
   } else if (wide) {
     outcome = 'wide'
-  } else if (power < 0.86) {
+  } else if (power < 0.84) {
     outcome = 'front_clank'
-  } else if (power > 1.18) {
+  } else if (power > 1.16) {
     outcome = 'bank'
   } else if (power >= 0.9 && power <= 1.1 && Math.abs(angle) < 0.12 && Math.abs(lateral) < 16) {
     outcome = 'swish'
-  } else if (Math.abs(lateral) > 14) {
+  } else if (Math.abs(lateral) > 18) {
     outcome = 'wide'
   } else {
     outcome = 'rim'
@@ -195,7 +195,7 @@ export function analyzeFlick(
     contactX = aimX
     contactY = board.contactY
     // Bank into rim if reasonably centered; else bounce out
-    if (Math.abs(lateral) < 11 && power <= 1.38) {
+    if (Math.abs(lateral) < 14 && power <= 1.42) {
       finalX = hoop.x + lateral * 0.2
       finalY = hoop.y
     } else {

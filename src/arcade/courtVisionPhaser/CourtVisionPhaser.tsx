@@ -368,14 +368,7 @@ export default function CourtVisionPhaser({
         {!ended && hud.mode === 'endless' && hud.phase === 'playing' ? (
           <button
             type="button"
-            className="cvp-back"
-            style={{
-              top: 'auto',
-              bottom: '1.25rem',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              pointerEvents: 'auto',
-            }}
+            className="cvp-back cvp-end-run"
             onClick={() => {
               const scene = gameRef.current?.scene.getScene('CourtVision') as
                 | { requestEnd?: () => void }
