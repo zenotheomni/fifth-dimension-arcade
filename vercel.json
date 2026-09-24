@@ -2,41 +2,17 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
-    {
-      "source": "/api/scores",
-      "destination": "/api/scores"
-    },
-    {
-      "source": "/api/challenges",
-      "destination": "/api/challenges"
-    },
-    {
-      "source": "/api/challenges/:id",
-      "destination": "/api/challenges/[id]"
-    },
-    {
-      "source": "/api/leaderboard",
-      "destination": "/api/leaderboard"
-    },
-    {
-      "source": "/api/games",
-      "destination": "/api/games"
-    },
-    {
-      "source": "/api/personal-best",
-      "destination": "/api/personal-best"
-    },
-    {
-      "source": "/api/register",
-      "destination": "/api/register"
-    },
-    {
-      "source": "/arcade",
-      "destination": "/arcade/index.html"
-    },
-    {
-      "source": "/arcade/(.*)",
-      "destination": "/arcade/index.html"
-    }
+    { "source": "/api/scores", "destination": "/api/scores" },
+    { "source": "/api/challenges", "destination": "/api/challenges" },
+    { "source": "/api/challenges/:id", "destination": "/api/challenges/[id]" },
+    { "source": "/api/leaderboard", "destination": "/api/leaderboard" },
+    { "source": "/api/games", "destination": "/api/games" },
+    { "source": "/api/personal-best", "destination": "/api/personal-best" },
+    { "source": "/api/register", "destination": "/api/register" },
+    { "source": "/arcade", "destination": "/arcade/index.html" },
+    { "source": "/arcade/court-vision", "destination": "/arcade/index.html" },
+    { "source": "/arcade/fifth-run", "destination": "/arcade/index.html" },
+    { "source": "/arcade/challenge/:id", "destination": "/arcade/index.html" },
+    { "source": "/arcade/key", "destination": "/arcade/index.html" }
   ]
 }
