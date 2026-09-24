@@ -19,9 +19,14 @@ await page.goto('http://127.0.0.1:4173/arcade/court-vision', {
   timeout: 60000,
 })
 await page.waitForFunction(() => globalThis.__CV_SCENE, null, { timeout: 20000 })
-await page.waitForTimeout(600)
+await page.waitForTimeout(500)
 
-// Switch to endless + freeze clock so harness can run
+const endless = page.getByRole('button', { name: /^Endless$/i })
+if (await endless.count()) {
+  await endless.click().catch(() => {})
+  await page.waitForTimeout(900)
+  await page.waitForFunction(() => globalThis.__CV_SCENE, null, { timeout: 15000 })
+}
 await page.evaluate(() => {
   const s = globalThis.__CV_SCENE
   s.mode = 'endless'
@@ -29,20 +34,6 @@ await page.evaluate(() => {
   s.ended = false
   s.phase = 'playing'
 })
-// Click Endless button if present
-const endless = page.getByRole('button', { name: /^Endless$/i })
-if (await endless.count()) {
-  await endless.click().catch(() => {})
-  await page.waitForTimeout(900)
-  await page.waitForFunction(() => globalThis.__CV_SCENE, null, { timeout: 15000 })
-  await page.evaluate(() => {
-    const s = globalThis.__CV_SCENE
-    s.mode = 'endless'
-    s.timeLeft = 9999
-    s.ended = false
-    s.phase = 'playing'
-  })
-}
 
 async function waitReady() {
   await page.waitForFunction(
@@ -54,12 +45,10 @@ async function waitReady() {
         s.phase = 'playing'
         s.timeLeft = 9999
       }
-      if (s.respawning) return false
-      if (s.flight) return false
-      return s.phase === 'playing'
+      return !s.respawning && !s.flight && s.phase === 'playing'
     },
     null,
-    { timeout: 8000 },
+    { timeout: 10000 },
   )
 }
 
@@ -71,95 +60,138 @@ async function fire(opts) {
     s.ended = false
     s.phase = 'playing'
     s.respawning = false
+    // Sample penetration during flight
+    s.__penSamples = []
     const r = s.debugFlick(o)
     return r
       ? {
           power: +r.power.toFixed(3),
-          perfect: r.perfect,
-          angle: +r.angle.toFixed(3),
-          err: +Math.hypot(r.targetX - s.hoopX, r.targetY - s.hoopY).toFixed(2),
-          tyOff: +(r.targetY - s.hoopY).toFixed(1),
-          txOff: +(r.targetX - s.hoopX).toFixed(1),
+          outcome: r.outcome,
+          allowOver: r.allowOver,
+          speed: +r.speed.toFixed(3),
         }
       : null
   }, opts)
-  if (!shot) {
-    return { shot: null, made: false, delta: 0 }
-  }
-  // Wait until flight resolved and ball ready (or timeout)
+  if (!shot) return { shot: null, made: false, meta: null }
+
   await page.waitForFunction(
-    () => {
-      const s = globalThis.__CV_SCENE
-      return s && !s.flight
-    },
+    () => !globalThis.__CV_SCENE?.flight,
     null,
     { timeout: 3000 },
   ).catch(() => {})
-  await page.waitForTimeout(500) // respawn
-  const after = await page.evaluate(() => globalThis.__CV_SCENE.score)
-  return { shot, made: after > before, delta: after - before }
+  await page.waitForTimeout(480)
+  const after = await page.evaluate(() => ({
+    score: globalThis.__CV_SCENE.score,
+    meta: globalThis.__CV_SCENE.lastShotMeta,
+  }))
+  return {
+    shot,
+    made: after.score > before,
+    meta: after.meta,
+  }
+}
+
+function summarize(name, results) {
+  const n = results.length
+  const makes = results.filter((r) => r.made).length
+  const pen = results.filter((r) => r.meta?.penetratedBoard).length
+  const over = results.filter((r) => r.meta?.overBoard).length
+  const near = results.filter(
+    (r) =>
+      r.meta?.finishNearRim ||
+      r.meta?.contactedBoard ||
+      r.meta?.contactedRim,
+  ).length
+  const boardHit = results.filter((r) => r.meta?.contactedBoard).length
+  return {
+    name,
+    n,
+    makes,
+    makeRate: +(makes / n).toFixed(3),
+    penetrateRate: +(pen / n).toFixed(3),
+    overRate: +(over / n).toFixed(3),
+    nearRimRate: +(near / n).toFixed(3),
+    boardContactRate: +(boardHit / n).toFixed(3),
+  }
 }
 
 const suites = []
 
+// straight medium
 {
-  let makes = 0
-  const n = 20
-  const details = []
-  for (let i = 0; i < n; i++) {
+  const results = []
+  for (let i = 0; i < 16; i++) {
     const speed = 0.95 + (i % 5) * 0.05
-    const r = await fire({ speed, dx: 0 })
-    if (r.made) makes++
-    details.push({ speed, made: r.made, ...r.shot })
+    results.push(await fire({ speed, dx: 0 }))
   }
-  suites.push({ name: 'straight_medium', makes, n, rate: makes / n, details })
+  suites.push(summarize('straight_medium', results))
 }
 
+// angled wide
 {
-  let makes = 0
-  const n = 10
-  for (let i = 0; i < n; i++) {
-    const dx = i % 2 === 0 ? 70 : -70
-    const r = await fire({ speed: 1.05, dx })
-    if (r.made) makes++
+  const results = []
+  for (let i = 0; i < 10; i++) {
+    results.push(await fire({ speed: 1.05, dx: i % 2 === 0 ? 70 : -70 }))
   }
-  suites.push({ name: 'angled_wide', makes, n, rate: makes / n })
+  suites.push(summarize('angled_wide', results))
 }
 
+// weak / front rim
 {
-  let makes = 0
-  const n = 10
-  for (let i = 0; i < n; i++) {
-    const r = await fire({ speed: 0.42, dx: 0 })
-    if (r.made) makes++
+  const results = []
+  for (let i = 0; i < 10; i++) {
+    results.push(await fire({ speed: 0.55, dx: 0 }))
   }
-  suites.push({ name: 'weak_short', makes, n, rate: makes / n })
+  suites.push(summarize('weak_front', results))
 }
 
+// strong / bank
 {
-  let makes = 0
-  const n = 10
-  for (let i = 0; i < n; i++) {
-    const r = await fire({ speed: 1.85, dx: 0 })
-    if (r.made) makes++
+  const results = []
+  for (let i = 0; i < 12; i++) {
+    results.push(await fire({ speed: 1.35 + (i % 3) * 0.05, dx: (i % 2) * 8 - 4 }))
   }
-  suites.push({ name: 'strong_long', makes, n, rate: makes / n })
+  suites.push(summarize('strong_bank', results))
 }
 
+// extreme over
 {
-  let makes = 0
-  const n = 24
-  for (let i = 0; i < n; i++) {
+  const results = []
+  for (let i = 0; i < 10; i++) {
+    results.push(await fire({ speed: 2.2, dx: 0 }))
+  }
+  suites.push(summarize('extreme_over', results))
+}
+
+// decent spread
+{
+  const results = []
+  for (let i = 0; i < 24; i++) {
     const speed = 0.78 + Math.random() * 0.5
     const dx = (Math.random() - 0.5) * 48
-    const r = await fire({ speed, dx })
-    if (r.made) makes++
+    results.push(await fire({ speed, dx }))
   }
-  suites.push({ name: 'decent_spread', makes, n, rate: makes / n })
+  suites.push(summarize('decent_spread', results))
 }
 
-console.log(JSON.stringify(suites.map(({ name, makes, n, rate }) => ({ name, makes, n, rate: +rate.toFixed(3) })), null, 2))
-console.log('SUMMARY', Object.fromEntries(suites.map((s) => [s.name, +s.rate.toFixed(3)])))
-console.log('DETAILS_MEDIUM', suites[0].details?.slice(0, 10))
+console.log(JSON.stringify(suites, null, 2))
+const assert = (cond, msg) => {
+  if (!cond) console.error('ASSERT FAIL:', msg)
+  else console.log('ASSERT OK:', msg)
+}
+for (const s of suites) {
+  assert(s.penetrateRate === 0, `${s.name} penetrate=0 (got ${s.penetrateRate})`)
+}
+assert(suites.find((s) => s.name === 'strong_bank').overRate === 0, 'strong over=0')
+assert(suites.find((s) => s.name === 'extreme_over').overRate > 0.5, 'extreme mostly over')
+assert(suites.find((s) => s.name === 'straight_medium').makeRate >= 0.85, 'straight makes')
+const decent = suites.find((s) => s.name === 'decent_spread')
+assert(decent.makeRate >= 0.55 && decent.makeRate <= 0.9, `decent make ${decent.makeRate}`)
+const nearAll =
+  suites
+    .filter((s) => s.name !== 'extreme_over')
+    .reduce((a, s) => a + s.nearRimRate * s.n, 0) /
+  suites.filter((s) => s.name !== 'extreme_over').reduce((a, s) => a + s.n, 0)
+assert(nearAll >= 0.9, `near-rim ~95% (got ${nearAll.toFixed(3)})`)
 
 await browser.close()
