@@ -94,28 +94,3 @@ export function playBounce5d(): void {
 export function unlockAudio(): void {
   getCtx()
 }
-
-export function playCoinInsert(): void {
-  const ac = getCtx()
-  if (!ac) return
-  const t = ac.currentTime
-  tone(980, t, 0.08, 'square', 0.06)
-  tone(1310, t + 0.07, 0.1, 'square', 0.05)
-  tone(1600, t + 0.14, 0.12, 'sine', 0.04)
-}
-
-export function playSelect(): void {
-  const ac = getCtx()
-  if (!ac) return
-  const t = ac.currentTime
-  tone(660, t, 0.06, 'square', 0.04)
-  tone(880, t + 0.05, 0.08, 'sine', 0.035)
-}
-
-export function playUiConfirm(): void {
-  const ac = getCtx()
-  if (!ac) return
-  const t = ac.currentTime
-  tone(520, t, 0.05, 'square', 0.04)
-  tone(780, t + 0.04, 0.1, 'triangle', 0.05)
-}

@@ -7,20 +7,14 @@
 - Bundled same-origin copy: `public/audio/zeno-5.mp3` (served at `/arcade/audio/zeno-5.mp3`)
 - Used with owner permission (Jenks / 5D Imperial).
 
-## Engine / runtime
+## 3D / runtime libraries
 
-- [Phaser 3](https://phaser.io/) — MIT (2D arcade games)
-- [React](https://react.dev/) / [Vite](https://vitejs.dev/) — MIT
+- [three.js](https://threejs.org/) — MIT
+- [@react-three/fiber](https://docs.pmnd.rs/react-three-fiber) — MIT
+- [@react-three/drei](https://github.com/pmndrs/drei) — MIT
+- [@react-three/rapier](https://github.com/pmndrs/react-three-rapier) — MIT
+- [@react-three/postprocessing](https://github.com/pmndrs/react-postprocessing) — MIT
 
-## Brand assets
+## Assets
 
-- Fifth Dimension emblem, wordmark, star-swirl — provided by Jenks / 5D Imperial
-- Title / Court Vision concept art — AI-assisted direction art (legal footer text from concepts was removed; not shipped as copyright claims)
-
-## SFX
-
-- Procedural Web Audio tones in `src/arcade/courtVision/sfx.ts` (original, no external samples)
-
-## Removed this pass
-
-- three.js / React Three Fiber lobby & Court Vision (replaced by Phaser + CSS title/select)
+All arcade geometry, materials, and shaders in this pass are procedural (no external paid models or textures). No Poly Haven / Kenney assets were bundled in this build.

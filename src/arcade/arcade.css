@@ -30,10 +30,7 @@ body {
   /* Palette tokens — day one */
   --void: #0a0a0c;
   --ink: #1a1028;
-  --signal: #ff5a3c;
-  --teal: #00c8c4;
-  --gold: #ffc83c;
-  --purple: #482078;
+  --signal: #ff5a1f;
   --soft: #f2f0ea;
   --mint: #7dffc3;
   --muted: #6b6b73;
@@ -41,7 +38,7 @@ body {
   min-height: 100dvh;
   background: var(--void);
   color: var(--soft);
-  font-family: 'Assistant', Inter, system-ui, sans-serif;
+  font-family: Inter, system-ui, sans-serif;
   position: relative;
   overflow-x: hidden;
 }

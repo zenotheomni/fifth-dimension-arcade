@@ -22,7 +22,7 @@ export default function ChallengePage() {
         </p>
         <div className="arcade-shell__actions">
           <Link to="/" className="arcade-back">
-            ← Back to Fifth Floor Arcade
+            ← Back to The Fifth Floor
           </Link>
         </div>
       </div>
