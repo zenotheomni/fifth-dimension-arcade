@@ -1,6 +1,7 @@
-import { useEffect } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { track } from '../arcade/analytics'
-import CourtVisionEndless from '../arcade/courtVision/CourtVisionEndless'
+
+const CourtVision3d = lazy(() => import('../arcade/courtVision3d/CourtVision3d'))
 
 export default function CourtVisionPage() {
   useEffect(() => {
@@ -9,7 +10,15 @@ export default function CourtVisionPage() {
 
   return (
     <div className="arcade-root arcade-root--game">
-      <CourtVisionEndless />
+      <Suspense
+        fallback={
+          <div className="cv3d-overlay" style={{ position: 'fixed', inset: 0 }}>
+            <p className="cv3d-overlay__copy">Loading Court Vision…</p>
+          </div>
+        }
+      >
+        <CourtVision3d />
+      </Suspense>
     </div>
   )
 }
