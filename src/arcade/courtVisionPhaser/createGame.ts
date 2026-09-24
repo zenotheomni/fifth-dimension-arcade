@@ -18,7 +18,7 @@ import {
   courtVisionSeedConfig,
   type CourtVisionSeedConfig,
 } from '../core/seededRandom'
-import { COURT_BG, HOOP_SPRITES } from './bgLayout'
+import { COURT_BG, HOOP_OVERLAY } from './bgLayout'
 import {
   analyzeFlick,
   boardBounds,
@@ -85,9 +85,6 @@ export function createCourtVisionGame(
     tutorial!: Phaser.GameObjects.Container
     rimFront!: Phaser.GameObjects.Image
     rimGlow!: Phaser.GameObjects.Graphics
-    backboardSpr!: Phaser.GameObjects.Image
-    rimSpr!: Phaser.GameObjects.Image
-    poleSpr!: Phaser.GameObjects.Image
 
     mode: CvMode = mode
     challengeCfg: CvChallengeConfig | null = bridge.challenge ?? null
@@ -149,10 +146,7 @@ export function createCourtVisionGame(
       this.load.image('ballShadow', `${base}art/ball-shadow.png`)
       this.load.image('fire', `${base}art/fire-particle.png`)
       this.load.image('firePurple', `${base}art/fire-particle-purple.png`)
-      this.load.image('backboard', `${base}art/backboard.png`)
-      this.load.image('rim', `${base}art/rim.png`)
       this.load.image('rimFront', `${base}art/rim-front.png`)
-      this.load.image('pole', `${base}art/pole.png`)
       for (let i = 0; i < NET_FRAMES; i++) {
         this.load.image(`net${i}`, `${base}art/net-${i}.png`)
       }
@@ -186,20 +180,7 @@ export function createCourtVisionGame(
       this.hoopY = this.baseHoopY
       this.hoopRoot = this.add.container(this.hoopX, this.hoopY).setDepth(5)
 
-      // Pole behind board
-      this.poleSpr = this.add
-        .image(0, HOOP_SPRITES.poleOffsetY, 'pole')
-        .setDisplaySize(HOOP_SPRITES.poleW, HOOP_SPRITES.poleH)
-        .setOrigin(0.5, 0)
-      this.poleSpr.texture.setFilter(Phaser.Textures.FilterMode.NEAREST)
-
-      this.backboardSpr = this.add
-        .image(0, HOOP_SPRITES.boardOffsetY, 'backboard')
-        .setDisplaySize(HOOP_SPRITES.boardW, HOOP_SPRITES.boardH)
-        .setOrigin(0.5, 0.5)
-      this.backboardSpr.texture.setFilter(Phaser.Textures.FilterMode.NEAREST)
-
-      // Net behind rim front lip — always visible (idle frame)
+      // Net overlay hanging from baked rim (always visible)
       if (this.textures.exists('net0')) {
         this.anims.create({
           key: 'net-swish',
@@ -232,30 +213,18 @@ export function createCourtVisionGame(
           repeat: 0,
         })
         this.net = this.add
-          .sprite(0, HOOP_SPRITES.netOffsetY, 'net0')
-          .setDisplaySize(HOOP_SPRITES.netW, HOOP_SPRITES.netH)
+          .sprite(0, HOOP_OVERLAY.netOffsetY, 'net0')
+          .setDisplaySize(HOOP_OVERLAY.netW, HOOP_OVERLAY.netH)
           .setOrigin(0.5, 0)
-          .setAlpha(0.92)
+          .setAlpha(0.95)
         this.net.texture.setFilter(Phaser.Textures.FilterMode.NEAREST)
+        this.hoopRoot.add(this.net)
       }
 
-      this.rimSpr = this.add
-        .image(0, 0, 'rim')
-        .setDisplaySize(HOOP_SPRITES.rimW, HOOP_SPRITES.rimH)
-        .setOrigin(0.5, 0.45)
-      this.rimSpr.texture.setFilter(Phaser.Textures.FilterMode.NEAREST)
-
-      this.hoopRoot.add([
-        this.poleSpr,
-        this.backboardSpr,
-        this.net,
-        this.rimSpr,
-      ])
-
-      // Front lip above ball when sinking (world space, follows hoop)
+      // Front rim lip — ball passes behind this on sink
       this.rimFront = this.add
-        .image(this.hoopX, this.hoopY + 2, 'rimFront')
-        .setDisplaySize(HOOP_SPRITES.rimW, HOOP_SPRITES.rimH)
+        .image(this.hoopX, this.hoopY + 3, 'rimFront')
+        .setDisplaySize(HOOP_OVERLAY.rimFrontW, HOOP_OVERLAY.rimFrontH)
         .setOrigin(0.5, 0.45)
         .setDepth(7)
       this.rimFront.texture.setFilter(Phaser.Textures.FilterMode.NEAREST)
@@ -482,9 +451,9 @@ export function createCourtVisionGame(
       const cx = this.hoopX
       // Enter rim center cleanly
       const enterY = this.hoopY + 2
-      const midNetY = this.hoopY + 36
-      const exitY = this.hoopY + 72
-      const floorY = H * 0.78
+      const midNetY = this.hoopY + 48
+      const exitY = this.hoopY + 108
+      const floorY = H * 0.88
       return [
         {
           x0: fromX,
@@ -549,7 +518,7 @@ export function createCourtVisionGame(
           kind: 'arc',
         })
         const bankMake =
-          Math.hypot(shot.finalX - this.hoopX, shot.finalY - this.hoopY) < 14
+          Math.hypot(shot.finalX - this.hoopX, shot.finalY - this.hoopY) < 16
         segs.push({
           x0: shot.contactX,
           y0: shot.contactY,
@@ -682,18 +651,19 @@ export function createCourtVisionGame(
       return { x, y }
     }
 
-    /** Stepped integer display size so NEAREST stays crisp. */
+    /** Stepped integer multiples of native 28px so NEAREST stays crisp. */
     setBallSize(ideal: number) {
       const native = BALL_NATIVE
-      // Prefer exact 1x / 2x; otherwise even pixel size
-      let size: number
-      if (ideal >= native * 1.75) size = native * 2
-      else if (ideal >= native * 1.25) size = Math.round(ideal / 2) * 2
-      else size = native
-      size = Math.max(native, Math.min(native * 2, size))
-      // During mid-flight allow even sizes between
-      if (ideal < native * 1.75 && ideal > native) {
-        size = Math.max(native, Math.round(ideal / 2) * 2)
+      // Allowed: 28, 56, 84, 112
+      const steps = [native, native * 2, native * 3, native * 4]
+      let size = steps[0]
+      let best = Math.abs(ideal - size)
+      for (const s of steps) {
+        const d = Math.abs(ideal - s)
+        if (d < best) {
+          best = d
+          size = s
+        }
       }
       this.ball.setDisplaySize(size, size)
     }
@@ -711,7 +681,7 @@ export function createCourtVisionGame(
         const cx = Phaser.Math.Clamp(x, b.left + 6, b.right - 6)
         const cy = b.contactY
         const lateral = cx - this.hoopX
-        const bankIn = Math.abs(lateral) < 11 && flight.power <= 1.38
+        const bankIn = Math.abs(lateral) < 14 && flight.power <= 1.42
         const finalX = bankIn
           ? this.hoopX + lateral * 0.2
           : cx + (lateral >= 0 ? 30 : -30)
@@ -1160,7 +1130,7 @@ export function createCourtVisionGame(
     backgroundColor: '#1c0c30',
     scene: CourtScene,
     scale: {
-      mode: Phaser.Scale.FIT,
+      mode: Phaser.Scale.ENVELOP,
       autoCenter: Phaser.Scale.CENTER_BOTH,
     },
     render: {

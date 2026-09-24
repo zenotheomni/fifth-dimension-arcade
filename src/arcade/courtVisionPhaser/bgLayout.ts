@@ -1,33 +1,24 @@
-/** Layout fractions for straight-on court-bg + sprite hoop (centered). */
+/** Layout fractions for baked straight-on court-bg (gen-court-straight-hoop). */
 export const COURT_BG = {
   hoopX: 0.5,
-  /** Rim center — just above the key, below crowd/fence */
-  hoopY: 0.305,
-  backboardTop: 0.218,
-  backboardBottom: 0.298,
-  floorSplit: 0.52,
+  /** Rim opening center */
+  hoopY: 0.2861,
+  backboardTop: 0.1194,
+  /** Glass bottom just above rim */
+  backboardBottom: 0.2736,
+  floorSplit: 0.55,
   wordmarkX: 0.5,
-  wordmarkY: 0.245,
+  wordmarkY: 0.168,
+  /** Shooter square top */
+  squareTop: 0.2111,
 } as const
 
-/** Native display sizes for hoop sprites (integer pixel art). */
-export const HOOP_SPRITES = {
-  /** Backboard display size */
-  boardW: 148,
-  boardH: 116,
-  /** Rim display */
-  rimW: 78,
-  rimH: 20,
-  /** Net display */
-  netW: 72,
-  netH: 84,
-  /** Pole */
-  poleW: 28,
-  poleH: 140,
-  /** Board center above rim (px) */
-  boardOffsetY: -58,
-  /** Net hangs below rim */
-  netOffsetY: 10,
-  /** Pole offset below rim */
-  poleOffsetY: 48,
+/** Overlay sprite sizes tuned to baked rim (~97px wide at 390). */
+export const HOOP_OVERLAY = {
+  rimWidthPx: 97,
+  netW: 104,
+  netH: 120,
+  netOffsetY: 4,
+  rimFrontW: 104,
+  rimFrontH: 24,
 } as const
