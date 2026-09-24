@@ -85,6 +85,7 @@ export function createCourtVisionGame(
     tutorial!: Phaser.GameObjects.Container
     rimFront!: Phaser.GameObjects.Image
     rimGlow!: Phaser.GameObjects.Graphics
+    wordmarkSpr!: Phaser.GameObjects.Image
 
     mode: CvMode = mode
     challengeCfg: CvChallengeConfig | null = bridge.challenge ?? null
@@ -147,6 +148,7 @@ export function createCourtVisionGame(
       this.load.image('fire', `${base}art/fire-particle.png`)
       this.load.image('firePurple', `${base}art/fire-particle-purple.png`)
       this.load.image('rimFront', `${base}art/rim-front.png`)
+      this.load.image('wordmarkBb', `${base}art/wordmark-backboard.webp`)
       for (let i = 0; i < NET_FRAMES; i++) {
         this.load.image(`net${i}`, `${base}art/net-${i}.png`)
       }
@@ -230,6 +232,13 @@ export function createCourtVisionGame(
       this.rimFront.texture.setFilter(Phaser.Textures.FilterMode.NEAREST)
 
       this.rimGlow = this.add.graphics().setDepth(6.5).setAlpha(0)
+
+      // Real stacked logo — pre-sized texture, LINEAR for clean edges under pixelArt
+      this.wordmarkSpr = this.add
+        .image(W * COURT_BG.wordmarkX, H * COURT_BG.wordmarkY, 'wordmarkBb')
+        .setDisplaySize(COURT_BG.wordmarkW, COURT_BG.wordmarkH)
+        .setDepth(4)
+      this.wordmarkSpr.texture.setFilter(Phaser.Textures.FilterMode.LINEAR)
 
       this.trailGraphics = this.add.graphics().setDepth(8)
 
