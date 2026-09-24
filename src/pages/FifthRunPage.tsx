@@ -30,7 +30,7 @@ export default function FifthRunPage() {
             </span>
           ))}
           <Link to="/" className="arcade-back">
-            ← Back to The Fifth Floor
+            ← Back to Fifth Floor Arcade
           </Link>
         </div>
       </div>
