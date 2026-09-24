@@ -18,7 +18,7 @@ import {
   courtVisionSeedConfig,
   type CourtVisionSeedConfig,
 } from '../core/seededRandom'
-import { COURT_BG } from './bgLayout'
+import { COURT_BG, HOOP_SPRITES } from './bgLayout'
 import {
   analyzeFlick,
   boardBounds,
@@ -32,6 +32,8 @@ import type { CvBridge, CvChallengeConfig, CvHudState, CvMode } from './types'
 const W = 390
 const H = 844
 const TUTORIAL_KEY = 'fd_cv_flick_tutorial_done'
+const NET_FRAMES = 14
+const BALL_NATIVE = 28
 
 type FlightSeg = {
   x0: number
@@ -40,8 +42,9 @@ type FlightSeg = {
   y1: number
   peak: number
   duration: number
-  /** 'arc' rising to contact, 'bounce' off board/rim, 'sink' through net */
-  kind: 'arc' | 'bounce' | 'sink'
+  /** 'arc' rising to contact, 'bounce' off board/rim, 'sink' through net, 'fall' to floor */
+  kind: 'arc' | 'bounce' | 'sink' | 'fall'
+  ease?: 'linear' | 'sineOut' | 'quadIn'
 }
 
 type ShotFlight = {
@@ -58,9 +61,12 @@ type ShotFlight = {
   penetratedBoard: boolean
   overBoard: boolean
   finishNearRim: boolean
-  /** Last evaluated position for collision sampling */
   lastX: number
   lastY: number
+  netTriggered: boolean
+  hitPaused: boolean
+  hitPauseLeft: number
+  scored: boolean
 }
 
 export function createCourtVisionGame(
@@ -77,7 +83,11 @@ export function createCourtVisionGame(
     hoopRoot!: Phaser.GameObjects.Container
     crowdFlash!: Phaser.GameObjects.Rectangle
     tutorial!: Phaser.GameObjects.Container
-    rimFront!: Phaser.GameObjects.Graphics
+    rimFront!: Phaser.GameObjects.Image
+    rimGlow!: Phaser.GameObjects.Graphics
+    backboardSpr!: Phaser.GameObjects.Image
+    rimSpr!: Phaser.GameObjects.Image
+    poleSpr!: Phaser.GameObjects.Image
 
     mode: CvMode = mode
     challengeCfg: CvChallengeConfig | null = bridge.challenge ?? null
@@ -94,7 +104,6 @@ export function createCourtVisionGame(
     flight: ShotFlight | null = null
     flicking = false
     samples: FlickSample[] = []
-    /** Rim center in screen space — painted hoop + seeded sway */
     hoopX = W * COURT_BG.hoopX
     hoopY = H * COURT_BG.hoopY
     baseHoopX = W * COURT_BG.hoopX
@@ -102,12 +111,12 @@ export function createCourtVisionGame(
     seedCfg: CourtVisionSeedConfig | null = null
     elapsed = 0
     shake = 0
+    camNudge = 0
     ended = false
     ballHome = { x: W / 2, y: H * FLICK.homeYFrac }
     trail: { x: number; y: number; a: number }[] = []
     respawning = false
     showTutorial = false
-    /** Last resolved shot metrics for harness */
     lastShotMeta: {
       penetratedBoard: boolean
       contactedBoard: boolean
@@ -134,13 +143,17 @@ export function createCourtVisionGame(
       const base = import.meta.env.BASE_URL
       this.load.image('court', `${base}art/court-bg.webp`)
       this.load.spritesheet('ball', `${base}art/ball-sheet.png`, {
-        frameWidth: 48,
-        frameHeight: 48,
+        frameWidth: BALL_NATIVE,
+        frameHeight: BALL_NATIVE,
       })
       this.load.image('ballShadow', `${base}art/ball-shadow.png`)
       this.load.image('fire', `${base}art/fire-particle.png`)
       this.load.image('firePurple', `${base}art/fire-particle-purple.png`)
-      for (let i = 0; i < 7; i++) {
+      this.load.image('backboard', `${base}art/backboard.png`)
+      this.load.image('rim', `${base}art/rim.png`)
+      this.load.image('rimFront', `${base}art/rim-front.png`)
+      this.load.image('pole', `${base}art/pole.png`)
+      for (let i = 0; i < NET_FRAMES; i++) {
         this.load.image(`net${i}`, `${base}art/net-${i}.png`)
       }
     }
@@ -149,6 +162,7 @@ export function createCourtVisionGame(
       unlockAudio()
       this.pb = loadPersonalBest()
       this.cameras.main.setBackgroundColor('#1c0c30')
+      this.cameras.main.roundPixels = true
 
       const seed = this.challengeCfg?.seed?.trim()
       this.seedCfg = seed ? courtVisionSeedConfig(seed) : null
@@ -172,24 +186,81 @@ export function createCourtVisionGame(
       this.hoopY = this.baseHoopY
       this.hoopRoot = this.add.container(this.hoopX, this.hoopY).setDepth(5)
 
+      // Pole behind board
+      this.poleSpr = this.add
+        .image(0, HOOP_SPRITES.poleOffsetY, 'pole')
+        .setDisplaySize(HOOP_SPRITES.poleW, HOOP_SPRITES.poleH)
+        .setOrigin(0.5, 0)
+      this.poleSpr.texture.setFilter(Phaser.Textures.FilterMode.NEAREST)
+
+      this.backboardSpr = this.add
+        .image(0, HOOP_SPRITES.boardOffsetY, 'backboard')
+        .setDisplaySize(HOOP_SPRITES.boardW, HOOP_SPRITES.boardH)
+        .setOrigin(0.5, 0.5)
+      this.backboardSpr.texture.setFilter(Phaser.Textures.FilterMode.NEAREST)
+
+      // Net behind rim front lip — always visible (idle frame)
       if (this.textures.exists('net0')) {
-        const frames = [0, 1, 2, 3, 4, 5, 6, 4, 2, 1].map((i) => ({
-          key: `net${i}`,
-        }))
         this.anims.create({
           key: 'net-swish',
-          frames,
+          frames: Array.from({ length: NET_FRAMES }, (_, i) => ({
+            key: `net${i}`,
+          })),
+          frameRate: 22,
+          repeat: 0,
+        })
+        this.anims.create({
+          key: 'net-rim',
+          frames: Array.from({ length: NET_FRAMES }, (_, i) => ({
+            key: `net${i}`,
+          })),
+          frameRate: 14,
+          repeat: 0,
+        })
+        this.anims.create({
+          key: 'net-jiggle',
+          frames: [
+            { key: 'net0' },
+            { key: 'net1' },
+            { key: 'net2' },
+            { key: 'net1' },
+            { key: 'net0' },
+            { key: 'net13' },
+            { key: 'net0' },
+          ],
           frameRate: 16,
           repeat: 0,
         })
-        this.net = this.add.sprite(0, 22, 'net0').setScale(1.1).setAlpha(0)
+        this.net = this.add
+          .sprite(0, HOOP_SPRITES.netOffsetY, 'net0')
+          .setDisplaySize(HOOP_SPRITES.netW, HOOP_SPRITES.netH)
+          .setOrigin(0.5, 0)
+          .setAlpha(0.92)
         this.net.texture.setFilter(Phaser.Textures.FilterMode.NEAREST)
-        this.hoopRoot.add(this.net)
       }
 
-      // Subtle front-rim arc for layering cue (ball goes behind on descent)
-      this.rimFront = this.add.graphics().setDepth(7)
-      this.drawRimFront()
+      this.rimSpr = this.add
+        .image(0, 0, 'rim')
+        .setDisplaySize(HOOP_SPRITES.rimW, HOOP_SPRITES.rimH)
+        .setOrigin(0.5, 0.45)
+      this.rimSpr.texture.setFilter(Phaser.Textures.FilterMode.NEAREST)
+
+      this.hoopRoot.add([
+        this.poleSpr,
+        this.backboardSpr,
+        this.net,
+        this.rimSpr,
+      ])
+
+      // Front lip above ball when sinking (world space, follows hoop)
+      this.rimFront = this.add
+        .image(this.hoopX, this.hoopY + 2, 'rimFront')
+        .setDisplaySize(HOOP_SPRITES.rimW, HOOP_SPRITES.rimH)
+        .setOrigin(0.5, 0.45)
+        .setDepth(7)
+      this.rimFront.texture.setFilter(Phaser.Textures.FilterMode.NEAREST)
+
+      this.rimGlow = this.add.graphics().setDepth(6.5).setAlpha(0)
 
       this.trailGraphics = this.add.graphics().setDepth(8)
 
@@ -261,17 +332,11 @@ export function createCourtVisionGame(
         })
       }
 
-      // Debug / harness hook
       ;(globalThis as unknown as { __CV_SCENE?: CourtScene }).__CV_SCENE = this
     }
 
-    drawRimFront() {
-      this.rimFront.clear()
-      // Thin orange arc at rim — visual only for depth; low alpha
-      this.rimFront.lineStyle(3, 0xff8c28, 0.35)
-      this.rimFront.beginPath()
-      this.rimFront.arc(this.hoopX, this.hoopY + 2, 22, Math.PI * 0.15, Math.PI * 0.85, false)
-      this.rimFront.strokePath()
+    syncRimFront() {
+      this.rimFront.setPosition(this.hoopX, this.hoopY + 2)
     }
 
     buildTutorial() {
@@ -355,7 +420,6 @@ export function createCourtVisionGame(
     onMove(p: Phaser.Input.Pointer) {
       if (!this.flicking) return
       this.samples.push({ x: p.x, y: p.y, t: p.time })
-      // Keep buffer lean
       const cutoff = p.time - 240
       while (this.samples.length > 2 && this.samples[0].t < cutoff) {
         this.samples.shift()
@@ -377,7 +441,6 @@ export function createCourtVisionGame(
       this.launchShot(shot)
     }
 
-    /** Harness / debug: fire a synthetic flick (dx,dy over sampleMs). */
     debugFlick(opts: {
       dx?: number
       dy?: number
@@ -388,7 +451,6 @@ export function createCourtVisionGame(
         return null
       const ms = opts.sampleMs ?? FLICK.sampleMs
       const speed = opts.speed ?? FLICK.speedRef
-      // dy negative = up
       let dx = opts.dx ?? 0
       let dy = opts.dy ?? -(speed * ms)
       if (opts.speed != null && opts.dy == null) {
@@ -415,6 +477,58 @@ export function createCourtVisionGame(
       return shot
     }
 
+    /** Continuous sink + floor fall for makes. */
+    makeSinkSegs(fromX: number, fromY: number): FlightSeg[] {
+      const cx = this.hoopX
+      // Enter rim center cleanly
+      const enterY = this.hoopY + 2
+      const midNetY = this.hoopY + 36
+      const exitY = this.hoopY + 72
+      const floorY = H * 0.78
+      return [
+        {
+          x0: fromX,
+          y0: fromY,
+          x1: cx,
+          y1: enterY,
+          peak: 0,
+          duration: 90,
+          kind: 'sink',
+          ease: 'sineOut',
+        },
+        {
+          x0: cx,
+          y0: enterY,
+          x1: cx,
+          y1: midNetY,
+          peak: 0,
+          duration: FLICK.sinkDuration * 0.45,
+          kind: 'sink',
+          ease: 'linear',
+        },
+        {
+          x0: cx,
+          y0: midNetY,
+          x1: cx,
+          y1: exitY,
+          peak: 0,
+          duration: FLICK.sinkDuration * 0.4,
+          kind: 'sink',
+          ease: 'quadIn',
+        },
+        {
+          x0: cx,
+          y0: exitY,
+          x1: cx + (Math.random() - 0.5) * 8,
+          y1: floorY,
+          peak: 10,
+          duration: FLICK.floorFallDuration,
+          kind: 'fall',
+          ease: 'quadIn',
+        },
+      ]
+    }
+
     launchShot(shot: FlickShot) {
       this.dismissTutorial()
       playRelease()
@@ -424,7 +538,6 @@ export function createCourtVisionGame(
       const y0 = this.ball.y
 
       if (shot.outcome === 'bank') {
-        // Keep arc below glass face so we kiss the board, not tunnel through
         const bankPeak = Math.min(shot.peak, Math.max(12, (y0 - shot.contactY) * 0.35))
         segs.push({
           x0,
@@ -436,26 +549,19 @@ export function createCourtVisionGame(
           kind: 'arc',
         })
         const bankMake =
-          Math.hypot(shot.finalX - this.hoopX, shot.finalY - this.hoopY) < 18
+          Math.hypot(shot.finalX - this.hoopX, shot.finalY - this.hoopY) < 14
         segs.push({
           x0: shot.contactX,
           y0: shot.contactY,
-          x1: shot.finalX,
-          y1: shot.finalY,
-          peak: bankMake ? 18 : 10,
+          x1: bankMake ? this.hoopX : shot.finalX,
+          y1: bankMake ? this.hoopY : shot.finalY,
+          peak: bankMake ? 14 : 10,
           duration: FLICK.bounceDuration,
           kind: 'bounce',
+          ease: 'sineOut',
         })
         if (bankMake) {
-          segs.push({
-            x0: shot.finalX,
-            y0: shot.finalY,
-            x1: this.hoopX,
-            y1: this.hoopY + 38,
-            peak: 0,
-            duration: 200,
-            kind: 'sink',
-          })
+          segs.push(...this.makeSinkSegs(this.hoopX, this.hoopY))
         }
       } else if (shot.outcome === 'front_clank') {
         segs.push({
@@ -506,25 +612,34 @@ export function createCourtVisionGame(
           kind: 'bounce',
         })
       } else {
-        // swish / rim
+        // swish / rim — arc to rim center, then continuous sink
+        const rimApproach =
+          shot.outcome === 'rim'
+            ? { x: shot.finalX, y: this.hoopY - 2 }
+            : { x: this.hoopX + (shot.finalX - this.hoopX) * 0.1, y: this.hoopY - 1 }
         segs.push({
           x0,
           y0,
-          x1: shot.finalX,
-          y1: shot.finalY,
+          x1: rimApproach.x,
+          y1: rimApproach.y,
           peak: shot.peak,
           duration: shot.duration,
           kind: 'arc',
         })
-        segs.push({
-          x0: shot.finalX,
-          y0: shot.finalY,
-          x1: this.hoopX,
-          y1: this.hoopY + 40,
-          peak: 0,
-          duration: 210,
-          kind: 'sink',
-        })
+        if (shot.outcome === 'rim') {
+          // Small rattle on rim before drop
+          segs.push({
+            x0: rimApproach.x,
+            y0: rimApproach.y,
+            x1: this.hoopX + (rimApproach.x - this.hoopX) * 0.3,
+            y1: this.hoopY + 1,
+            peak: 5,
+            duration: 120,
+            kind: 'bounce',
+            ease: 'sineOut',
+          })
+        }
+        segs.push(...this.makeSinkSegs(this.hoopX, this.hoopY))
       }
 
       this.flight = {
@@ -543,34 +658,60 @@ export function createCourtVisionGame(
         finishNearRim: false,
         lastX: x0,
         lastY: y0,
+        netTriggered: false,
+        hitPaused: false,
+        hitPauseLeft: 0,
+        scored: false,
       }
       this.ball.play('ball-spin')
       if (this.streak >= 3) this.fireEmitter.startFollow(this.ball)
     }
 
-    /** Arc position along a segment (peak bows upward / smaller Y). */
-    segPos(seg: FlightSeg, u: number) {
+    segEase(u: number, ease?: FlightSeg['ease']) {
+      if (ease === 'sineOut') return Math.sin((u * Math.PI) / 2)
+      if (ease === 'quadIn') return u * u
+      return u
+    }
+
+    segPos(seg: FlightSeg, uRaw: number) {
+      const u = this.segEase(uRaw, seg.ease)
       const x = Phaser.Math.Linear(seg.x0, seg.x1, u)
       const y =
         Phaser.Math.Linear(seg.y0, seg.y1, u) -
-        Math.sin(Math.PI * u) * seg.peak
+        Math.sin(Math.PI * uRaw) * seg.peak
       return { x, y }
     }
 
-    /** Hard stop: ball may not travel through/behind the glass above the contact face. */
+    /** Stepped integer display size so NEAREST stays crisp. */
+    setBallSize(ideal: number) {
+      const native = BALL_NATIVE
+      // Prefer exact 1x / 2x; otherwise even pixel size
+      let size: number
+      if (ideal >= native * 1.75) size = native * 2
+      else if (ideal >= native * 1.25) size = Math.round(ideal / 2) * 2
+      else size = native
+      size = Math.max(native, Math.min(native * 2, size))
+      // During mid-flight allow even sizes between
+      if (ideal < native * 1.75 && ideal > native) {
+        size = Math.max(native, Math.round(ideal / 2) * 2)
+      }
+      this.ball.setDisplaySize(size, size)
+    }
+
     enforceBoardCollision(flight: ShotFlight, x: number, y: number) {
       if (flight.allowOver || flight.contactedBoard) return { x, y }
+      if (flight.segs[flight.segIndex]?.kind === 'sink' || flight.segs[flight.segIndex]?.kind === 'fall') {
+        return { x, y }
+      }
       const b = boardBounds(this.hoopX, this.hoopY, H)
       const insideX = x >= b.left && x <= b.right
-      // Through-glass = above (smaller Y than) the intended contact face
       const throughGlass = insideX && y < b.contactY - 1 && y >= b.top
       if (throughGlass) {
-        // Solid glass hit — bounce off the face (not a ghost-through)
         flight.contactedBoard = true
         const cx = Phaser.Math.Clamp(x, b.left + 6, b.right - 6)
         const cy = b.contactY
         const lateral = cx - this.hoopX
-        const bankIn = Math.abs(lateral) < 16 && flight.power <= 1.45
+        const bankIn = Math.abs(lateral) < 11 && flight.power <= 1.38
         const finalX = bankIn
           ? this.hoopX + lateral * 0.2
           : cx + (lateral >= 0 ? 30 : -30)
@@ -586,15 +727,7 @@ export function createCourtVisionGame(
         }
         flight.segs = [bounce]
         if (bankIn) {
-          flight.segs.push({
-            x0: finalX,
-            y0: finalY,
-            x1: this.hoopX,
-            y1: this.hoopY + 38,
-            peak: 0,
-            duration: 200,
-            kind: 'sink',
-          })
+          flight.segs.push(...this.makeSinkSegs(finalX, finalY))
           flight.outcome = 'bank'
         }
         flight.segIndex = 0
@@ -603,6 +736,114 @@ export function createCourtVisionGame(
         return { x: cx, y: cy }
       }
       return { x, y }
+    }
+
+    triggerNet(outcome: ShotOutcome) {
+      if (!this.net) return
+      this.net.setAlpha(0.95)
+      const key =
+        outcome === 'swish'
+          ? 'net-swish'
+          : outcome === 'front_clank'
+            ? 'net-jiggle'
+            : 'net-rim'
+      this.net.play(key)
+      this.net.once('animationcomplete', () => {
+        if (this.net) {
+          this.net.setTexture('net0')
+          this.net.setAlpha(0.92)
+        }
+      })
+    }
+
+    flashRimGlow(strong: boolean) {
+      this.rimGlow.clear()
+      this.rimGlow.setPosition(0, 0)
+      const alpha = strong ? 0.55 : 0.28
+      this.rimGlow.fillStyle(0xffe08a, alpha)
+      this.rimGlow.fillCircle(this.hoopX, this.hoopY, strong ? 34 : 26)
+      this.rimGlow.fillStyle(0xff8c28, alpha * 0.6)
+      this.rimGlow.fillCircle(this.hoopX, this.hoopY, strong ? 22 : 16)
+      this.rimGlow.setAlpha(1)
+      this.tweens.add({
+        targets: this.rimGlow,
+        alpha: 0,
+        duration: strong ? 320 : 220,
+        ease: 'Quad.easeOut',
+        onComplete: () => this.rimGlow.clear(),
+      })
+    }
+
+    beginMakeFeel(flight: ShotFlight) {
+      if (flight.scored) return
+      flight.scored = true
+      flight.hitPaused = true
+      flight.hitPauseLeft = FLICK.hitPauseMs
+
+      const isSwish = flight.outcome === 'swish'
+      const isMake =
+        flight.outcome === 'swish' ||
+        flight.outcome === 'rim' ||
+        (flight.outcome === 'bank' &&
+          flight.segs.some((s) => s.kind === 'sink'))
+
+      if (!isMake) return
+
+      // Score immediately on sink entry so callout syncs with net
+      let kind: 'swish' | 'make' | 'miss' = isSwish ? 'swish' : 'make'
+      const banked = flight.outcome === 'bank'
+      const result = scoreShot({
+        kind,
+        streakBefore: this.streak,
+        perfectRelease: flight.perfect,
+        banked5d: banked,
+      })
+      this.streak = result.streakAfter
+      this.lastPoints = result.points || null
+      this.score += result.points
+      this.cheer()
+
+      if (isSwish) {
+        playSwish()
+        this.camNudge = 140
+        this.flashRimGlow(true)
+        this.callout = 'SWISH!'
+      } else {
+        playMake()
+        this.flashRimGlow(false)
+        this.callout = banked ? '5D BOUNCE' : 'MAKE'
+      }
+      if (banked) playBounce5d()
+      this.triggerNet(flight.outcome)
+
+      if (!this.firstMake) {
+        this.firstMake = true
+        this.callout = COURT_VISION_COPY.FIRST_MAKE
+      }
+      if (this.streak >= 5 && !this.announcedX5) {
+        this.announcedX5 = true
+        this.callout = COURT_VISION_COPY.STREAK_X5
+      }
+      if (this.streak >= 10 && !this.announcedX10) {
+        this.announcedX10 = true
+        this.callout = COURT_VISION_COPY.STREAK_X10
+      }
+
+      this.lastShotMeta = {
+        penetratedBoard: flight.penetratedBoard,
+        contactedBoard: flight.contactedBoard,
+        contactedRim: flight.contactedRim || flight.outcome === 'rim',
+        overBoard: flight.overBoard,
+        finishNearRim: true,
+        outcome: flight.outcome,
+        kind,
+      }
+      this.emitHud(this.callout)
+      this.time.delayedCall(900, () => {
+        this.callout = null
+        this.lastPoints = null
+        this.emitHud(null)
+      })
     }
 
     update(_time: number, delta: number) {
@@ -614,19 +855,23 @@ export function createCourtVisionGame(
         this.hoopX = this.baseHoopX + Math.sin(ang) * s.swayAmpX
         this.hoopY = this.baseHoopY + Math.sin(ang * 1.37 + 0.6) * s.swayAmpY
         this.hoopRoot.setPosition(this.hoopX, this.hoopY)
-        this.drawRimFront()
+        this.syncRimFront()
       }
 
+      let scrollX = 0
+      let scrollY = 0
       if (this.shake > 0) {
         this.shake -= delta
-        this.cameras.main.setScroll(
-          (Math.random() - 0.5) * 5,
-          (Math.random() - 0.5) * 5,
-        )
-        if (this.shake <= 0) this.cameras.main.setScroll(0, 0)
+        scrollX += (Math.random() - 0.5) * 5
+        scrollY += (Math.random() - 0.5) * 5
       }
+      if (this.camNudge > 0) {
+        this.camNudge -= delta
+        const t = this.camNudge / 140
+        scrollY += -3.5 * Math.sin((1 - t) * Math.PI) * t
+      }
+      this.cameras.main.setScroll(scrollX, scrollY)
 
-      // Idle bob + shadow
       if (!this.flight && !this.respawning && this.phase === 'playing') {
         const bob =
           Math.sin((this.elapsed / FLICK.bobPeriod) * Math.PI * 2) * FLICK.bobAmp
@@ -648,25 +893,25 @@ export function createCourtVisionGame(
       }
 
       const flight = this.flight
+
+      // Hit-pause: freeze briefly on make entry
+      if (flight.hitPaused && flight.hitPauseLeft > 0) {
+        flight.hitPauseLeft -= delta
+        if (flight.hitPauseLeft <= 0) flight.hitPaused = false
+        return
+      }
+
       const seg = flight.segs[flight.segIndex]
       if (!seg) {
-        this.resolveShot(flight)
-        this.flight = null
-        this.fireEmitter.emitting = false
-        this.fireEmitter.stopFollow()
-        this.trailGraphics.clear()
-        this.trail = []
+        this.finishFlight(flight)
         return
       }
 
       flight.t += delta
       const u = Phaser.Math.Clamp(flight.t / seg.duration, 0, 1)
       let { x, y } = this.segPos(seg, u)
-
-      // Solid backboard — never occupy glass (unless extreme over allowed)
       ;({ x, y } = this.enforceBoardCollision(flight, x, y))
 
-      // Rim contact flags
       const rimDist = Math.hypot(x - this.hoopX, y - this.hoopY)
       if (rimDist < 28 && (seg.kind === 'arc' || seg.kind === 'bounce')) {
         flight.contactedRim = true
@@ -675,11 +920,16 @@ export function createCourtVisionGame(
         flight.contactedBoard = true
       }
 
+      // Trigger make feel + net when first entering sink
+      if (seg.kind === 'sink' && !flight.netTriggered) {
+        flight.netTriggered = true
+        this.beginMakeFeel(flight)
+      }
+
       this.ball.setPosition(x, y)
       flight.lastX = x
       flight.lastY = y
 
-      // Progress across whole multi-seg path for scale
       const totalDur = flight.segs.reduce((s, g) => s + g.duration, 0)
       const doneDur =
         flight.segs
@@ -687,30 +937,41 @@ export function createCourtVisionGame(
           .reduce((s, g) => s + g.duration, 0) + flight.t
       const pathU = Phaser.Math.Clamp(doneDur / totalDur, 0, 1)
 
-      const size = Phaser.Math.Linear(
-        FLICK.ballStartSize,
-        FLICK.ballRimSize,
-        Math.pow(pathU, 0.85),
-      )
-      this.ball.setDisplaySize(size, size)
+      // Scale down toward rim; hold near native through sink/fall
+      let ideal: number
+      if (seg.kind === 'sink' || seg.kind === 'fall') {
+        ideal = FLICK.ballRimSize
+      } else {
+        ideal = Phaser.Math.Linear(
+          FLICK.ballStartSize,
+          FLICK.ballRimSize,
+          Math.pow(Math.min(pathU * 1.15, 1), 0.85),
+        )
+      }
+      this.setBallSize(ideal)
 
-      // Layering: in front going up; behind front-rim when sinking
-      if (seg.kind === 'sink' || (seg.kind === 'bounce' && u > 0.35)) {
-        this.ball.setDepth(4)
+      // Layering: behind front lip while in net; in front of net mesh
+      if (seg.kind === 'sink') {
+        this.ball.setDepth(6) // above net (in hoopRoot ~5), below rimFront (7)
+      } else if (seg.kind === 'fall') {
+        this.ball.setDepth(8)
+      } else if (seg.kind === 'bounce' && u > 0.35) {
+        this.ball.setDepth(6)
       } else if (pathU < 0.5) {
         this.ball.setDepth(10)
       } else {
         this.ball.setDepth(6)
       }
-      // Stay in front of board glass always (depth above bg, never "through")
-      if (flight.contactedBoard && seg.kind !== 'sink') {
+      if (flight.contactedBoard && seg.kind !== 'sink' && seg.kind !== 'fall') {
         this.ball.setDepth(Math.max(this.ball.depth, 6))
       }
 
-      const shadowScale = Phaser.Math.Linear(1, 0.35, pathU)
+      const shadowScale = Phaser.Math.Linear(1, 0.35, Math.min(pathU, 1))
       this.ballShadow.setPosition(x + 2, y + 18 * shadowScale + 8)
       this.ballShadow.setDisplaySize(40 * shadowScale, 14 * shadowScale)
-      this.ballShadow.setAlpha(0.4 * (1 - pathU * 0.7))
+      this.ballShadow.setAlpha(
+        seg.kind === 'fall' ? 0.35 : 0.4 * (1 - pathU * 0.7),
+      )
       this.ballShadow.setDepth(Math.min(this.ball.depth - 1, 9))
 
       this.trail.push({ x, y, a: 0.55 })
@@ -728,7 +989,6 @@ export function createCourtVisionGame(
       if (this.streak >= 3) this.fireEmitter.emitting = true
 
       if (u >= 1) {
-        // Segment complete
         if (seg.kind === 'arc' && flight.outcome === 'bank') {
           flight.contactedBoard = true
           this.shake = Math.max(this.shake, 60)
@@ -736,6 +996,7 @@ export function createCourtVisionGame(
         if (seg.kind === 'arc' && flight.outcome === 'front_clank') {
           flight.contactedRim = true
           this.shake = Math.max(this.shake, 50)
+          this.triggerNet('front_clank')
         }
         flight.segIndex += 1
         flight.t = 0
@@ -749,12 +1010,7 @@ export function createCourtVisionGame(
             flight.outcome === 'bank' ||
             flight.outcome === 'swish' ||
             flight.outcome === 'rim'
-          this.resolveShot(flight)
-          this.flight = null
-          this.fireEmitter.emitting = false
-          this.fireEmitter.stopFollow()
-          this.trailGraphics.clear()
-          this.trail = []
+          this.finishFlight(flight)
         }
       }
     }
@@ -771,110 +1027,39 @@ export function createCourtVisionGame(
       })
     }
 
-    resolveShot(flight: ShotFlight) {
+    finishFlight(flight: ShotFlight) {
+      this.flight = null
+      this.fireEmitter.emitting = false
+      this.fireEmitter.stopFollow()
+      this.trailGraphics.clear()
+      this.trail = []
+
+      if (flight.scored) {
+        // Already scored during sink — soft fade then reset
+        this.tweens.add({
+          targets: this.ball,
+          alpha: 0,
+          duration: 180,
+          onComplete: () => this.resetBall(),
+        })
+        return
+      }
+
+      this.resolveMiss(flight)
+    }
+
+    resolveMiss(flight: ShotFlight) {
       const dx = flight.lastX - this.hoopX
-      const dy = flight.lastY - this.hoopY
-      const err = Math.hypot(dx, dy)
-
-      let kind: 'swish' | 'make' | 'miss' = 'miss'
-      let banked = false
-
-      // Score from intended outcome + whether path included a clean sink/bank
-      const hadSink = flight.segs.some((s) => s.kind === 'sink')
-      if (flight.overBoard || flight.outcome === 'over') {
-        kind = 'miss'
-      } else if (flight.outcome === 'front_clank' || flight.outcome === 'wide') {
-        kind = 'miss'
-      } else if (flight.outcome === 'swish') {
-        kind = 'swish'
-      } else if (flight.outcome === 'rim') {
-        kind = 'make'
-      } else if (flight.outcome === 'bank') {
-        if (hadSink || flight.contactedBoard) {
-          // Bank-in if we planned a sink, else bounce-out miss
-          if (hadSink) {
-            kind = 'make'
-            banked = true
-          } else {
-            kind = 'miss'
-          }
-        }
-      } else if (err < 14) {
-        kind = 'swish'
-      } else if (err < 24) {
-        kind = 'make'
-      }
-
       const result = scoreShot({
-        kind,
+        kind: 'miss',
         streakBefore: this.streak,
-        perfectRelease: flight.perfect && kind !== 'miss',
-        banked5d: banked && kind !== 'miss',
+        perfectRelease: false,
+        banked5d: false,
       })
-
       this.streak = result.streakAfter
-      this.lastPoints = result.points || null
-
-      if (kind === 'miss') {
-        playMiss()
-        this.callout = COURT_VISION_COPY.LOST_CHALLENGE
-        const missDir = dx >= 0 ? 1 : -1
-        this.tweens.add({
-          targets: this.ball,
-          x: this.ball.x + missDir * 28,
-          y: this.ball.y + 70,
-          alpha: 0.35,
-          duration: 260,
-          onComplete: () => this.resetBall(),
-        })
-      } else {
-        this.score += result.points
-        this.cheer()
-        if (kind === 'swish') {
-          playSwish()
-          if (this.net) {
-            this.net.setAlpha(0.95)
-            this.net.play('net-swish')
-            this.net.once('animationcomplete', () => this.net?.setAlpha(0))
-          }
-          this.shake = 180
-          this.callout = 'SWISH!'
-        } else {
-          playMake()
-          if (this.net) {
-            this.net.setAlpha(0.85)
-            this.net.play('net-swish')
-            this.net.once('animationcomplete', () => this.net?.setAlpha(0))
-          }
-          this.shake = 100
-          this.callout = banked ? '5D BOUNCE' : 'MAKE'
-        }
-        if (banked) playBounce5d()
-        if (!this.firstMake) {
-          this.firstMake = true
-          this.callout = COURT_VISION_COPY.FIRST_MAKE
-        }
-        if (this.streak >= 5 && !this.announcedX5) {
-          this.announcedX5 = true
-          this.callout = COURT_VISION_COPY.STREAK_X5
-        }
-        if (this.streak >= 10 && !this.announcedX10) {
-          this.announcedX10 = true
-          this.callout = COURT_VISION_COPY.STREAK_X10
-        }
-
-        // Drop through net (behind rim)
-        this.ball.setDepth(4)
-        this.tweens.add({
-          targets: this.ball,
-          y: this.ball.y + 42,
-          displayWidth: FLICK.ballRimSize * 0.75,
-          displayHeight: FLICK.ballRimSize * 0.75,
-          alpha: 0.2,
-          duration: 220,
-          onComplete: () => this.resetBall(),
-        })
-      }
+      this.lastPoints = null
+      playMiss()
+      this.callout = COURT_VISION_COPY.LOST_CHALLENGE
 
       this.lastShotMeta = {
         penetratedBoard: flight.penetratedBoard,
@@ -883,8 +1068,18 @@ export function createCourtVisionGame(
         overBoard: flight.overBoard,
         finishNearRim: flight.finishNearRim,
         outcome: flight.outcome,
-        kind,
+        kind: 'miss',
       }
+
+      const missDir = dx >= 0 ? 1 : -1
+      this.tweens.add({
+        targets: this.ball,
+        x: this.ball.x + missDir * 28,
+        y: this.ball.y + 70,
+        alpha: 0.35,
+        duration: 260,
+        onComplete: () => this.resetBall(),
+      })
 
       this.emitHud(this.callout)
       this.time.delayedCall(900, () => {
@@ -900,7 +1095,7 @@ export function createCourtVisionGame(
       this.ball.setFrame(0)
       this.ball.setAlpha(0)
       this.ball.setDepth(10)
-      this.ball.setDisplaySize(FLICK.ballStartSize, FLICK.ballStartSize)
+      this.setBallSize(FLICK.ballStartSize)
       this.ball.setPosition(this.ballHome.x, this.ballHome.y + 20)
       this.ballShadow.setAlpha(0)
 

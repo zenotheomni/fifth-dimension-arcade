@@ -48,7 +48,7 @@ async function waitReady() {
       return !s.respawning && !s.flight && s.phase === 'playing'
     },
     null,
-    { timeout: 10000 },
+    { timeout: 15000 },
   )
 }
 
@@ -77,9 +77,9 @@ async function fire(opts) {
   await page.waitForFunction(
     () => !globalThis.__CV_SCENE?.flight,
     null,
-    { timeout: 3000 },
+    { timeout: 6000 },
   ).catch(() => {})
-  await page.waitForTimeout(480)
+  await page.waitForTimeout(700)
   const after = await page.evaluate(() => ({
     score: globalThis.__CV_SCENE.score,
     meta: globalThis.__CV_SCENE.lastShotMeta,
