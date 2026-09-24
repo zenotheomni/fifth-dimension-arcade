@@ -21,9 +21,11 @@ import {
 import { COURT_BG } from './bgLayout'
 import {
   analyzeFlick,
+  boardBounds,
   FLICK,
   type FlickSample,
   type FlickShot,
+  type ShotOutcome,
 } from './flickPhysics'
 import type { CvBridge, CvChallengeConfig, CvHudState, CvMode } from './types'
 
@@ -31,18 +33,34 @@ const W = 390
 const H = 844
 const TUTORIAL_KEY = 'fd_cv_flick_tutorial_done'
 
-type ShotFlight = {
-  t: number
-  duration: number
+type FlightSeg = {
   x0: number
   y0: number
   x1: number
   y1: number
   peak: number
+  duration: number
+  /** 'arc' rising to contact, 'bounce' off board/rim, 'sink' through net */
+  kind: 'arc' | 'bounce' | 'sink'
+}
+
+type ShotFlight = {
+  segs: FlightSeg[]
+  segIndex: number
+  t: number
   spinning: boolean
   perfect: boolean
   power: number
-  madePath: boolean
+  outcome: ShotOutcome
+  allowOver: boolean
+  contactedBoard: boolean
+  contactedRim: boolean
+  penetratedBoard: boolean
+  overBoard: boolean
+  finishNearRim: boolean
+  /** Last evaluated position for collision sampling */
+  lastX: number
+  lastY: number
 }
 
 export function createCourtVisionGame(
@@ -89,6 +107,24 @@ export function createCourtVisionGame(
     trail: { x: number; y: number; a: number }[] = []
     respawning = false
     showTutorial = false
+    /** Last resolved shot metrics for harness */
+    lastShotMeta: {
+      penetratedBoard: boolean
+      contactedBoard: boolean
+      contactedRim: boolean
+      overBoard: boolean
+      finishNearRim: boolean
+      outcome: ShotOutcome | null
+      kind: 'swish' | 'make' | 'miss' | null
+    } = {
+      penetratedBoard: false,
+      contactedBoard: false,
+      contactedRim: false,
+      overBoard: false,
+      finishNearRim: false,
+      outcome: null,
+      kind: null,
+    }
 
     constructor() {
       super('CourtVision')
@@ -334,6 +370,7 @@ export function createCourtVisionGame(
         { x: p.x, y: p.y, t: p.time },
         { x: this.hoopX, y: this.hoopY },
         this.seedCfg?.windBias ?? 0,
+        H,
       )
       this.samples = []
       if (!shot) return
@@ -371,6 +408,7 @@ export function createCourtVisionGame(
         { x: this.ball.x + dx, y: this.ball.y + dy, t: t0 + ms },
         { x: this.hoopX, y: this.hoopY },
         this.seedCfg?.windBias ?? 0,
+        H,
       )
       if (!shot) return null
       this.launchShot(shot)
@@ -381,21 +419,190 @@ export function createCourtVisionGame(
       this.dismissTutorial()
       playRelease()
       this.trail = []
+      const segs: FlightSeg[] = []
+      const x0 = this.ball.x
+      const y0 = this.ball.y
+
+      if (shot.outcome === 'bank') {
+        // Keep arc below glass face so we kiss the board, not tunnel through
+        const bankPeak = Math.min(shot.peak, Math.max(12, (y0 - shot.contactY) * 0.35))
+        segs.push({
+          x0,
+          y0,
+          x1: shot.contactX,
+          y1: shot.contactY,
+          peak: bankPeak,
+          duration: shot.duration,
+          kind: 'arc',
+        })
+        const bankMake =
+          Math.hypot(shot.finalX - this.hoopX, shot.finalY - this.hoopY) < 18
+        segs.push({
+          x0: shot.contactX,
+          y0: shot.contactY,
+          x1: shot.finalX,
+          y1: shot.finalY,
+          peak: bankMake ? 18 : 10,
+          duration: FLICK.bounceDuration,
+          kind: 'bounce',
+        })
+        if (bankMake) {
+          segs.push({
+            x0: shot.finalX,
+            y0: shot.finalY,
+            x1: this.hoopX,
+            y1: this.hoopY + 38,
+            peak: 0,
+            duration: 200,
+            kind: 'sink',
+          })
+        }
+      } else if (shot.outcome === 'front_clank') {
+        segs.push({
+          x0,
+          y0,
+          x1: shot.contactX,
+          y1: shot.contactY,
+          peak: shot.peak * 0.75,
+          duration: shot.duration * 0.9,
+          kind: 'arc',
+        })
+        segs.push({
+          x0: shot.contactX,
+          y0: shot.contactY,
+          x1: shot.finalX,
+          y1: shot.finalY,
+          peak: 8,
+          duration: 240,
+          kind: 'bounce',
+        })
+      } else if (shot.outcome === 'over') {
+        segs.push({
+          x0,
+          y0,
+          x1: shot.finalX,
+          y1: shot.finalY,
+          peak: shot.peak * 1.15,
+          duration: shot.duration * 1.05,
+          kind: 'arc',
+        })
+      } else if (shot.outcome === 'wide') {
+        segs.push({
+          x0,
+          y0,
+          x1: shot.contactX,
+          y1: shot.contactY,
+          peak: shot.peak * 0.85,
+          duration: shot.duration,
+          kind: 'arc',
+        })
+        segs.push({
+          x0: shot.contactX,
+          y0: shot.contactY,
+          x1: shot.finalX,
+          y1: shot.finalY,
+          peak: 6,
+          duration: 220,
+          kind: 'bounce',
+        })
+      } else {
+        // swish / rim
+        segs.push({
+          x0,
+          y0,
+          x1: shot.finalX,
+          y1: shot.finalY,
+          peak: shot.peak,
+          duration: shot.duration,
+          kind: 'arc',
+        })
+        segs.push({
+          x0: shot.finalX,
+          y0: shot.finalY,
+          x1: this.hoopX,
+          y1: this.hoopY + 40,
+          peak: 0,
+          duration: 210,
+          kind: 'sink',
+        })
+      }
+
       this.flight = {
+        segs,
+        segIndex: 0,
         t: 0,
-        duration: shot.duration,
-        x0: this.ball.x,
-        y0: this.ball.y,
-        x1: shot.targetX,
-        y1: shot.targetY,
-        peak: shot.peak,
         spinning: true,
         perfect: shot.perfect,
         power: shot.power,
-        madePath: false,
+        outcome: shot.outcome,
+        allowOver: shot.allowOver,
+        contactedBoard: false,
+        contactedRim: false,
+        penetratedBoard: false,
+        overBoard: shot.outcome === 'over',
+        finishNearRim: false,
+        lastX: x0,
+        lastY: y0,
       }
       this.ball.play('ball-spin')
       if (this.streak >= 3) this.fireEmitter.startFollow(this.ball)
+    }
+
+    /** Arc position along a segment (peak bows upward / smaller Y). */
+    segPos(seg: FlightSeg, u: number) {
+      const x = Phaser.Math.Linear(seg.x0, seg.x1, u)
+      const y =
+        Phaser.Math.Linear(seg.y0, seg.y1, u) -
+        Math.sin(Math.PI * u) * seg.peak
+      return { x, y }
+    }
+
+    /** Hard stop: ball may not travel through/behind the glass above the contact face. */
+    enforceBoardCollision(flight: ShotFlight, x: number, y: number) {
+      if (flight.allowOver || flight.contactedBoard) return { x, y }
+      const b = boardBounds(this.hoopX, this.hoopY, H)
+      const insideX = x >= b.left && x <= b.right
+      // Through-glass = above (smaller Y than) the intended contact face
+      const throughGlass = insideX && y < b.contactY - 1 && y >= b.top
+      if (throughGlass) {
+        // Solid glass hit — bounce off the face (not a ghost-through)
+        flight.contactedBoard = true
+        const cx = Phaser.Math.Clamp(x, b.left + 6, b.right - 6)
+        const cy = b.contactY
+        const lateral = cx - this.hoopX
+        const bankIn = Math.abs(lateral) < 16 && flight.power <= 1.45
+        const finalX = bankIn
+          ? this.hoopX + lateral * 0.2
+          : cx + (lateral >= 0 ? 30 : -30)
+        const finalY = bankIn ? this.hoopY : this.hoopY + 42
+        const bounce: FlightSeg = {
+          x0: cx,
+          y0: cy,
+          x1: finalX,
+          y1: finalY,
+          peak: bankIn ? 16 : 8,
+          duration: FLICK.bounceDuration,
+          kind: 'bounce',
+        }
+        flight.segs = [bounce]
+        if (bankIn) {
+          flight.segs.push({
+            x0: finalX,
+            y0: finalY,
+            x1: this.hoopX,
+            y1: this.hoopY + 38,
+            peak: 0,
+            duration: 200,
+            kind: 'sink',
+          })
+          flight.outcome = 'bank'
+        }
+        flight.segIndex = 0
+        flight.t = 0
+        this.shake = Math.max(this.shake, 70)
+        return { x: cx, y: cy }
+      }
+      return { x, y }
     }
 
     update(_time: number, delta: number) {
@@ -440,35 +647,72 @@ export function createCourtVisionGame(
         return
       }
 
-      this.flight.t += delta
-      const u = Phaser.Math.Clamp(this.flight.t / this.flight.duration, 0, 1)
-      const x = Phaser.Math.Linear(this.flight.x0, this.flight.x1, u)
-      const y =
-        Phaser.Math.Linear(this.flight.y0, this.flight.y1, u) -
-        Math.sin(Math.PI * u) * this.flight.peak
-      this.ball.setPosition(x, y)
+      const flight = this.flight
+      const seg = flight.segs[flight.segIndex]
+      if (!seg) {
+        this.resolveShot(flight)
+        this.flight = null
+        this.fireEmitter.emitting = false
+        this.fireEmitter.stopFollow()
+        this.trailGraphics.clear()
+        this.trail = []
+        return
+      }
 
-      // Perspective shrink toward hoop
+      flight.t += delta
+      const u = Phaser.Math.Clamp(flight.t / seg.duration, 0, 1)
+      let { x, y } = this.segPos(seg, u)
+
+      // Solid backboard — never occupy glass (unless extreme over allowed)
+      ;({ x, y } = this.enforceBoardCollision(flight, x, y))
+
+      // Rim contact flags
+      const rimDist = Math.hypot(x - this.hoopX, y - this.hoopY)
+      if (rimDist < 28 && (seg.kind === 'arc' || seg.kind === 'bounce')) {
+        flight.contactedRim = true
+      }
+      if (flight.outcome === 'bank' && seg.kind === 'bounce') {
+        flight.contactedBoard = true
+      }
+
+      this.ball.setPosition(x, y)
+      flight.lastX = x
+      flight.lastY = y
+
+      // Progress across whole multi-seg path for scale
+      const totalDur = flight.segs.reduce((s, g) => s + g.duration, 0)
+      const doneDur =
+        flight.segs
+          .slice(0, flight.segIndex)
+          .reduce((s, g) => s + g.duration, 0) + flight.t
+      const pathU = Phaser.Math.Clamp(doneDur / totalDur, 0, 1)
+
       const size = Phaser.Math.Linear(
         FLICK.ballStartSize,
         FLICK.ballRimSize,
-        Math.pow(u, 0.85),
+        Math.pow(pathU, 0.85),
       )
       this.ball.setDisplaySize(size, size)
 
-      // Layering: in front going up, behind front-rim on the way down
-      if (u < 0.52) this.ball.setDepth(10)
-      else if (u < 0.68) this.ball.setDepth(6)
-      else this.ball.setDepth(4)
+      // Layering: in front going up; behind front-rim when sinking
+      if (seg.kind === 'sink' || (seg.kind === 'bounce' && u > 0.35)) {
+        this.ball.setDepth(4)
+      } else if (pathU < 0.5) {
+        this.ball.setDepth(10)
+      } else {
+        this.ball.setDepth(6)
+      }
+      // Stay in front of board glass always (depth above bg, never "through")
+      if (flight.contactedBoard && seg.kind !== 'sink') {
+        this.ball.setDepth(Math.max(this.ball.depth, 6))
+      }
 
-      // Shadow tracks under ball, fades near rim
-      const shadowScale = Phaser.Math.Linear(1, 0.35, u)
+      const shadowScale = Phaser.Math.Linear(1, 0.35, pathU)
       this.ballShadow.setPosition(x + 2, y + 18 * shadowScale + 8)
       this.ballShadow.setDisplaySize(40 * shadowScale, 14 * shadowScale)
-      this.ballShadow.setAlpha(0.4 * (1 - u * 0.7))
+      this.ballShadow.setAlpha(0.4 * (1 - pathU * 0.7))
       this.ballShadow.setDepth(Math.min(this.ball.depth - 1, 9))
 
-      // Trail
       this.trail.push({ x, y, a: 0.55 })
       if (this.trail.length > 12) this.trail.shift()
       this.trailGraphics.clear()
@@ -484,12 +728,34 @@ export function createCourtVisionGame(
       if (this.streak >= 3) this.fireEmitter.emitting = true
 
       if (u >= 1) {
-        this.resolveShot(this.flight)
-        this.flight = null
-        this.fireEmitter.emitting = false
-        this.fireEmitter.stopFollow()
-        this.trailGraphics.clear()
-        this.trail = []
+        // Segment complete
+        if (seg.kind === 'arc' && flight.outcome === 'bank') {
+          flight.contactedBoard = true
+          this.shake = Math.max(this.shake, 60)
+        }
+        if (seg.kind === 'arc' && flight.outcome === 'front_clank') {
+          flight.contactedRim = true
+          this.shake = Math.max(this.shake, 50)
+        }
+        flight.segIndex += 1
+        flight.t = 0
+        if (flight.segIndex >= flight.segs.length) {
+          flight.finishNearRim =
+            Math.hypot(x - this.hoopX, y - this.hoopY) < FLICK.nearRimRadius ||
+            flight.contactedBoard ||
+            flight.contactedRim ||
+            flight.outcome === 'wide' ||
+            flight.outcome === 'front_clank' ||
+            flight.outcome === 'bank' ||
+            flight.outcome === 'swish' ||
+            flight.outcome === 'rim'
+          this.resolveShot(flight)
+          this.flight = null
+          this.fireEmitter.emitting = false
+          this.fireEmitter.stopFollow()
+          this.trailGraphics.clear()
+          this.trail = []
+        }
       }
     }
 
@@ -506,23 +772,37 @@ export function createCourtVisionGame(
     }
 
     resolveShot(flight: ShotFlight) {
-      const dx = flight.x1 - this.hoopX
-      const dy = flight.y1 - this.hoopY
+      const dx = flight.lastX - this.hoopX
+      const dy = flight.lastY - this.hoopY
       const err = Math.hypot(dx, dy)
 
       let kind: 'swish' | 'make' | 'miss' = 'miss'
       let banked = false
-      if (err < 10) kind = 'swish'
-      else if (err < 18) kind = 'make'
-      else if (
-        // Bank off backboard: a bit long + near center
-        dy < -6 &&
-        dy > -30 &&
-        Math.abs(dx) < 20 &&
-        err < 34
-      ) {
+
+      // Score from intended outcome + whether path included a clean sink/bank
+      const hadSink = flight.segs.some((s) => s.kind === 'sink')
+      if (flight.overBoard || flight.outcome === 'over') {
+        kind = 'miss'
+      } else if (flight.outcome === 'front_clank' || flight.outcome === 'wide') {
+        kind = 'miss'
+      } else if (flight.outcome === 'swish') {
+        kind = 'swish'
+      } else if (flight.outcome === 'rim') {
         kind = 'make'
-        banked = true
+      } else if (flight.outcome === 'bank') {
+        if (hadSink || flight.contactedBoard) {
+          // Bank-in if we planned a sink, else bounce-out miss
+          if (hadSink) {
+            kind = 'make'
+            banked = true
+          } else {
+            kind = 'miss'
+          }
+        }
+      } else if (err < 14) {
+        kind = 'swish'
+      } else if (err < 24) {
+        kind = 'make'
       }
 
       const result = scoreShot({
@@ -594,6 +874,16 @@ export function createCourtVisionGame(
           duration: 220,
           onComplete: () => this.resetBall(),
         })
+      }
+
+      this.lastShotMeta = {
+        penetratedBoard: flight.penetratedBoard,
+        contactedBoard: flight.contactedBoard,
+        contactedRim: flight.contactedRim,
+        overBoard: flight.overBoard,
+        finishNearRim: flight.finishNearRim,
+        outcome: flight.outcome,
+        kind,
       }
 
       this.emitHud(this.callout)
