@@ -1,0 +1,264 @@
+.lobby3d-root {
+  position: relative;
+  min-height: 100dvh;
+  background: #0a0a0c;
+  overflow: hidden;
+}
+
+.lobby3d-canvas-wrap {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  touch-action: none;
+}
+
+.lobby3d-canvas-wrap canvas {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+}
+
+.lobby3d-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 1rem 1rem 5.5rem;
+}
+
+.lobby3d-overlay > * {
+  pointer-events: auto;
+}
+
+.lobby3d-ticket {
+  align-self: center;
+  display: inline-flex;
+  padding: 0.4rem 0.95rem;
+  border: 1px dashed rgba(242, 240, 234, 0.35);
+  border-radius: 4px;
+  font-family: Oswald, Inter, sans-serif;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  color: #f2f0ea;
+  background: rgba(10, 10, 12, 0.45);
+  backdrop-filter: blur(6px);
+}
+
+.lobby3d-teaser {
+  align-self: center;
+  margin: 0;
+  text-align: center;
+  font-size: 0.78rem;
+  color: #6b6b73;
+  background: rgba(10, 10, 12, 0.4);
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+}
+
+.lobby3d-teaser strong {
+  color: #ff5a1f;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.lobby3d-dock {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  padding: 0.85rem 1rem calc(0.85rem + env(safe-area-inset-bottom));
+  background: linear-gradient(transparent, rgba(10, 10, 12, 0.92) 40%);
+}
+
+.lobby3d-dock__btn {
+  flex: 1;
+  max-width: 8rem;
+  text-align: center;
+  text-decoration: none;
+  color: #f2f0ea;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.7rem 0.5rem;
+  border: 1px solid rgba(242, 240, 234, 0.14);
+  border-radius: 999px;
+  background: rgba(26, 16, 40, 0.55);
+  backdrop-filter: blur(8px);
+}
+
+.lobby3d-mute {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 4;
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 999px;
+  border: 1px solid rgba(242, 240, 234, 0.2);
+  background: rgba(10, 10, 12, 0.55);
+  color: #f2f0ea;
+  font-size: 0.85rem;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+}
+
+.lobby3d-enter {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  background:
+    radial-gradient(ellipse at 50% 30%, rgba(26, 16, 40, 0.85), transparent 55%),
+    rgba(10, 10, 12, 0.92);
+  padding: 2rem;
+  text-align: center;
+  cursor: pointer;
+  border: 0;
+  color: inherit;
+}
+
+.lobby3d-enter__title {
+  font-family: Oswald, Inter, sans-serif;
+  font-size: 1.8rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #f2f0ea;
+  margin: 0;
+}
+
+.lobby3d-enter__copy {
+  color: #6b6b73;
+  max-width: 16rem;
+  margin: 0;
+  line-height: 1.45;
+  font-size: 0.92rem;
+}
+
+.lobby3d-enter__cta {
+  margin-top: 0.5rem;
+  padding: 0.85rem 1.5rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 90, 31, 0.55);
+  background: rgba(255, 90, 31, 0.18);
+  color: #ff5a1f;
+  font-family: Oswald, Inter, sans-serif;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 0.85rem;
+}
+
+.lobby3d-enter__whisper {
+  color: #7dffc3;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  margin: 0.25rem 0 0;
+}
+
+.lobby3d-dots {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 5.6rem;
+  z-index: 3;
+  display: flex;
+  justify-content: center;
+  gap: 0.45rem;
+  pointer-events: auto;
+}
+
+.lobby3d-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  border: 0;
+  padding: 0;
+  background: rgba(107, 107, 115, 0.55);
+  cursor: pointer;
+}
+
+.lobby3d-dot--on {
+  background: #ff5a1f;
+  box-shadow: 0 0 10px rgba(255, 90, 31, 0.55);
+  width: 1rem;
+}
+
+.lobby3d-swipe-hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 4.35rem;
+  z-index: 3;
+  text-align: center;
+  margin: 0;
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(107, 107, 115, 0.9);
+  pointer-events: none;
+}
+
+.lobby3d-desktop-gate {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .lobby3d-mobile {
+    display: none;
+  }
+  .lobby3d-desktop-gate {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100dvh;
+    gap: 0.75rem;
+    padding: 2rem;
+    text-align: center;
+    position: relative;
+    z-index: 5;
+    background: #0a0a0c;
+  }
+  .lobby3d-desktop-gate__title {
+    font-family: Oswald, Inter, sans-serif;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin: 0.5rem 0;
+  }
+  .lobby3d-desktop-gate__copy {
+    color: #6b6b73;
+    max-width: 22rem;
+  }
+  .lobby3d-desktop-gate__qr {
+    border-radius: 12px;
+    background: #f2f0ea;
+    padding: 0.75rem;
+  }
+  .lobby3d-desktop-gate__whisper {
+    color: #7dffc3;
+    letter-spacing: 0.06em;
+  }
+}
+
+.lobby3d-overlay {
+  pointer-events: none !important;
+}
+.lobby3d-overlay .lobby3d-ticket,
+.lobby3d-overlay .lobby3d-teaser {
+  pointer-events: none;
+}
+.lobby3d-dots {
+  pointer-events: auto;
+  z-index: 6;
+}
