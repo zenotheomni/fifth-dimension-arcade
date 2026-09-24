@@ -5,6 +5,9 @@
     { "source": "/api/scores", "destination": "/api/scores" },
     { "source": "/api/challenges", "destination": "/api/challenges" },
     { "source": "/api/challenges/:id", "destination": "/api/challenges/[id]" },
+    { "source": "/api/leaderboard", "destination": "/api/leaderboard" },
+    { "source": "/api/games", "destination": "/api/games" },
+    { "source": "/api/personal-best", "destination": "/api/personal-best" },
     { "source": "/arcade", "destination": "/arcade/index.html" },
     { "source": "/arcade/(.*)", "destination": "/arcade/index.html" }
   ]

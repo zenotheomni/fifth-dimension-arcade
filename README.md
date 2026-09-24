@@ -46,3 +46,7 @@ Full steps: [DEPLOY.md](./DEPLOY.md).
 | `/arcade/key` | NFC key landing |
 
 Owner: 5Dimperial / Jenks · Builder: Fifth Floor
+
+## Backend
+
+Scores, leaderboards, challenges, and contests: see [`ARCADE_BACKEND.md`](./ARCADE_BACKEND.md).

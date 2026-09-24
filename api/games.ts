@@ -1,9 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { handleOptions, rpcErrorResponse } from '../_lib/http'
-import { getSupabase } from '../_lib/supabase'
+import { handleOptions, rpcErrorResponse } from './_lib/http'
+import { getSupabase } from './_lib/supabase'
 
 /**
- * GET /api/challenges/:id
+ * GET /api/games — data-driven game registry
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (handleOptions(req, res, 'GET, OPTIONS')) return
@@ -13,22 +13,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const raw = req.query.id
-    const id = typeof raw === 'string' ? raw : Array.isArray(raw) ? raw[0] : ''
-    if (!id) {
-      return res.status(400).json({ ok: false, error: 'missing_id' })
-    }
-
     const supabase = getSupabase()
-    const { data, error } = await supabase.rpc('arcade_get_challenge', {
-      p_id: id,
-    })
-
+    const { data, error } = await supabase.rpc('arcade_list_games')
     if (error) return rpcErrorResponse(res, error)
 
     return res.status(200).json({
       ok: true,
-      challenge: data,
+      games: data ?? [],
     })
   } catch (err) {
     return rpcErrorResponse(res, err)
