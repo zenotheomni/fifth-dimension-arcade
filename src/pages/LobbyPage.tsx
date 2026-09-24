@@ -173,7 +173,6 @@ export default function LobbyPage() {
             </div>
 
             <p className="ffa-title__cta">▶▶ Tap to Start ◀◀</p>
-            <p className="ffa-title__whisper">{COPY.FLOW_STATE}</p>
             <img
               className="ffa-title__wordmark"
               src={`${BASE}art/wordmark-280.webp`}

@@ -51,8 +51,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-end;
-  padding: 0 clamp(0.75rem, 4vw, 1.25rem) 2.25rem;
+  justify-content: flex-start;
+  padding: clamp(12%, 16vh, 20%) clamp(0.35rem, 2.5vw, 0.85rem) 2rem;
   cursor: pointer;
   border: 0;
   background: transparent;
@@ -163,15 +163,16 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: min(100%, 430px);
-  margin-bottom: 1.1rem;
-  animation: ffa-logo-in 0.65s ease-out 1.45s both;
+  width: min(92%, 440px);
+  margin-bottom: 0.85rem;
+  /* slam-in after sting */
+  animation: ffa-logo-slam 0.55s cubic-bezier(0.2, 1.4, 0.4, 1) 1.4s both;
 }
 
 .ffa-title__emblem {
-  width: clamp(96px, 28vw, 148px);
+  width: clamp(110px, 32vw, 168px);
   height: auto;
-  margin-bottom: 0.35rem;
+  margin-bottom: 0.25rem;
   filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.5));
   image-rendering: pixelated;
 }
@@ -182,8 +183,8 @@
   width: 100%;
   font-family: Bungee, Impact, sans-serif;
   font-weight: 400;
-  font-size: clamp(1.55rem, 8.4vw, 2.35rem);
-  line-height: 0.92;
+  font-size: clamp(2.05rem, 11.5vw, 3.1rem);
+  line-height: 0.9;
   letter-spacing: 0.02em;
   text-transform: uppercase;
   transform: skewX(-4deg);
@@ -246,7 +247,7 @@
 .ffa-title__cta {
   position: relative;
   z-index: 3;
-  margin: 1.35rem 0 0;
+  margin: auto 0 0;
   min-height: 1.4em;
   font-family: Bungee, sans-serif;
   font-size: clamp(0.78rem, 3.4vw, 0.95rem);

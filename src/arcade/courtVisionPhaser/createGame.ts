@@ -39,7 +39,7 @@ export function createCourtVisionGame(
   mode: CvMode,
 ): Phaser.Game {
   class CourtScene extends Phaser.Scene {
-    ball!: Phaser.GameObjects.Image
+    ball!: Phaser.GameObjects.Sprite
     net!: Phaser.GameObjects.Sprite
     aimGraphics!: Phaser.GameObjects.Graphics
     fireEmitter!: Phaser.GameObjects.Particles.ParticleEmitter
@@ -75,9 +75,13 @@ export function createCourtVisionGame(
     preload() {
       const base = import.meta.env.BASE_URL
       this.load.image('court', `${base}art/court-bg.webp`)
-      this.load.image('ball', `${base}art/ball.png`)
+      this.load.spritesheet('ball', `${base}art/ball-sheet.png`, {
+        frameWidth: 48,
+        frameHeight: 48,
+      })
       this.load.image('fire', `${base}art/fire-particle.png`)
-      for (let i = 0; i < 5; i++) {
+      this.load.image('firePurple', `${base}art/fire-particle-purple.png`)
+      for (let i = 0; i < 7; i++) {
         this.load.image(`net${i}`, `${base}art/net-${i}.png`)
       }
     }
@@ -103,43 +107,51 @@ export function createCourtVisionGame(
       this.hoopY = H * COURT_BG.hoopY
       this.hoopRoot = this.add.container(this.hoopX, this.hoopY).setDepth(5)
 
-      // Soft rim highlight so the ball reads through the painted hoop
-      const rimGlow = this.add
-        .circle(0, 0, 30)
-        .setStrokeStyle(3, 0xff8c28, 0.55)
-        .setFillStyle(0x000000, 0)
-      this.hoopRoot.add(rimGlow)
-
+      // Pixel net overlay (idle hidden — painted net on plate; animates on make)
       if (this.textures.exists('net0')) {
-        const frames = [0, 1, 2, 3, 4, 3, 2, 1].map((i) => ({ key: `net${i}` }))
+        const frames = [0, 1, 2, 3, 4, 5, 6, 4, 2, 1].map((i) => ({
+          key: `net${i}`,
+        }))
         this.anims.create({
           key: 'net-swish',
           frames,
-          frameRate: 14,
-          repeat: 1,
+          frameRate: 16,
+          repeat: 0,
         })
-        // Sit just under the painted rim
-        this.net = this.add.sprite(0, 22, 'net0').setScale(1.05).setAlpha(0)
+        this.net = this.add.sprite(0, 22, 'net0').setScale(1.1).setAlpha(0)
+        this.net.texture.setFilter(Phaser.Textures.FilterMode.NEAREST)
         this.hoopRoot.add(this.net)
       }
 
       this.aimGraphics = this.add.graphics().setDepth(8)
 
+      if (!this.anims.exists('ball-spin')) {
+        this.anims.create({
+          key: 'ball-spin',
+          frames: this.anims.generateFrameNumbers('ball', { start: 0, end: 7 }),
+          frameRate: 14,
+          repeat: -1,
+        })
+      }
+
       this.ball = this.add
-        .image(this.ballHome.x, this.ballHome.y, 'ball')
-        .setDisplaySize(56, 56)
+        .sprite(this.ballHome.x, this.ballHome.y, 'ball', 0)
+        .setDisplaySize(52, 52)
         .setDepth(10)
         .setInteractive({ useHandCursor: true })
       this.ball.texture.setFilter(Phaser.Textures.FilterMode.NEAREST)
 
+      // Chunky orange/purple fire for streak heat
       this.fireEmitter = this.add.particles(0, 0, 'fire', {
-        lifespan: 420,
-        speed: { min: 20, max: 60 },
-        scale: { start: 0.55, end: 0 },
-        alpha: { start: 0.85, end: 0 },
-        frequency: 40,
+        lifespan: { min: 280, max: 520 },
+        speed: { min: 30, max: 90 },
+        scale: { start: 0.9, end: 0 },
+        alpha: { start: 0.95, end: 0 },
+        frequency: 28,
+        gravityY: -40,
         blendMode: 'ADD',
         emitting: false,
+        tint: [0xff8c28, 0xff5a3c, 0xffc83c, 0x482078],
       })
       this.fireEmitter.setDepth(9)
 
@@ -226,6 +238,7 @@ export function createCourtVisionGame(
         perfect,
         power,
       }
+      this.ball.play('ball-spin')
       if (this.streak >= 3) this.fireEmitter.startFollow(this.ball)
     }
 
@@ -274,7 +287,7 @@ export function createCourtVisionGame(
         Phaser.Math.Linear(this.flight.y0, this.flight.y1, u) -
         Math.sin(Math.PI * u) * this.flight.peak
       this.ball.setPosition(x, y)
-      this.ball.rotation += delta * 0.012 * this.flight.power
+      if (!this.ball.anims.isPlaying) this.ball.play('ball-spin')
 
       if (this.streak >= 3) this.fireEmitter.emitting = true
 
@@ -390,10 +403,12 @@ export function createCourtVisionGame(
     }
 
     resetBall() {
+      this.ball.anims.stop()
+      this.ball.setFrame(0)
       this.ball.setPosition(this.ballHome.x, this.ballHome.y)
       this.ball.setAlpha(1)
       this.ball.setScale(1)
-      this.ball.setDisplaySize(56, 56)
+      this.ball.setDisplaySize(52, 52)
       this.ball.rotation = 0
     }
 
