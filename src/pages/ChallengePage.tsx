@@ -8,6 +8,8 @@ import '../arcade/courtVisionPhaser/courtVisionPhaser.css'
 
 type Phase = 'loading' | 'ready' | 'playing' | 'error'
 
+const BASE = import.meta.env.BASE_URL
+
 export default function ChallengePage() {
   const { id } = useParams<{ id: string }>()
   const [phase, setPhase] = useState<Phase>('loading')
@@ -83,43 +85,77 @@ export default function ChallengePage() {
   }
 
   return (
-    <div className="arcade-root">
-      <div className="arcade-glow arcade-glow--ink" aria-hidden />
-      <div className="arcade-shell cvp-challenge-shell">
-        <p className="arcade-ticket">Challenge</p>
-        {phase === 'loading' ? (
-          <>
-            <h1 className="arcade-shell__title">Loading…</h1>
-            <p className="arcade-shell__copy">Pulling the challenge card.</p>
-          </>
-        ) : null}
-        {phase === 'error' ? (
-          <>
-            <h1 className="arcade-shell__title">Challenge offline</h1>
-            <p className="arcade-shell__copy">
-              {error === 'challenge_expired'
-                ? 'This challenge expired. Run a fresh one from Court Vision.'
-                : 'Could not find that challenge.'}
-            </p>
-            <div className="arcade-shell__actions">
-              <Link to="/" className="arcade-back">
+    <div className="arcade-root arcade-root--game">
+      <div className="cvp-challenger">
+        <div
+          className="cvp-challenger__bg"
+          style={{ backgroundImage: `url(${BASE}art/court-bg.webp)` }}
+          aria-hidden
+        />
+        <div className="cvp-challenger__scan" aria-hidden />
+        <div className="cvp-challenger__vignette" aria-hidden />
+
+        <div className="cvp-challenger__panel">
+          {phase === 'loading' ? (
+            <>
+              <p className="cvp-challenger__badge">Challenge</p>
+              <h1 className="cvp-challenger__title">Loading…</h1>
+              <p className="cvp-challenger__copy">Pulling the challenge card.</p>
+            </>
+          ) : null}
+
+          {phase === 'error' ? (
+            <>
+              <p className="cvp-challenger__badge">Offline</p>
+              <h1 className="cvp-challenger__title">Challenge offline</h1>
+              <p className="cvp-challenger__copy">
+                {error === 'challenge_expired'
+                  ? 'This challenge expired. Run a fresh one from Court Vision.'
+                  : 'Could not find that challenge.'}
+              </p>
+              <Link to="/" className="ffa-btn ffa-btn--ghost">
                 ← Back to Fifth Floor Arcade
               </Link>
-            </div>
-          </>
-        ) : null}
-        {phase === 'ready' && challenge ? (
-          <>
-            <h1 className="arcade-shell__title">Beat {challenge.creatorHandle}</h1>
-            <p className="cvp-challenge-target">{challenge.targetScore}</p>
-            <p className="arcade-shell__copy">
-              Court Vision · same setup · 60 seconds. Shift the scoreboard.
-            </p>
-            <div className="arcade-shell__actions">
+            </>
+          ) : null}
+
+          {phase === 'ready' && challenge ? (
+            <>
+              <p className="cvp-challenger__badge">
+                <span className="cvp-challenger__dot" />
+                Here comes a new challenger!
+                <span className="cvp-challenger__dot" />
+              </p>
+
+              <div className="cvp-challenger__vs">
+                <div className="cvp-challenger__side">
+                  <p className="cvp-challenger__role">Challenger</p>
+                  <p className="cvp-challenger__handle">
+                    {challenge.creatorHandle}
+                  </p>
+                </div>
+                <p className="cvp-challenger__vs-mark" aria-hidden>
+                  VS
+                </p>
+                <div className="cvp-challenger__side cvp-challenger__side--you">
+                  <p className="cvp-challenger__role">You</p>
+                  <p className="cvp-challenger__handle cvp-challenger__handle--you">
+                    ???
+                  </p>
+                </div>
+              </div>
+
+              <p className="cvp-challenger__target-label">Beat this score</p>
+              <p className="cvp-challenger__target">{challenge.targetScore}</p>
+              <p className="cvp-challenger__copy">
+                Court Vision · same setup · 60 seconds.
+                <br />
+                Shift the scoreboard.
+              </p>
+
               <button
                 type="button"
-                className="cvp-btn-primary"
-                style={{ width: '100%', textAlign: 'center' }}
+                className="ffa-btn ffa-btn--primary"
                 onClick={() => {
                   setPhase('playing')
                   track('arcade_challenge_start', { challengeId: challenge.id })
@@ -127,13 +163,13 @@ export default function ChallengePage() {
               >
                 Accept challenge
               </button>
-              <Link to="/" className="arcade-back">
+              <Link to="/" className="ffa-btn ffa-btn--ghost ffa-btn--sm">
                 ← Back to Fifth Floor Arcade
               </Link>
-            </div>
-          </>
-        ) : null}
-              </div>
+            </>
+          ) : null}
+        </div>
+      </div>
     </div>
   )
 }

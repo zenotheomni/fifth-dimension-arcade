@@ -468,26 +468,9 @@
 }
 
 .ffa-select__play {
-  display: block;
+  /* visuals from .ffa-btn / .ffa-btn--primary */
   width: calc(100% - 2.2rem);
   margin: 0.85rem 1.1rem 0;
-  padding: 0.85rem 1rem;
-  border: 0;
-  border-radius: 6px;
-  background: linear-gradient(180deg, #ffe68c, #ff8c28);
-  color: #1a0c08;
-  font-family: Bungee, sans-serif;
-  font-size: 0.85rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  cursor: pointer;
-  box-shadow: 0 4px 0 #8a3a10;
-}
-
-.ffa-select__play:disabled {
-  opacity: 0.45;
-  box-shadow: none;
-  cursor: not-allowed;
 }
 
 .ffa-dock {

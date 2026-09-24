@@ -435,7 +435,7 @@ export default function CourtVisionPhaser({
               )}
               <button
                 type="submit"
-                className="cvp-btn-primary"
+                className="ffa-btn ffa-btn--primary"
                 disabled={handleBusy}
               >
                 {handleBusy ? 'Saving…' : 'Lock it in'}
@@ -446,13 +446,13 @@ export default function CourtVisionPhaser({
           )}
 
           <div className="cvp-end__actions">
-            <button type="button" className="cvp-btn-primary" onClick={runItBack}>
+            <button type="button" className="ffa-btn ffa-btn--primary" onClick={runItBack}>
               {COPY.RUN_IT_BACK}
             </button>
             {!challenge ? (
               <button
                 type="button"
-                className="cvp-btn-secondary"
+                className="ffa-btn ffa-btn--secondary"
                 onClick={() => void challengeFriend()}
                 disabled={busyShare || needsHandle}
               >
@@ -461,7 +461,7 @@ export default function CourtVisionPhaser({
             ) : null}
             {shareNote ? <p className="cvp-end__share">{shareNote}</p> : null}
             <a
-              className="cvp-btn-ghost"
+              className="ffa-btn ffa-btn--ghost"
               href="https://5dimperial.com/collections/apparel"
               target="_blank"
               rel="noreferrer"
@@ -469,7 +469,7 @@ export default function CourtVisionPhaser({
             >
               {END_DOORS.courtVision[1].label}
             </a>
-            <Link to="/" className="cvp-btn-ghost">
+            <Link to="/" className="ffa-btn ffa-btn--ghost">
               Back to select
             </Link>
           </div>

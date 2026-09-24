@@ -479,3 +479,145 @@ body {
   margin-bottom: 1.25rem;
   word-break: break-all;
 }
+
+/* ===== Shared arcade buttons (use everywhere) ===== */
+.ffa-btn {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  text-decoration: none;
+  text-align: center;
+  padding: 0.85rem 1rem;
+  border: 0;
+  border-radius: 6px;
+  font-family: Bungee, Impact, sans-serif;
+  font-size: 0.82rem;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  transition: transform 0.08s ease, box-shadow 0.08s ease, opacity 0.15s ease;
+}
+
+.ffa-btn--primary {
+  background: linear-gradient(180deg, #ffe68c 0%, #ff8c28 100%);
+  color: #1a0c08;
+  box-shadow: 0 4px 0 #8a3a10;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.ffa-btn--primary:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 #8a3a10;
+}
+
+.ffa-btn--secondary {
+  background: linear-gradient(180deg, rgba(0, 200, 196, 0.35), rgba(0, 140, 140, 0.25));
+  border: 2px solid #00c8c4;
+  color: #7dffc3;
+  box-shadow: 0 4px 0 #0a4a48;
+}
+
+.ffa-btn--secondary:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 #0a4a48;
+}
+
+.ffa-btn--ghost {
+  background: rgba(10, 10, 12, 0.55);
+  border: 1px solid rgba(242, 240, 234, 0.35);
+  color: #f2f0ea;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.45);
+}
+
+.ffa-btn--ghost:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.45);
+}
+
+.ffa-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+.ffa-btn--sm {
+  padding: 0.65rem 0.85rem;
+  font-size: 0.72rem;
+}
+
+/* Legacy aliases → same look as .ffa-btn--* */
+button.cvp-btn-primary,
+a.cvp-btn-primary,
+.cvp-btn-primary {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  text-decoration: none;
+  text-align: center;
+  padding: 0.85rem 1rem;
+  border: 0;
+  border-radius: 6px;
+  font-family: Bungee, Impact, sans-serif;
+  font-size: 0.82rem;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background: linear-gradient(180deg, #ffe68c 0%, #ff8c28 100%);
+  color: #1a0c08;
+  box-shadow: 0 4px 0 #8a3a10;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+button.cvp-btn-primary:active:not(:disabled),
+.cvp-btn-primary:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 #8a3a10;
+}
+button.cvp-btn-secondary,
+a.cvp-btn-secondary,
+.cvp-btn-secondary {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  text-decoration: none;
+  text-align: center;
+  padding: 0.85rem 1rem;
+  border-radius: 6px;
+  font-family: Bungee, Impact, sans-serif;
+  font-size: 0.82rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  appearance: none;
+  background: linear-gradient(180deg, rgba(0, 200, 196, 0.35), rgba(0, 140, 140, 0.25));
+  border: 2px solid #00c8c4;
+  color: #7dffc3;
+  box-shadow: 0 4px 0 #0a4a48;
+}
+button.cvp-btn-ghost,
+a.cvp-btn-ghost,
+.cvp-btn-ghost {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  text-decoration: none;
+  text-align: center;
+  padding: 0.85rem 1rem;
+  border-radius: 6px;
+  font-family: Bungee, Impact, sans-serif;
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  appearance: none;
+  background: rgba(10, 10, 12, 0.55);
+  border: 1px solid rgba(242, 240, 234, 0.35);
+  color: #f2f0ea;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.45);
+}

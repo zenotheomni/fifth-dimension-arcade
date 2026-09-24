@@ -14,6 +14,7 @@ import {
   playSwish,
   unlockAudio,
 } from '../courtVision/sfx'
+import { courtVisionSeedConfig, type CourtVisionSeedConfig } from '../core/seededRandom'
 import { COURT_BG } from './bgLayout'
 import type { CvBridge, CvChallengeConfig, CvHudState, CvMode } from './types'
 
@@ -62,9 +63,13 @@ export function createCourtVisionGame(
     pulling = false
     pullStart = { x: 0, y: 0 }
     pullCur = { x: 0, y: 0 }
-    /** Rim center in screen space — locked to painted hoop */
+    /** Rim center in screen space — painted hoop + seeded sway */
     hoopX = W * COURT_BG.hoopX
     hoopY = H * COURT_BG.hoopY
+    baseHoopX = W * COURT_BG.hoopX
+    baseHoopY = H * COURT_BG.hoopY
+    seedCfg: CourtVisionSeedConfig | null = null
+    elapsed = 0
     shake = 0
     ended = false
     ballHome = { x: W / 2, y: H - 150 }
@@ -92,6 +97,16 @@ export function createCourtVisionGame(
       this.pb = loadPersonalBest()
       this.cameras.main.setBackgroundColor('#1c0c30')
 
+      // Challenge seed drives sway / wind / ball spawn so friends share a setup
+      const seed = this.challengeCfg?.seed?.trim()
+      this.seedCfg = seed ? courtVisionSeedConfig(seed) : null
+      if (this.seedCfg) {
+        this.ballHome = {
+          x: W / 2 + this.seedCfg.ballHomeOffsetX,
+          y: H - 150,
+        }
+      }
+
       // Portrait court plate already hoop-centered — fit exactly to game size
       const bg = this.add.image(W / 2, H / 2, 'court')
       bg.setDisplaySize(W, H)
@@ -104,8 +119,10 @@ export function createCourtVisionGame(
         .setDepth(2)
 
       // Interactive hoop overlays aligned to painted rim (no second backboard frame)
-      this.hoopX = W * COURT_BG.hoopX
-      this.hoopY = H * COURT_BG.hoopY
+      this.baseHoopX = W * COURT_BG.hoopX
+      this.baseHoopY = H * COURT_BG.hoopY
+      this.hoopX = this.baseHoopX
+      this.hoopY = this.baseHoopY
       this.hoopRoot = this.add.container(this.hoopX, this.hoopY).setDepth(5)
 
       // Pixel net overlay (idle hidden — painted net on plate; animates on make)
@@ -222,7 +239,13 @@ export function createCourtVisionGame(
       if (dist < 18) return
 
       const power = Phaser.Math.Clamp(dist / 140, 0.45, 1.35)
-      const targetX = this.hoopX + Phaser.Math.Clamp(dx * 0.28, -55, 55)
+      const wind = this.seedCfg ? this.seedCfg.windBias * 14 : 0
+      const jitter = this.seedCfg ? this.seedCfg.aimJitter * 20 : 0
+      const targetX =
+        this.hoopX +
+        Phaser.Math.Clamp(dx * 0.28, -55, 55) +
+        wind +
+        (this.seedCfg ? (dx >= 0 ? jitter : -jitter) * 0.35 : 0)
       const targetY = this.hoopY
       const perfect = dist > 55 && dist < 130 && Math.abs(dx) < 48
 
@@ -250,7 +273,9 @@ export function createCourtVisionGame(
       const dist = Math.hypot(dx, dy)
       if (dist < 8) return
       const power = Phaser.Math.Clamp(dist / 140, 0.45, 1.35)
-      const tx = this.hoopX + Phaser.Math.Clamp(dx * 0.28, -55, 55)
+      const wind = this.seedCfg ? this.seedCfg.windBias * 14 : 0
+      const tx =
+        this.hoopX + Phaser.Math.Clamp(dx * 0.28, -55, 55) + wind
       const ty = this.hoopY
       const peak = 90 + power * 70
 
@@ -270,6 +295,17 @@ export function createCourtVisionGame(
     }
 
     update(_time: number, delta: number) {
+      this.elapsed += delta
+
+      // Seeded hoop sway (challenge same-setup)
+      if (this.seedCfg && this.phase === 'playing' && !this.ended) {
+        const s = this.seedCfg
+        const ang = this.elapsed * s.swaySpeed + s.swayPhase
+        this.hoopX = this.baseHoopX + Math.sin(ang) * s.swayAmpX
+        this.hoopY = this.baseHoopY + Math.sin(ang * 1.37 + 0.6) * s.swayAmpY
+        this.hoopRoot.setPosition(this.hoopX, this.hoopY)
+      }
+
       if (this.shake > 0) {
         this.shake -= delta
         this.cameras.main.setScroll(

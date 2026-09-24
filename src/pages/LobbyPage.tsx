@@ -299,7 +299,7 @@ export default function LobbyPage() {
             <p className="ffa-select__hint">Swipe · tap a cabinet · press play</p>
             <button
               type="button"
-              className="ffa-select__play"
+              className="ffa-btn ffa-btn--primary ffa-select__play"
               disabled={!game.route}
               onClick={onPlay}
             >
