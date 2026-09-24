@@ -10,13 +10,14 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.49.8",
     "phaser": "^3.90.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.13.1"
   },
   "devDependencies": {
-    "@types/node": "^24.10.1",
+    "@types/node": "^24.13.6",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vercel/node": "^5.3.6",

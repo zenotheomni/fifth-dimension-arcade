@@ -17,11 +17,18 @@ After the first deploy, the lobby is at:
 
 `https://<project>.vercel.app/arcade`
 
-API stubs:
+API (Supabase-backed — see `ARCADE_BACKEND.md`):
 
 - `POST /api/scores`
 - `POST /api/challenges`
 - `GET /api/challenges/:id`
+- `GET /api/leaderboard`
+- `GET /api/games`
+- `GET /api/personal-best`
+
+### Env vars (Vercel)
+
+Set publishable keys only (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, matching `VITE_*`, and `ARCADE_PUBLIC_BASE_URL`). Never commit service-role keys.
 
 ## Link from 5Dimperial.com
 

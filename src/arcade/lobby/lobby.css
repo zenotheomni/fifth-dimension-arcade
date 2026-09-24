@@ -348,6 +348,9 @@
   animation: ffa-ticker 28s linear infinite;
 }
 
+.ffa-ticker__label {
+  color: #ffc83c;
+}
 .ffa-ticker__sample {
   color: var(--coral);
   margin-right: 0.35rem;
@@ -663,4 +666,14 @@
   .ffa-ticker__track {
     animation: none !important;
   }
+}
+
+.ffa-ticker.is-empty .ffa-ticker__track {
+  animation-duration: 40s;
+  opacity: 0.85;
+}
+.ffa-ticker__label {
+  color: #ffc83c;
+  letter-spacing: 0.14em;
+  margin-right: 0.75rem;
 }

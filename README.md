@@ -22,7 +22,13 @@ npm run preview
 | `/arcade` | Title screen → game select |
 | `/arcade/court-vision` | Phaser Court Vision |
 | `/arcade/fifth-run` | Shell (gameplay later) |
-| `/arcade/challenge/:id` | Challenge shell |
+| `/arcade/challenge/:id` | Friend challenge |
 | `/arcade/key` | NFC key shell |
 
 See `CREDITS.md` for music / engine / brand asset credits.
+
+Owner: 5Dimperial / Jenks · Builder: Fifth Floor
+
+## Backend
+
+Scores, leaderboards, challenges, and contests: see [`ARCADE_BACKEND.md`](./ARCADE_BACKEND.md).

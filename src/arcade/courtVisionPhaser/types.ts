@@ -1,4 +1,11 @@
-export type CvMode = 'timed' | 'endless'
+export type CvMode = 'timed' | 'endless' | 'challenge'
+
+export type CvChallengeConfig = {
+  id: string
+  targetScore: number
+  seed: string
+  creatorHandle: string
+}
 
 export type CvHudState = {
   score: number
@@ -13,8 +20,17 @@ export type CvHudState = {
   mode: CvMode
 }
 
+export type CvEndPayload = {
+  score: number
+  pb: number
+  newPb: boolean
+  mode: CvMode
+  beatChallenge: boolean | null
+}
+
 export type CvBridge = {
   onHud: (state: CvHudState) => void
-  onEnded: (final: { score: number; pb: number; newPb: boolean; mode: CvMode }) => void
+  onEnded: (final: CvEndPayload) => void
   muted: boolean
+  challenge?: CvChallengeConfig | null
 }
