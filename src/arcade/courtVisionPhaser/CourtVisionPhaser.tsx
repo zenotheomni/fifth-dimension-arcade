@@ -363,7 +363,7 @@ export default function CourtVisionPhaser({
         ) : null}
 
         {!ended && hud.score === 0 && hud.streak === 0 ? (
-          <p className="cvp-hint">Hold ball · pull back · release</p>
+          <p className="cvp-hint">Flick up to shoot</p>
         ) : null}
         {!ended && hud.mode === 'endless' && hud.phase === 'playing' ? (
           <button
