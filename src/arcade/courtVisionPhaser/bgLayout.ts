@@ -11,6 +11,9 @@ export const COURT_BG = {
   wordmarkY: 0.168,
   /** Shooter square top */
   squareTop: 0.2111,
+  /** Real logo overlay (exact display px, LINEAR) */
+  wordmarkW: 117,
+  wordmarkH: 58,
 } as const
 
 /** Overlay sprite sizes tuned to baked rim (~97px wide at 390). */
