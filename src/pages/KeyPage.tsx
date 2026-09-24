@@ -19,10 +19,10 @@ export default function KeyPage() {
         </p>
         <div className="arcade-shell__actions">
           <Link to="/" className="arcade-soft-cta">
-            Enter The Fifth Floor
+            Enter Fifth Floor Arcade
           </Link>
           <Link to="/" className="arcade-back">
-            ← Lobby
+            ← Fifth Floor Arcade
           </Link>
         </div>
       </div>
