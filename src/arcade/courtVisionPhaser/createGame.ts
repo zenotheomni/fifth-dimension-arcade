@@ -14,6 +14,7 @@ import {
   playSwish,
   unlockAudio,
 } from '../courtVision/sfx'
+import { COURT_BG } from './bgLayout'
 import type { CvBridge, CvHudState, CvMode } from './types'
 
 const W = 390
@@ -40,11 +41,10 @@ export function createCourtVisionGame(
   class CourtScene extends Phaser.Scene {
     ball!: Phaser.GameObjects.Image
     net!: Phaser.GameObjects.Sprite
-    rim!: Phaser.GameObjects.Arc
-    backboard!: Phaser.GameObjects.Rectangle
     aimGraphics!: Phaser.GameObjects.Graphics
     fireEmitter!: Phaser.GameObjects.Particles.ParticleEmitter
     hoopRoot!: Phaser.GameObjects.Container
+    crowdFlash!: Phaser.GameObjects.Rectangle
 
     mode: CvMode = mode
     score = 0
@@ -61,13 +61,12 @@ export function createCourtVisionGame(
     pulling = false
     pullStart = { x: 0, y: 0 }
     pullCur = { x: 0, y: 0 }
-    hoopX = W / 2
-    hoopY = 320
-    hoopAmp = 0
-    hoopPhase = 0
+    /** Rim center in screen space — locked to painted hoop */
+    hoopX = W * COURT_BG.hoopX
+    hoopY = H * COURT_BG.hoopY
     shake = 0
     ended = false
-    ballHome = { x: W / 2, y: H - 160 }
+    ballHome = { x: W / 2, y: H - 150 }
 
     constructor() {
       super('CourtVision')
@@ -75,7 +74,7 @@ export function createCourtVisionGame(
 
     preload() {
       const base = import.meta.env.BASE_URL
-      this.load.image('court', `${base}art/court-hero.webp`)
+      this.load.image('court', `${base}art/court-bg.webp`)
       this.load.image('ball', `${base}art/ball.png`)
       this.load.image('fire', `${base}art/fire-particle.png`)
       for (let i = 0; i < 5; i++) {
@@ -88,38 +87,28 @@ export function createCourtVisionGame(
       this.pb = loadPersonalBest()
       this.cameras.main.setBackgroundColor('#1c0c30')
 
+      // Portrait court plate already hoop-centered — fit exactly to game size
       const bg = this.add.image(W / 2, H / 2, 'court')
-      const cover = Math.max(W / bg.width, H / bg.height)
-      bg.setScale(cover)
+      bg.setDisplaySize(W, H)
       bg.setDepth(0)
+      // crisp pixels when scaled
+      bg.texture.setFilter(Phaser.Textures.FilterMode.NEAREST)
 
-      // Soft dim so HUD/ball read clearly over busy art
-      this.add.rectangle(W / 2, H / 2, W, H, 0x0a0a0c, 0.12).setDepth(1)
+      this.crowdFlash = this.add
+        .rectangle(W / 2, H * 0.38, W, H * 0.18, 0xffc83c, 0)
+        .setDepth(2)
 
+      // Interactive hoop overlays aligned to painted rim (no second backboard frame)
+      this.hoopX = W * COURT_BG.hoopX
+      this.hoopY = H * COURT_BG.hoopY
       this.hoopRoot = this.add.container(this.hoopX, this.hoopY).setDepth(5)
 
-      // Chevron frame
-      const frameColors = [0x00c8c4, 0xff5a3c, 0x482078, 0xdc283c]
-      frameColors.forEach((c, i) => {
-        const inset = i * 3
-        const r = this.add
-          .rectangle(0, -36, 120 - inset * 2, 78 - inset * 2)
-          .setStrokeStyle(3, c)
-          .setFillStyle(0x000000, 0)
-        this.hoopRoot.add(r)
-      })
-
-      this.backboard = this.add
-        .rectangle(0, -40, 96, 58, 0xe8e8f0, 0.55)
-        .setStrokeStyle(2, 0x333344)
-      this.hoopRoot.add(this.backboard)
-      // inner square
-      this.hoopRoot.add(
-        this.add.rectangle(0, -36, 36, 28).setStrokeStyle(2, 0x222233).setFillStyle(0x000000, 0),
-      )
-
-      this.rim = this.add.circle(0, -8, 28).setStrokeStyle(4, 0xff5a3c).setFillStyle(0x000000, 0)
-      this.hoopRoot.add(this.rim)
+      // Soft rim highlight so the ball reads through the painted hoop
+      const rimGlow = this.add
+        .circle(0, 0, 30)
+        .setStrokeStyle(3, 0xff8c28, 0.55)
+        .setFillStyle(0x000000, 0)
+      this.hoopRoot.add(rimGlow)
 
       if (this.textures.exists('net0')) {
         const frames = [0, 1, 2, 3, 4, 3, 2, 1].map((i) => ({ key: `net${i}` }))
@@ -129,7 +118,8 @@ export function createCourtVisionGame(
           frameRate: 14,
           repeat: 1,
         })
-        this.net = this.add.sprite(0, 18, 'net0').setScale(1.15)
+        // Sit just under the painted rim
+        this.net = this.add.sprite(0, 22, 'net0').setScale(1.05).setAlpha(0)
         this.hoopRoot.add(this.net)
       }
 
@@ -139,7 +129,8 @@ export function createCourtVisionGame(
         .image(this.ballHome.x, this.ballHome.y, 'ball')
         .setDisplaySize(56, 56)
         .setDepth(10)
-        .setInteractive({ draggable: false, useHandCursor: true })
+        .setInteractive({ useHandCursor: true })
+      this.ball.texture.setFilter(Phaser.Textures.FilterMode.NEAREST)
 
       this.fireEmitter = this.add.particles(0, 0, 'fire', {
         lifespan: 420,
@@ -174,9 +165,6 @@ export function createCourtVisionGame(
           },
         })
       }
-
-      // Moving hoop difficulty after score milestones / time
-      this.hoopAmp = 0
     }
 
     emitHud(callout: string | null = this.callout) {
@@ -221,10 +209,9 @@ export function createCourtVisionGame(
       if (dist < 18) return
 
       const power = Phaser.Math.Clamp(dist / 140, 0.45, 1.35)
-      // Aim toward hoop with pull direction bias (flick away from hoop pulls back)
-      const targetX = this.hoopX + Phaser.Math.Clamp(dx * 0.35, -70, 70)
-      const targetY = this.hoopY - 8
-      const perfect = dist > 55 && dist < 130 && Math.abs(dx) < 50
+      const targetX = this.hoopX + Phaser.Math.Clamp(dx * 0.28, -55, 55)
+      const targetY = this.hoopY
+      const perfect = dist > 55 && dist < 130 && Math.abs(dx) < 48
 
       playRelease()
       this.flight = {
@@ -249,8 +236,8 @@ export function createCourtVisionGame(
       const dist = Math.hypot(dx, dy)
       if (dist < 8) return
       const power = Phaser.Math.Clamp(dist / 140, 0.45, 1.35)
-      const tx = this.hoopX + Phaser.Math.Clamp(dx * 0.35, -70, 70)
-      const ty = this.hoopY - 8
+      const tx = this.hoopX + Phaser.Math.Clamp(dx * 0.28, -55, 55)
+      const ty = this.hoopY
       const peak = 90 + power * 70
 
       this.aimGraphics.lineStyle(2, 0x00c8c4, 0.55)
@@ -258,31 +245,22 @@ export function createCourtVisionGame(
       for (let i = 0; i <= 16; i++) {
         const t = i / 16
         const x = Phaser.Math.Linear(this.ball.x, tx, t)
-        const y = Phaser.Math.Linear(this.ball.y, ty, t) - Math.sin(Math.PI * t) * peak
+        const y =
+          Phaser.Math.Linear(this.ball.y, ty, t) - Math.sin(Math.PI * t) * peak
         if (i === 0) this.aimGraphics.moveTo(x, y)
         else this.aimGraphics.lineTo(x, y)
       }
       this.aimGraphics.strokePath()
-      this.aimGraphics.fillStyle(0xffc83c, 0.8)
+      this.aimGraphics.fillStyle(0xffc83c, 0.85)
       this.aimGraphics.fillCircle(tx, ty, 5)
     }
 
     update(_time: number, delta: number) {
-      // hoop sway for difficulty
-      const difficulty =
-        this.mode === 'endless'
-          ? Math.min(1, this.score / 80)
-          : Math.min(1, (60 - this.timeLeft) / 45)
-      this.hoopAmp = 40 * difficulty
-      this.hoopPhase += delta * 0.0018 * (0.6 + difficulty)
-      this.hoopX = W / 2 + Math.sin(this.hoopPhase) * this.hoopAmp
-      this.hoopRoot.x = this.hoopX
-
       if (this.shake > 0) {
         this.shake -= delta
         this.cameras.main.setScroll(
-          (Math.random() - 0.5) * 6,
-          (Math.random() - 0.5) * 6,
+          (Math.random() - 0.5) * 5,
+          (Math.random() - 0.5) * 5,
         )
         if (this.shake <= 0) this.cameras.main.setScroll(0, 0)
       }
@@ -298,9 +276,7 @@ export function createCourtVisionGame(
       this.ball.setPosition(x, y)
       this.ball.rotation += delta * 0.012 * this.flight.power
 
-      if (this.streak >= 3) {
-        this.fireEmitter.emitting = true
-      }
+      if (this.streak >= 3) this.fireEmitter.emitting = true
 
       if (u >= 1) {
         this.resolveShot(this.flight)
@@ -310,26 +286,32 @@ export function createCourtVisionGame(
       }
     }
 
+    cheer() {
+      this.tweens.add({
+        targets: this.crowdFlash,
+        fillAlpha: 0.18,
+        duration: 80,
+        yoyo: true,
+        onComplete: () => {
+          this.crowdFlash.setFillStyle(0xffc83c, 0)
+        },
+      })
+    }
+
     resolveShot(flight: ShotFlight) {
-      const rimX = this.hoopX
-      const rimY = this.hoopY - 8
-      const dx = flight.x1 - rimX
-      const dy = flight.y1 - rimY
+      const dx = flight.x1 - this.hoopX
+      const dy = flight.y1 - this.hoopY
       const err = Math.hypot(dx, dy)
 
-      // Forgiving windows
       let kind: 'swish' | 'make' | 'miss' = 'miss'
       let banked = false
-      if (err < 18) kind = 'swish'
-      else if (err < 38) kind = 'make'
-      else if (err < 52 && flight.x1 > rimX - 10) {
-        // near backboard → bank chance
+      if (err < 16) kind = 'swish'
+      else if (err < 36) kind = 'make'
+      else if (err < 50 && flight.x1 > this.hoopX - 8) {
         kind = 'make'
         banked = true
       }
-
-      // Slight aim assist toward make when close
-      if (kind === 'miss' && err < 62 && flight.power > 0.7 && flight.power < 1.15) {
+      if (kind === 'miss' && err < 60 && flight.power > 0.7 && flight.power < 1.15) {
         kind = 'make'
       }
 
@@ -355,14 +337,23 @@ export function createCourtVisionGame(
         })
       } else {
         this.score += result.points
+        this.cheer()
         if (kind === 'swish') {
           playSwish()
-          this.net?.play('net-swish')
+          if (this.net) {
+            this.net.setAlpha(0.95)
+            this.net.play('net-swish')
+            this.net.once('animationcomplete', () => this.net?.setAlpha(0))
+          }
           this.shake = 180
           this.callout = 'SWISH!'
         } else {
           playMake()
-          this.net?.play('net-swish')
+          if (this.net) {
+            this.net.setAlpha(0.85)
+            this.net.play('net-swish')
+            this.net.once('animationcomplete', () => this.net?.setAlpha(0))
+          }
           this.shake = 100
           this.callout = banked ? '5D BOUNCE' : 'MAKE'
         }
@@ -382,9 +373,9 @@ export function createCourtVisionGame(
 
         this.tweens.add({
           targets: this.ball,
-          y: this.ball.y + 40,
+          y: this.ball.y + 36,
           scale: 0.7,
-          alpha: 0.3,
+          alpha: 0.25,
           duration: 220,
           onComplete: () => this.resetBall(),
         })
@@ -424,7 +415,6 @@ export function createCourtVisionGame(
       })
     }
 
-    /** Allow React overlay to force end / restart via registry */
     requestEnd() {
       this.endRun()
     }
@@ -442,8 +432,8 @@ export function createCourtVisionGame(
       autoCenter: Phaser.Scale.CENTER_BOTH,
     },
     render: {
-      pixelArt: false,
-      antialias: true,
+      pixelArt: true,
+      antialias: false,
       roundPixels: true,
     },
     audio: { noAudio: true },

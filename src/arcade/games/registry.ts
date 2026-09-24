@@ -8,16 +8,11 @@ export type ArcadeGame = {
   title: string
   tagline: string
   status: GameStatus
-  /** Public path under /arcade/ */
   boxArt: string
   route: string | null
   accent: string
   accentAlt: string
-  /** Placeholder for future giveaways / competitions */
-  contest?: {
-    label: string
-    endsAt?: string
-  }
+  contest?: { label: string; endsAt?: string }
 }
 
 const art = (file: string) => `${import.meta.env.BASE_URL}art/${file}`
@@ -49,7 +44,7 @@ export const GAMES: ArcadeGame[] = [
     title: 'Break & Rack',
     tagline: 'Pool hall pressure',
     status: 'coming-soon',
-    boxArt: art('box-break-and-rack.webp'),
+    boxArt: art('box-coming-soon.webp'),
     route: null,
     accent: '#482078',
     accentAlt: '#DC283C',
@@ -60,14 +55,13 @@ export const GAMES: ArcadeGame[] = [
     title: 'Lane Drift',
     tagline: 'Neon highway glide',
     status: 'coming-soon',
-    boxArt: art('box-lane-drift.webp'),
+    boxArt: art('box-coming-soon.webp'),
     route: null,
     accent: '#14183C',
     accentAlt: '#00C8C4',
   },
 ]
 
-/** Sample ticker until /api/scores leaderboard exists — clearly marked */
 export const SAMPLE_TOP_SCORES = [
   { name: 'JENKS', game: 'Court Vision', score: 240, sample: true },
   { name: 'ZENO', game: 'Court Vision', score: 198, sample: true },

@@ -37,6 +37,14 @@ function useIsDesktop(): boolean {
   return isDesktop
 }
 
+const TWINKLES = [
+  { top: '8%', left: '12%', delay: '0s' },
+  { top: '14%', left: '72%', delay: '0.4s' },
+  { top: '22%', left: '40%', delay: '1.1s' },
+  { top: '18%', left: '88%', delay: '1.7s' },
+  { top: '6%', left: '55%', delay: '0.8s' },
+]
+
 export default function LobbyPage() {
   const isDesktop = useIsDesktop()
   const audio = useArcadeAudio()
@@ -98,48 +106,86 @@ export default function LobbyPage() {
             onClick={onTapToStart}
             aria-label="Tap to start Fifth Floor Arcade"
           >
-            <div
-              className="ffa-title__bg"
-              style={{ backgroundImage: `url(${BASE}art/title-hero.webp)` }}
-            />
-            <div className="ffa-title__stars" aria-hidden>
-              <img
-                className="ffa-title__star"
-                src={`${BASE}art/star-192.webp`}
-                alt=""
-                style={{ top: '12%', right: '8%', animationDelay: '0s' }}
+            <div className="ffa-title__bg-wrap">
+              <div
+                className="ffa-title__bg ffa-pixel"
+                style={{ backgroundImage: `url(${BASE}art/title-bg.webp)` }}
               />
-              <img
-                className="ffa-title__star"
-                src={`${BASE}art/star-96.webp`}
-                alt=""
-                style={{ top: '22%', right: '28%', animationDelay: '2.2s', width: 48 }}
-              />
-              <img
-                className="ffa-title__star"
-                src={`${BASE}art/star-96.webp`}
-                alt=""
-                style={{ top: '8%', right: '45%', animationDelay: '4.1s', width: 40 }}
-              />
+              <div className="ffa-title__stars" aria-hidden>
+                {TWINKLES.map((t, i) => (
+                  <span
+                    key={i}
+                    className="ffa-title__twinkle"
+                    style={{ top: t.top, left: t.left, animationDelay: t.delay }}
+                  />
+                ))}
+                <img
+                  className="ffa-title__star"
+                  src={`${BASE}art/star-192.webp`}
+                  alt=""
+                  style={{ top: '10%', right: '4%', animationDelay: '0s' }}
+                />
+                <img
+                  className="ffa-title__star"
+                  src={`${BASE}art/star-96.webp`}
+                  alt=""
+                  style={{
+                    top: '20%',
+                    right: '30%',
+                    animationDelay: '2.6s',
+                    width: 44,
+                  }}
+                />
+                <img
+                  className="ffa-title__star"
+                  src={`${BASE}art/star-96.webp`}
+                  alt=""
+                  style={{
+                    top: '6%',
+                    right: '52%',
+                    animationDelay: '5s',
+                    width: 36,
+                  }}
+                />
+              </div>
+              <div className="ffa-title__scan" aria-hidden />
+              <div className="ffa-title__vignette" />
             </div>
-            <div className="ffa-title__vignette" />
-            <div className="ffa-title__chevrons" aria-hidden />
 
             <div className="ffa-title__sting" aria-hidden>
-              <img src={`${BASE}art/emblem-256.webp`} alt="" />
+              <img src={`${BASE}art/emblem-160.webp`} alt="" />
               <p>Fifth Dimension presents</p>
             </div>
 
-            <h1 className="visually-hidden">Fifth Floor Arcade</h1>
+            <div className="ffa-title__brand">
+              <img
+                className="ffa-title__emblem"
+                src={`${BASE}art/emblem-160.webp`}
+                alt=""
+              />
+              <div className="ffa-logo" aria-hidden={false}>
+                <span className="ffa-logo__shine" aria-hidden />
+                <h1 className="visually-hidden">Fifth Floor Arcade</h1>
+                <p className="ffa-logo__line">Fifth Floor</p>
+                <p className="ffa-logo__line ffa-logo__line--arcade">Arcade</p>
+              </div>
+              <p className="ffa-title__tag">Music · Games · Nostalgia</p>
+            </div>
+
             <p className="ffa-title__cta">▶▶ Tap to Start ◀◀</p>
             <p className="ffa-title__whisper">{COPY.FLOW_STATE}</p>
+            <img
+              className="ffa-title__wordmark"
+              src={`${BASE}art/wordmark-280.webp`}
+              alt="Fifth Dimension"
+            />
           </button>
         ) : (
           <div className="ffa-select">
             <header className="ffa-select__header">
               <img
                 className="ffa-select__wordmark"
-                src={`${BASE}art/wordmark-320.webp`}
+                src={`${BASE}art/wordmark-280.webp`}
                 alt="Fifth Dimension"
               />
               <h2 className="ffa-select__heading">Select Game</h2>
@@ -229,17 +275,36 @@ export default function LobbyPage() {
       </div>
 
       <div className="ffa-desktop">
-        <img src={`${BASE}art/emblem-256.webp`} alt="" width={96} height={96} />
-        <p style={{ letterSpacing: '0.28em', textTransform: 'uppercase', color: '#ffc83c' }}>
+        <img
+          className="emblem"
+          src={`${BASE}art/emblem-160.webp`}
+          alt=""
+          width={96}
+          height={96}
+        />
+        <p
+          style={{
+            letterSpacing: '0.28em',
+            textTransform: 'uppercase',
+            color: '#ffc83c',
+            fontFamily: 'Bungee, sans-serif',
+          }}
+        >
           Fifth Floor Arcade
         </p>
         <h1 style={{ margin: 0, fontSize: '1.6rem' }}>Open on your phone</h1>
         <p style={{ maxWidth: 360, color: 'rgba(242,240,234,0.7)' }}>
-          The arcade is built for touch — flick shots, juiced pixels, Miami dusk.
-          Scan to step onto the Fifth Floor.
+          Built for touch — flick shots, juiced pixels, Miami dusk. Scan to step
+          onto the Fifth Floor.
         </p>
-        <img src={qrSrc} width={200} height={200} alt="QR code to the arcade" />
-        <p style={{ letterSpacing: '0.18em', textTransform: 'uppercase', opacity: 0.6 }}>
+        <img className="qr" src={qrSrc} width={200} height={200} alt="QR code to the arcade" />
+        <p
+          style={{
+            letterSpacing: '0.18em',
+            textTransform: 'uppercase',
+            opacity: 0.6,
+          }}
+        >
           {COPY.FLOW_STATE}
         </p>
       </div>

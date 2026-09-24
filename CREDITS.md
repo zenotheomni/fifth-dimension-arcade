@@ -3,24 +3,24 @@
 ## Music
 
 - **ZENO 5** — from *ZENO RELOADED* by Jenks / Fifth Dimension Imperial
-- Source preview URL: `https://5dimperial.com/cdn/shop/t/6/assets/fd-preview-zeno-reloaded-01.mp3`
-- Bundled same-origin copy: `public/audio/zeno-5.mp3` (served at `/arcade/audio/zeno-5.mp3`)
+- Bundled: `public/audio/zeno-5.mp3` → `/arcade/audio/zeno-5.mp3`
 - Used with owner permission (Jenks / 5D Imperial).
 
 ## Engine / runtime
 
-- [Phaser 3](https://phaser.io/) — MIT (2D arcade games)
+- [Phaser 3](https://phaser.io/) — MIT
 - [React](https://react.dev/) / [Vite](https://vitejs.dev/) — MIT
 
-## Brand assets
+## Fonts
 
-- Fifth Dimension emblem, wordmark, star-swirl — provided by Jenks / 5D Imperial
-- Title / Court Vision concept art — AI-assisted direction art (legal footer text from concepts was removed; not shipped as copyright claims)
+- [Bungee](https://fonts.google.com/specimen/Bungee) — SIL Open Font License 1.1 (display logotype)
+- [Inter](https://fonts.google.com/specimen/Inter) — SIL Open Font License 1.1 (UI)
+
+## Brand & art
+
+- Fifth Dimension emblem, wordmark, star-swirl — Jenks / 5D Imperial
+- Title / court / box backgrounds — original pixel plates generated for this arcade (no baked UI/text). Concept mockups are direction-only and are **not** shipped in-game.
 
 ## SFX
 
-- Procedural Web Audio tones in `src/arcade/courtVision/sfx.ts` (original, no external samples)
-
-## Removed this pass
-
-- three.js / React Three Fiber lobby & Court Vision (replaced by Phaser + CSS title/select)
+- Procedural Web Audio in `src/arcade/courtVision/sfx.ts` (original)
