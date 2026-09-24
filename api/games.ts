@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { handleOptions, rpcErrorResponse } from './_lib/http'
-import { getSupabase } from './_lib/supabase'
+import { handleOptions, rpcErrorResponse } from './_lib/http.js'
+import { getSupabase } from './_lib/supabase.js'
 
 /**
  * GET /api/games — data-driven game registry
