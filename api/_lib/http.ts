@@ -5,7 +5,7 @@ export function setCors(res: VercelResponse, methods: string): void {
   res.setHeader('Access-Control-Allow-Methods', methods)
   res.setHeader(
     'Access-Control-Allow-Headers',
-    'Content-Type, X-Arcade-Device, X-Arcade-Token',
+    'Content-Type, X-Arcade-Device, X-Arcade-Token, X-Arcade-Admin',
   )
 }
 
@@ -33,6 +33,9 @@ const STATUS_BY_CODE: Record<string, number> = {
   challenge_not_found: 404,
   score_not_found: 404,
   contest_not_found: 404,
+  winner_not_found: 404,
+  contest_already_announced: 409,
+  contest_locked: 409,
   handle_taken: 409,
   handle_conflict: 409,
   rpc_error: 500,
@@ -61,6 +64,16 @@ const KNOWN = new Set([
   'invalid_subscription',
   'contest_not_active',
   'invalid_body',
+  'contest_not_ended',
+  'contest_not_started',
+  'invalid_contest',
+  'invalid_title',
+  'invalid_game',
+  'invalid_dates',
+  'invalid_prize_image',
+  'invalid_prize',
+  'invalid_rules',
+  'invalid_winner_count',
 ])
 
 export function errorCodeOf(err: unknown): { code: string; message: string } {

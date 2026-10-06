@@ -2,6 +2,7 @@ import { ImageResponse } from '@vercel/og'
 
 /**
  * GET /api/og?id=<challengeId> — 1200×630 challenge card (handle, score, game, branding).
+ * GET /api/og?story=<scoreId>  — 1080×1920 story score card (IG/TikTok stories).
  * Node.js runtime (the Edge runtime outside Next.js blocks @vercel/og's wasm compile).
  * Written with plain element objects (no JSX) so it needs no TSX config.
  */
@@ -152,16 +153,223 @@ async function render(req: Request): Promise<ImageResponse> {
   })
 }
 
+
+// ───────────────────────── story score card (1080×1920) ─────────────────────────
+
+export type ScoreCard = {
+  id: string
+  handle: string
+  score: number
+  game_id: string
+  game_title: string
+  mode: string
+  best_streak: number | null
+  alltime_rank: number | null
+  weekly_rank: number | null
+  contest: { id: string; title: string; rank: number } | null
+}
+
+async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T | null> {
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
+  const key = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY
+  if (!url || !key) return null
+  const headers: Record<string, string> = { apikey: key, 'Content-Type': 'application/json' }
+  if (key.startsWith('eyJ')) headers.Authorization = `Bearer ${key}`
+  try {
+    const r = await fetch(`${url}/rest/v1/rpc/${fn}`, { method: 'POST', headers, body: JSON.stringify(args) })
+    return r.ok ? ((await r.json()) as T) : null
+  } catch {
+    return null
+  }
+}
+
+async function loadImageDataUrl(src: string): Promise<string | null> {
+  try {
+    const r = await fetch(src)
+    if (!r.ok) return null
+    const b = Buffer.from(await r.arrayBuffer())
+    return `data:${r.headers.get('content-type') || 'image/png'};base64,${b.toString('base64')}`
+  } catch {
+    return null
+  }
+}
+
+function publicArcadeHost(): string {
+  const base = process.env.ARCADE_PUBLIC_BASE_URL || 'https://fifth-dimension-arcade.vercel.app/arcade'
+  return base.replace(/^https?:\/\//, '').replace(/\/$/, '')
+}
+
+async function renderStory(req: Request, scoreId: string): Promise<ImageResponse | null> {
+  if (!/^[0-9a-f-]{36}$/i.test(scoreId)) return null
+  const card = await rpc<ScoreCard>('arcade_score_card', { p_score_id: scoreId })
+  if (!card) return null
+  return renderStoryCard(card, new URL(req.url).origin)
+}
+
+/** Pure renderer (card data → 1080×1920 PNG); exported for local layout checks. */
+export async function renderStoryCard(card: ScoreCard, origin: string): Promise<ImageResponse> {
+
+  const handle = card.handle.toUpperCase()
+  const score = String(card.score)
+  const game = (card.game_title || GAME_TITLES[card.game_id] || 'Fifth Floor').toUpperCase()
+  const modeLabel = card.mode === 'endless' ? 'ENDLESS' : card.mode === 'challenge' ? 'CHALLENGE' : '60 SECONDS'
+  const chips: { text: string; color: string }[] = []
+  if (card.contest) chips.push({ text: `#${card.contest.rank} IN CONTEST`, color: '#ffd34d' })
+  if (card.alltime_rank) chips.push({ text: `#${card.alltime_rank} ALL-TIME`, color: '#ff4fa3' })
+  else if (card.weekly_rank) chips.push({ text: `#${card.weekly_rank} THIS WEEK`, color: '#ff4fa3' })
+  if (card.best_streak && card.best_streak > 1) chips.push({ text: `BEST STREAK X${card.best_streak}`, color: '#00e5ff' })
+  const host = publicArcadeHost()
+
+  const displayText = `FIFTH FLOOR ARCADE${game}${modeLabel}${handle}${score}${chips.map((c) => c.text).join('')}CAN YOU BEAT IT?PTS·0123456789`
+  const [bungee, inter, emblem] = await Promise.all([
+    loadFont('Bungee', displayText),
+    loadFont('Inter:wght@600', `Play free at ${host} PTS`),
+    loadImageDataUrl(`${origin}/arcade/art/emblem-story.png`),
+  ])
+  const fonts: { name: string; data: ArrayBuffer; weight: 600 | 400; style: 'normal' }[] = []
+  if (bungee) fonts.push({ name: 'Bungee', data: bungee, weight: 400, style: 'normal' })
+  if (inter) fonts.push({ name: 'Body', data: inter, weight: 600, style: 'normal' })
+  const display = bungee ? 'Bungee' : 'sans-serif'
+  const body = inter ? 'Body' : 'sans-serif'
+
+  const HORIZON = 1330
+  const sunD = 640
+  const stripes = [0, 1, 2, 3, 4, 5].map((i) =>
+    h('div', { position: 'absolute', left: 0, right: 0, top: sunD * 0.5 - 40 - i * 46, height: 10 + i * 4, background: '#1a0b2e' }),
+  )
+  const floorLines = [1, 2, 3, 4, 5, 6, 7, 8].map((i) =>
+    h('div', {
+      position: 'absolute', left: 0, right: 0, top: HORIZON + Math.round(i * i * 9 + i * 14), height: 3,
+      background: 'rgba(255, 64, 160, 0.55)',
+    }),
+  )
+  const rays = [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5].map((i) =>
+    h('div', {
+      position: 'absolute', left: 540 - 1, top: HORIZON, width: 3, height: 1100,
+      background: 'rgba(255, 64, 160, 0.45)', transformOrigin: 'top center', transform: `rotate(${i * 11}deg)`,
+    }),
+  )
+  const handleSize = handle.length > 12 ? 92 : handle.length > 9 ? 110 : 128
+  const scoreSize = score.length > 4 ? 250 : score.length > 3 ? 300 : 360
+
+  const root = h(
+    'div',
+    {
+      width: '100%', height: '100%', position: 'relative', flexDirection: 'column', alignItems: 'center',
+      background: `linear-gradient(180deg, #0c0418 0%, #1d0838 30%, #3d1158 55%, #6b1d63 ${Math.round((HORIZON / 1920) * 100)}%, #12081f ${Math.round((HORIZON / 1920) * 100) + 0.3}%, #07070c 100%)`,
+      color: '#f2f0ea', fontFamily: display, overflow: 'hidden',
+    },
+    // stars
+    ...[[120, 260], [930, 210], [210, 520], [860, 600], [80, 900], [990, 980], [470, 120], [700, 380]].map(([x, y], i) =>
+      h('div', { position: 'absolute', left: x, top: y, width: i % 3 ? 6 : 9, height: i % 3 ? 6 : 9, borderRadius: 9, background: 'rgba(255,255,255,0.75)' }),
+    ),
+    // sun (upper half above the horizon)
+    h(
+      'div',
+      { position: 'absolute', left: 540 - sunD / 2, top: HORIZON - sunD / 2, width: sunD, height: sunD / 2, overflow: 'hidden' },
+      h(
+        'div',
+        {
+          position: 'absolute', left: 0, top: 0, width: sunD, height: sunD, borderRadius: sunD,
+          background: 'linear-gradient(180deg, #ffd34d 0%, #ff8a3d 35%, #ff3d8b 60%, #a1288a 100%)', overflow: 'hidden',
+        },
+        ...stripes,
+      ),
+    ),
+    ...rays,
+    ...floorLines,
+    h('div', { position: 'absolute', left: 0, right: 0, top: HORIZON - 3, height: 6, background: '#00e5ff', boxShadow: '0 0 30px #00e5ff' }),
+    // content column
+    h(
+      'div',
+      { position: 'absolute', left: 60, right: 60, top: 150, bottom: 0, flexDirection: 'column', alignItems: 'center' },
+      h('div', { fontSize: 54, letterSpacing: 10, color: '#ffc83c', textShadow: '0 0 20px rgba(255,200,60,0.6)' }, 'FIFTH FLOOR ARCADE'),
+      emblem
+        ? { type: 'img', props: { src: emblem, width: 250, height: 250, style: { marginTop: 26 } } }
+        : h('div', { height: 250, marginTop: 26 }),
+      h(
+        'div',
+        {
+          marginTop: 26, fontSize: 40, letterSpacing: 6, color: '#00e5ff', padding: '10px 28px',
+          border: '4px solid #00e5ff', borderRadius: 12, textShadow: '0 0 16px rgba(0,229,255,0.7)',
+        },
+        `${game} · ${modeLabel}`,
+      ),
+      h(
+        'div',
+        {
+          marginTop: 44, fontSize: handleSize, letterSpacing: 3, color: '#ff4fa3',
+          textShadow: '0 0 30px rgba(255, 79, 163, 0.85), 6px 6px 0 #1a0b2e',
+        },
+        handle,
+      ),
+      h(
+        'div',
+        { alignItems: 'flex-end', marginTop: 0 },
+        h(
+          'div',
+          { fontSize: scoreSize, lineHeight: 1, color: '#ffd34d', textShadow: '0 0 50px rgba(255, 200, 60, 0.75), 10px 10px 0 #3a1260' },
+          score,
+        ),
+        h('div', { fontSize: 52, marginLeft: 22, marginBottom: 46, color: '#f2f0ea', fontFamily: body, fontWeight: 600 }, 'PTS'),
+      ),
+    ),
+    // chips on the floor
+    h(
+      'div',
+      { position: 'absolute', left: 40, right: 40, top: HORIZON + (chips.length > 2 ? 46 : 70), justifyContent: 'center', flexWrap: 'wrap' },
+      ...chips.map((c) =>
+        h(
+          'div',
+          {
+            // three chips wrap to two rows → compact so they clear the footer
+            margin: chips.length > 2 ? '0 8px 12px' : '0 12px 18px',
+            padding: chips.length > 2 ? '10px 22px' : '14px 30px',
+            fontSize: chips.length > 2 ? 32 : 40,
+            letterSpacing: 3, color: c.color,
+            background: 'rgba(10, 6, 20, 0.82)', border: `4px solid ${c.color}`, borderRadius: 14,
+          },
+          c.text,
+        ),
+      ),
+    ),
+    // footer (kept above the bottom ~250px that story UIs cover)
+    h(
+      'div',
+      { position: 'absolute', left: 0, right: 0, top: 1560, flexDirection: 'column', alignItems: 'center' },
+      h('div', { fontSize: 66, color: '#ffffff', letterSpacing: 4, textShadow: '0 0 22px rgba(0,229,255,0.9)' }, 'CAN YOU BEAT IT?'),
+      h('div', { marginTop: 14, fontSize: 34, fontFamily: body, fontWeight: 600, color: '#00e5ff' }, `Play free at ${host}`),
+    ),
+  )
+
+  return new ImageResponse(root as unknown as ConstructorParameters<typeof ImageResponse>[0], {
+    width: 1080,
+    height: 1920,
+    fonts,
+  })
+}
+
 /** Buffer the PNG so a render failure becomes an uncached 500 instead of a cached empty 200. */
 export async function GET(req: Request): Promise<Response> {
   try {
-    const buf = await (await render(req)).arrayBuffer()
+    const storyId = new URL(req.url).searchParams.get('story')
+    let img: ImageResponse | null
+    if (storyId) {
+      img = await renderStory(req, storyId.slice(0, 40))
+      if (!img) return new Response('not_found', { status: 404, headers: { 'Cache-Control': 'no-store' } })
+    } else {
+      img = await render(req)
+    }
+    const buf = await img.arrayBuffer()
     if (!buf.byteLength) throw new Error('empty_image')
     return new Response(buf, {
       status: 200,
       headers: {
         'Content-Type': 'image/png',
-        'Cache-Control': 'public, max-age=60, s-maxage=300, stale-while-revalidate=86400',
+        // Story cards carry live ranks → short CDN life; challenge cards are effectively static.
+        'Cache-Control': storyId
+          ? 'public, max-age=30, s-maxage=60, stale-while-revalidate=300'
+          : 'public, max-age=60, s-maxage=300, stale-while-revalidate=86400',
       },
     })
   } catch (err) {

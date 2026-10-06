@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import LobbyPage from './pages/LobbyPage'
 import CourtVisionPage from './pages/CourtVisionPage'
@@ -6,6 +7,8 @@ import ChallengePage from './pages/ChallengePage'
 import KeyPage from './pages/KeyPage'
 import ClaimPage from './pages/ClaimPage'
 import AlertsCenter from './arcade/social/AlertsCenter'
+
+const AdminPage = lazy(() => import('./pages/AdminPage'))
 
 export default function App() {
   return (
@@ -18,6 +21,14 @@ export default function App() {
         <Route path="challenge/:id" element={<ChallengePage />} />
         <Route path="claim" element={<ClaimPage />} />
         <Route path="key" element={<KeyPage />} />
+        <Route
+          path="admin"
+          element={
+            <Suspense fallback={null}>
+              <AdminPage />
+            </Suspense>
+          }
+        />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </>

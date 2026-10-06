@@ -33,7 +33,7 @@ export default function AlertsCenter() {
     if (seen === 0) return
     if (fresh.length) {
       setToasts((t) => [...fresh, ...t].slice(0, 2))
-      fresh.forEach((a) => window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== a.id)), 7000))
+      fresh.forEach((a) => window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== a.id)), a.kind === 'contest_won' ? 20000 : 7000))
     }
   }, [])
 

@@ -1,6 +1,7 @@
+import { createHash, timingSafeEqual } from 'node:crypto'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { readAuth } from './_lib/auth.js'
-import { challengePublicUrl, getPushEnv } from './_lib/config.js'
+import { challengePublicUrl, getAdminKey, getPushEnv, getServerKey } from './_lib/config.js'
 import { bodyOf, errorCodeOf, handleOptions, rpcErrorResponse, str, uuidOrNull } from './_lib/http.js'
 import { flushPush } from './_lib/push.js'
 import { getSupabase } from './_lib/supabase.js'
@@ -47,18 +48,61 @@ async function maybeFlush(result: unknown, reason: string) {
   return null
 }
 
+
+function wantsTest(req: VercelRequest): boolean {
+  return req.query.preview === '1' || req.query.preview === 'contests'
+}
+
+/** Announce winners for contests that have ended (idempotent, server-key gated), then push. */
+async function finalizeContests(reason: string) {
+  const key = getServerKey()
+  if (!key) return null
+  try {
+    const r = await call<{ announced: number; alerts_created: number }>('arcade_contest_finalize', { p_server_key: key })
+    const push = await maybeFlush(r, reason)
+    return { ...r, push }
+  } catch (err) {
+    console.error('[arcade] contest finalize failed', err)
+    return null
+  }
+}
+
+const sha = (v: string) => createHash('sha256').update(v).digest()
+
+/** Admin gate: X-Arcade-Admin must match the ARCADE_ADMIN_KEY env (compared as sha256, constant time).
+ *  The RPCs re-check the key against the sha256 stored in arcade_server_keys. */
+async function adminKey(req: VercelRequest): Promise<string> {
+  const expected = getAdminKey()
+  if (!expected) throw new HttpError(503, 'misconfigured')
+  const raw = req.headers['x-arcade-admin']
+  const given = (Array.isArray(raw) ? raw[0] : raw ?? '').trim().slice(0, 200)
+  if (!given || !timingSafeEqual(sha(given), sha(expected))) {
+    await new Promise((r) => setTimeout(r, 400))
+    throw new HttpError(403, 'forbidden')
+  }
+  return given
+}
+
 const GET: Record<string, Handler> = {
   async board(req, res) {
     const game = str(req.query.game, 40) ?? 'court-vision'
     const window = str(req.query.window, 16) ?? 'alltime'
     const playerId = uuidOrNull(req.query.playerId)
     const limit = req.query.limit != null ? Number(req.query.limit) : null
-    const board = await call('arcade_board', {
-      p_game_id: game,
-      p_window: window,
-      p_player_id: playerId,
-      p_limit: Number.isFinite(limit) ? limit : null,
-    })
+    const board =
+      window === 'contest'
+        ? await call('arcade_contest_board', {
+            p_contest_id: uuidOrNull(req.query.contest) ?? (() => { throw new HttpError(400, 'invalid_body') })(),
+            p_player_id: playerId,
+            p_limit: Number.isFinite(limit) ? limit : null,
+            p_include_test: wantsTest(req),
+          })
+        : await call('arcade_board', {
+            p_game_id: game,
+            p_window: window,
+            p_player_id: playerId,
+            p_limit: Number.isFinite(limit) ? limit : null,
+          })
     res.setHeader('Cache-Control', 'no-store')
     return res.status(200).json({ ok: true, board })
   },
@@ -90,6 +134,47 @@ const GET: Record<string, Handler> = {
       p_after_id: Number.isFinite(after) ? Math.max(0, Math.floor(after)) : 0,
       p_limit: 20,
     })
+    return res.status(200).json({ ok: true, ...data })
+  },
+
+
+  async contests(req, res) {
+    await finalizeContests('contests')
+    const data = await call<Record<string, unknown>>('arcade_contests_public', {
+      p_player_id: uuidOrNull(req.query.playerId),
+      p_include_test: wantsTest(req),
+    })
+    res.setHeader('Cache-Control', 'no-store')
+    return res.status(200).json({ ok: true, ...data })
+  },
+
+  async ticker(req, res) {
+    const data = await call<Record<string, unknown>>('arcade_ticker', { p_include_test: wantsTest(req) })
+    res.setHeader('Cache-Control', wantsTest(req) ? 'no-store' : 'public, max-age=0, s-maxage=30, stale-while-revalidate=120')
+    return res.status(200).json({ ok: true, ...data })
+  },
+
+  /** Daily cron backstop (and safe to hit manually): announce any contests that ended. */
+  async 'contest-tick'(_req, res) {
+    const r = await finalizeContests('contest-tick')
+    res.setHeader('Cache-Control', 'no-store')
+    return res.status(200).json({ ok: true, finalize: r })
+  },
+
+  async 'admin-contests'(req, res) {
+    const key = await adminKey(req)
+    await finalizeContests('admin')
+    const data = await call<Record<string, unknown>>('arcade_admin_contests', { p_admin_key: key })
+    res.setHeader('Cache-Control', 'no-store')
+    return res.status(200).json({ ok: true, ...data })
+  },
+
+  async 'admin-board'(req, res) {
+    const key = await adminKey(req)
+    const id = uuidOrNull(req.query.id)
+    if (!id) throw new HttpError(400, 'invalid_body')
+    const data = await call<Record<string, unknown>>('arcade_admin_contest_board', { p_admin_key: key, p_contest_id: id, p_limit: 25 })
+    res.setHeader('Cache-Control', 'no-store')
     return res.status(200).json({ ok: true, ...data })
   },
 
@@ -203,6 +288,50 @@ const POST: Record<string, Handler> = {
       p_user_agent: str(req.headers['user-agent'], 300) ?? '',
     })
     return res.status(200).json({ ok: true, ...result })
+  },
+
+
+  async 'admin-save'(req, res) {
+    const key = await adminKey(req)
+    const body = bodyOf(req)
+    const contest = body.contest
+    if (!contest || typeof contest !== 'object' || Array.isArray(contest)) throw new HttpError(400, 'invalid_contest')
+    const data = await call<Record<string, unknown>>('arcade_admin_contest_save', { p_admin_key: key, p_contest: contest })
+    return res.status(200).json({ ok: true, ...data })
+  },
+
+  async 'admin-end'(req, res) {
+    const key = await adminKey(req)
+    const id = uuidOrNull(bodyOf(req).id)
+    if (!id) throw new HttpError(400, 'invalid_body')
+    const data = await call<Record<string, unknown>>('arcade_admin_contest_end', { p_admin_key: key, p_contest_id: id })
+    const push = await maybeFlush(data, 'admin-end')
+    return res.status(200).json({ ok: true, ...data, push })
+  },
+
+  async 'admin-announce'(req, res) {
+    const key = await adminKey(req)
+    const id = uuidOrNull(bodyOf(req).id)
+    if (!id) throw new HttpError(400, 'invalid_body')
+    const data = await call<Record<string, unknown>>('arcade_admin_contest_announce', { p_admin_key: key, p_contest_id: id })
+    const push = await maybeFlush(data, 'admin-announce')
+    return res.status(200).json({ ok: true, ...data, push })
+  },
+
+  async 'admin-winner'(req, res) {
+    const key = await adminKey(req)
+    const body = bodyOf(req)
+    const id = uuidOrNull(body.contestId)
+    const place = Number(body.place)
+    if (!id || !Number.isInteger(place)) throw new HttpError(400, 'invalid_body')
+    const data = await call<Record<string, unknown>>('arcade_admin_winner_update', {
+      p_admin_key: key,
+      p_contest_id: id,
+      p_place: place,
+      p_contacted: Boolean(body.contacted),
+      p_note: typeof body.note === 'string' ? body.note.slice(0, 500) : null,
+    })
+    return res.status(200).json({ ok: true, ...data })
   },
 
   async 'push-unsubscribe'(req, res) {

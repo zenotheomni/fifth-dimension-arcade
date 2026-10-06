@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { getOrCreatePlayerId } from '../arcade/core/identity'
 import { track } from '../arcade/analytics'
@@ -10,9 +10,11 @@ import {
   mergeGamesWithApi,
   statusLabel,
   type ArcadeGame,
-  type TickerScore,
 } from '../arcade/games/registry'
-import { fetchGames, fetchLeaderboard } from '../arcade/leaderboard/api'
+import { fetchGames } from '../arcade/leaderboard/api'
+import { fetchContests, fetchTicker, type BoardWindow, type Contest, type TickerData } from '../arcade/core/arcadeApi'
+import ContestBanner from '../arcade/social/ContestBanner'
+import { countdown } from '../arcade/social/contestTime'
 import {
   playCoinInsert,
   playSelect,
@@ -42,6 +44,41 @@ function useIsDesktop(): boolean {
   return isDesktop
 }
 
+type TickerSeg = { label: string; text: string }
+
+/** Ticker = best run per player (weekly top 5, all-time if the week is empty) + the giveaway, if any. */
+function buildTicker(t: TickerData | null): TickerSeg[] {
+  if (!t) return []
+  const segs: TickerSeg[] = []
+  const c = t.contest
+  if (c) {
+    const now = Date.parse(t.server_now) || Date.now()
+    const leaders = c.leaders.map((l) => `#${l.rank} ${l.handle.toUpperCase()} ${l.score.toLocaleString()}`).join(' · ')
+    if (c.status === 'live') {
+      segs.push({
+        label: '★ LIVE GIVEAWAY',
+        text: `${c.title} · Prize: ${c.prize_text} · ends in ${countdown(Date.parse(c.ends_at) - now).replace(/:\d\d$/, '')}${leaders ? ` · ${leaders}` : ' · no entries yet — play to win'}`,
+      })
+    } else if (c.status === 'upcoming') {
+      segs.push({ label: '★ GIVEAWAY SOON', text: `${c.title} · Prize: ${c.prize_text} · starts in ${countdown(Date.parse(c.starts_at) - now).replace(/:\d\d$/, '')}` })
+    } else if (c.status === 'winners_announced' && c.winners[0]) {
+      segs.push({ label: '★ GIVEAWAY WINNER', text: `${c.winners[0].handle.toUpperCase()} · ${c.winners[0].score.toLocaleString()} · ${c.title}` })
+    } else if (c.status === 'ended') {
+      segs.push({ label: '★ GIVEAWAY ENDED', text: `${c.title} · winner revealed soon${leaders ? ` · ${leaders}` : ''}` })
+    }
+  }
+  for (const b of t.boards) {
+    const weekly = b.weekly.length > 0
+    const rows = weekly ? b.weekly : b.alltime
+    if (!rows.length) continue
+    segs.push({
+      label: `${weekly ? 'WEEKLY' : 'ALL-TIME'} · ${b.game_title.toUpperCase()}`,
+      text: rows.map((r) => `#${r.rank} ${r.handle.toUpperCase()} ${r.score.toLocaleString()}`).join(' · '),
+    })
+  }
+  return segs
+}
+
 const TWINKLES = [
   { top: '8%', left: '12%', delay: '0s' },
   { top: '14%', left: '72%', delay: '0.4s' },
@@ -57,7 +94,10 @@ export default function LobbyPage() {
   const [exiting, setExiting] = useState(false)
   const [selected, setSelected] = useState(0)
   const [games, setGames] = useState<ArcadeGame[]>(GAMES)
-  const [tickerScores, setTickerScores] = useState<TickerScore[] | null>(null)
+  const [ticker, setTicker] = useState<TickerData | null | undefined>(undefined)
+  const [contests, setContests] = useState<{ list: Contest[]; serverNow: string }>({ list: [], serverNow: '' })
+  const [boardWin, setBoardWin] = useState<BoardWindow>('alltime')
+  const boardFocus = useRef(false)
   const [params, setParams] = useSearchParams()
   const [rivalsOpen, setRivalsOpen] = useState(() => params.get('rivals') === '1')
   const { unread } = useAlertStore()
@@ -69,6 +109,49 @@ export default function LobbyPage() {
   }, [])
 
   const game = games[selected] ?? games[0] ?? GAMES[0]
+  const contest = contests.list[0] ?? null
+  const contestFor = (gameId: string) => contests.list.find((c) => c.game_id === gameId) ?? null
+
+  const loadContests = useCallback(async () => {
+    const [r, t] = await Promise.all([fetchContests(), fetchTicker()])
+    if (r.ok) setContests({ list: r.contests, serverNow: r.server_now })
+    setTicker(t.ok ? t : null)
+  }, [])
+
+  useEffect(() => {
+    void loadContests()
+    const id = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void loadContests()
+    }, 120_000)
+    return () => window.clearInterval(id)
+  }, [loadContests])
+
+  const showContestBoard = useCallback(
+    (c: Contest) => {
+      const idx = games.findIndex((g) => g.id === c.game_id)
+      if (idx >= 0) setSelected(idx)
+      setBoardWin('contest')
+      boardFocus.current = true
+    },
+    [games],
+  )
+
+  // Deep link from a "You won" alert / shared link: /arcade/?contest=<id>
+  const contestParam = params.get('contest')
+  useEffect(() => {
+    if (!contestParam || !audio.entered || !contests.serverNow) return
+    const c = contests.list.find((x) => x.id === contestParam)
+    if (c) showContestBoard(c)
+    const next = new URLSearchParams(params)
+    next.delete('contest')
+    setParams(next, { replace: true })
+  }, [contestParam, audio.entered, contests, params, setParams, showContestBoard])
+
+  useEffect(() => {
+    if (!boardFocus.current || !audio.entered) return
+    boardFocus.current = false
+    window.setTimeout(() => document.getElementById('arcade-board')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 60)
+  })
 
   useEffect(() => {
     getOrCreatePlayerId()
@@ -76,31 +159,13 @@ export default function LobbyPage() {
     let cancelled = false
     void (async () => {
       try {
-        const [lb, remoteGames] = await Promise.all([
-          fetchLeaderboard({
-            game: 'court-vision',
-            window: 'weekly',
-            limit: 10,
-          }).catch(() => null),
-          fetchGames().catch(() => null),
-        ])
+        const remoteGames = await fetchGames().catch(() => null)
         if (cancelled) return
         if (remoteGames) {
           setGames(mergeGamesWithApi(GAMES, remoteGames))
         }
-        if (lb?.entries?.length) {
-          setTickerScores(
-            lb.entries.map((e) => ({
-              name: e.handle.toUpperCase(),
-              game: 'Court Vision',
-              score: e.score,
-            })),
-          )
-        } else {
-          setTickerScores([])
-        }
       } catch {
-        if (!cancelled) setTickerScores([])
+        /* keep the static registry */
       }
     })()
     return () => {
@@ -124,6 +189,7 @@ export default function LobbyPage() {
 
   const onSelectCard = (index: number, g: ArcadeGame) => {
     setSelected(index)
+    if (g.id !== game.id) setBoardWin(contestFor(g.id) && boardWin === 'contest' ? 'contest' : 'alltime')
     playSelect()
     track('arcade_game_focus', { game: g.id })
   }
@@ -135,15 +201,24 @@ export default function LobbyPage() {
     navigate(game.route)
   }
 
-  const lbReady = tickerScores !== null
-  const hasScores = (tickerScores?.length ?? 0) > 0
-  const tickerText = !lbReady
-    ? 'Loading weekly board…'
+  const lbReady = ticker !== undefined
+  const segs = buildTicker(ticker ?? null)
+  const hasScores = segs.length > 0
+  const tickerSegs: TickerSeg[] = !lbReady
+    ? [{ label: 'LEADERBOARD', text: 'Loading the board…' }]
     : hasScores
-      ? (tickerScores ?? [])
-          .map((s) => `${s.name} · ${s.game} · ${s.score}`)
-          .join('   ◆   ')
-      : 'Be the first on the board'
+      ? segs
+      : [{ label: 'LEADERBOARD', text: 'Be the first on the board' }]
+  const tickerChars = tickerSegs.reduce((n, x) => n + x.label.length + x.text.length + 8, 0)
+  const tickerDuration = `${Math.max(28, Math.round(tickerChars * 0.22))}s`
+  const renderTicker = (copy: number) =>
+    tickerSegs.map((x, i) => (
+      <span key={`${copy}-${i}`}>
+        <span className="ffa-ticker__label">{x.label}</span>
+        {x.text}
+        {'   ◆   '}
+      </span>
+    ))
 
   return (
     <div className="ffa-root arcade-root">
@@ -229,7 +304,7 @@ export default function LobbyPage() {
             />
           </button>
         ) : (
-          <div className="ffa-select ffa-select--social">
+          <div className={`ffa-select ffa-select--social${contest ? ' has-contest' : ''}`}>
             <header className="ffa-select__header">
               <img
                 className="ffa-select__wordmark"
@@ -249,20 +324,34 @@ export default function LobbyPage() {
 
             <div
               className={`ffa-ticker${lbReady && !hasScores ? ' is-empty' : ''}`}
-              aria-label="Weekly Court Vision leaderboard"
+              aria-label="Leaderboard ticker"
             >
-              <div className="ffa-ticker__track">
-                <span className="ffa-ticker__label">
-                  {hasScores ? 'WEEKLY · COURT VISION' : 'WEEKLY BOARD'}
-                </span>
-                {tickerText}
-                {'   ◆   '}
-                <span className="ffa-ticker__label">
-                  {hasScores ? 'WEEKLY · COURT VISION' : 'WEEKLY BOARD'}
-                </span>
-                {tickerText}
+              <div className="ffa-ticker__track" style={{ animationDuration: tickerDuration }}>
+                {renderTicker(0)}
+                {renderTicker(1)}
               </div>
             </div>
+
+            {contest ? (
+              <ContestBanner
+                contest={contest}
+                serverNow={contests.serverNow}
+                playable={Boolean(games.find((g) => g.id === contest.game_id)?.route)}
+                onPlay={() => {
+                  const g = games.find((x) => x.id === contest.game_id)
+                  if (!g?.route) return
+                  playUiConfirm()
+                  track('arcade_contest_play', { game: g.id })
+                  navigate(g.route)
+                }}
+                onBoard={() => {
+                  playSelect()
+                  track('arcade_contest_board')
+                  showContestBoard(contest)
+                }}
+                onBoundary={() => void loadContests()}
+              />
+            ) : null}
 
             <div className="ffa-cards" role="listbox" aria-label="Games">
               {games.map((g, i) => {
@@ -293,7 +382,17 @@ export default function LobbyPage() {
                     <div className="ffa-card__meta">
                       <h3 className="ffa-card__title">{g.title}</h3>
                       <p className="ffa-card__tag">{g.tagline}</p>
-                      {g.contest ? (
+                      {contestFor(g.id) ? (
+                        <p className="ffa-card__contest">
+                          {contestFor(g.id)!.status === 'live'
+                            ? 'Giveaway live now'
+                            : contestFor(g.id)!.status === 'upcoming'
+                              ? 'Giveaway soon'
+                              : contestFor(g.id)!.status === 'ended'
+                                ? 'Giveaway ended'
+                                : 'See the winner'}
+                        </p>
+                      ) : g.contest ? (
                         <p className="ffa-card__contest">{g.contest.label}</p>
                       ) : null}
                     </div>
@@ -345,7 +444,16 @@ export default function LobbyPage() {
               </div>
             ) : null}
 
-            {game.route ? <TopFiveBoard key={game.id} gameId={game.id} title={game.title} /> : null}
+            {game.route ? (
+              <TopFiveBoard
+                key={game.id}
+                gameId={game.id}
+                title={game.title}
+                contest={contestFor(game.id)}
+                win={boardWin}
+                onWinChange={setBoardWin}
+              />
+            ) : null}
 
             {rivalsOpen ? (
               <RivalsSheet

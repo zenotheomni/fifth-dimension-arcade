@@ -15,6 +15,7 @@ import { getCachedPlayer, onPlayerChange, type ArcadePlayer } from '../core/sess
 import { toApiMode } from '../core/scores'
 import HandlePrompt from '../social/HandlePrompt'
 import SharePanel from '../social/SharePanel'
+import StoryShareButton from '../social/StoryShareButton'
 import { requestAlertsRefresh } from '../social/alertStore'
 import { createCourtVision3D, type CourtVision3DHandle } from './engine'
 import type {
@@ -158,7 +159,7 @@ export default function CourtVision3D({
               runId: runIdRef.current,
               challengeId: challenge?.id || null,
               ticketId: seeded?.ticketId ?? null,
-              meta: { pb: final.pb, seed: engineChallenge?.seed ?? null },
+              meta: { pb: final.pb, seed: engineChallenge?.seed ?? null, bestStreak: final.bestStreak ?? 0 },
             })
             if (r.ok) {
               setRun(r.run)
@@ -393,6 +394,7 @@ export default function CourtVision3D({
                 {busyShare ? 'Building challenge…' : END_DOORS.courtVision[0].label}
               </button>
             ) : null}
+            <StoryShareButton scoreId={run?.id ?? null} score={ended.score} />
             <button
               type="button"
               className={`ffa-btn ${canChallenge && !shareChallenge ? 'ffa-btn--secondary' : shareChallenge ? 'ffa-btn--ghost' : 'ffa-btn--primary'}`}
