@@ -140,7 +140,12 @@ class Engine {
     this.bridge = bridge
     this.mode = bridge.challenge ? 'challenge' : mode
     this.challengeCfg = bridge.challenge ?? null
-    this.seedCfg = bridge.challenge ? courtVisionSeedConfig(bridge.challenge.seed) : null
+    // 'still:*' seeds = the normal static court (challenge sent from a plain 60s run, so both
+    // players get identical conditions). Any other seed drives deterministic sway + wind.
+    this.seedCfg =
+      bridge.challenge && !(bridge.challenge.seed ?? '').startsWith('still:')
+        ? courtVisionSeedConfig(bridge.challenge.seed)
+        : null
     this.home = {
       x: this.seedCfg ? this.seedCfg.ballHomeOffsetX * 0.45 * 0.004 : 0,
       y: DIM.ballR,
@@ -462,7 +467,7 @@ class Engine {
     const newPb = next > prev
     this.pb = next
     let beatChallenge: boolean | null = null
-    if (this.challengeCfg) {
+    if (this.challengeCfg && !this.challengeCfg.setTheBar) {
       beatChallenge = this.score >= this.challengeCfg.targetScore
       this.callout = beatChallenge ? COURT_VISION_COPY.WON_CHALLENGE : COURT_VISION_COPY.LOST_CHALLENGE
     } else if (newPb) {

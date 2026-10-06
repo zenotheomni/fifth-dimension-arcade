@@ -5,7 +5,7 @@ import type {
   LeaderboardWindow,
   PersonalBestPayload,
 } from './types'
-import { getOrCreateDeviceId } from '../core/identity'
+import { getCachedPlayer } from '../core/session'
 
 export async function fetchLeaderboard(opts: {
   game: string
@@ -51,39 +51,27 @@ export async function fetchPersonalBest(opts: {
   mode?: string
   deviceId?: string
 }): Promise<PersonalBestPayload> {
-  const deviceId = opts.deviceId ?? getOrCreateDeviceId()
-  // Personal best goes through a lightweight scores helper endpoint pattern:
-  // for v1 we call leaderboard personal-best via dedicated query on games API
-  // or direct — expose via /api/leaderboard with pb flag would be odd.
-  // Use client fetch to a small inline path: GET /api/scores is POST-only,
-  // so we add personal best onto games? No — use fetch to supabase via API.
-  // Temporary: encode as GET /api/leaderboard?pb=1 — cleaner to add /api/me/best.
-  const params = new URLSearchParams({
-    game: opts.game,
-    deviceId,
-  })
-  if (opts.mode) params.set('mode', opts.mode)
-  const res = await fetch(`/api/personal-best?${params.toString()}`)
-  const json = (await res.json()) as {
-    ok?: boolean
-    personalBest?: PersonalBestPayload
-    error?: string
+  // Best score on the game's board for the cached device player (all-time).
+  const me = getCachedPlayer()
+  const params = new URLSearchParams({ game: opts.game, window: 'alltime' })
+  if (me) params.set('playerId', me.player_id)
+  const res = await fetch(`/api/arcade/board?${params.toString()}`)
+  const json = (await res.json()) as { ok?: boolean; board?: { me: { score: number; handle: string } | null }; error?: string }
+  if (!res.ok || !json.ok || !json.board) throw new Error(json.error ?? 'personal_best_failed')
+  const mine = json.board.me
+  return {
+    found: Boolean(mine),
+    player_id: me?.player_id,
+    handle: mine?.handle,
+    game_id: opts.game,
+    mode: opts.mode ?? null,
+    score: mine?.score ?? 0,
   }
-  if (!res.ok || !json.ok || !json.personalBest) {
-    throw new Error(json.error ?? 'personal_best_failed')
-  }
-  return json.personalBest
 }
 
-export async function fetchChallenge(
-  id: string,
-): Promise<ChallengePayload> {
-  const res = await fetch(`/api/challenges/${encodeURIComponent(id)}`)
-  const json = (await res.json()) as {
-    ok?: boolean
-    challenge?: ChallengePayload
-    error?: string
-  }
+export async function fetchChallenge(id: string): Promise<ChallengePayload> {
+  const res = await fetch(`/api/arcade/challenge?id=${encodeURIComponent(id)}`)
+  const json = (await res.json()) as { ok?: boolean; challenge?: ChallengePayload; error?: string }
   if (!res.ok || !json.ok || !json.challenge) {
     throw new Error(json.error ?? 'challenge_failed')
   }

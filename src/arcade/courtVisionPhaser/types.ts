@@ -5,6 +5,8 @@ export type CvChallengeConfig = {
   targetScore: number
   seed: string
   creatorHandle: string
+  /** Seeded run that creates a new challenge (no target to beat yet). */
+  setTheBar?: boolean
 }
 
 export type CvHudState = {

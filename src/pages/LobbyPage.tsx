@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { getOrCreatePlayerId } from '../arcade/core/identity'
 import { track } from '../arcade/analytics'
 import { COPY } from '../arcade/copyLocks'
@@ -19,6 +19,9 @@ import {
   playUiConfirm,
   unlockAudio,
 } from '../arcade/courtVision/sfx'
+import TopFiveBoard from '../arcade/social/TopFiveBoard'
+import RivalsSheet from '../arcade/social/RivalsSheet'
+import { useAlertStore } from '../arcade/social/alertStore'
 import '../arcade/lobby/lobby.css'
 
 const BASE = import.meta.env.BASE_URL
@@ -55,6 +58,9 @@ export default function LobbyPage() {
   const [selected, setSelected] = useState(0)
   const [games, setGames] = useState<ArcadeGame[]>(GAMES)
   const [tickerScores, setTickerScores] = useState<TickerScore[] | null>(null)
+  const [params, setParams] = useSearchParams()
+  const [rivalsOpen, setRivalsOpen] = useState(() => params.get('rivals') === '1')
+  const { unread } = useAlertStore()
 
 
   const qrSrc = useMemo(() => {
@@ -223,7 +229,7 @@ export default function LobbyPage() {
             />
           </button>
         ) : (
-          <div className="ffa-select">
+          <div className="ffa-select ffa-select--social">
             <header className="ffa-select__header">
               <img
                 className="ffa-select__wordmark"
@@ -305,6 +311,50 @@ export default function LobbyPage() {
             >
               {game.route ? `Play ${game.title}` : 'Coming Up'}
             </button>
+
+            {game.id === 'court-vision' ? (
+              <div className="soc-actions">
+                <button
+                  type="button"
+                  className="ffa-btn ffa-btn--secondary"
+                  onClick={() => {
+                    playUiConfirm()
+                    track('arcade_menu_challenge')
+                    navigate('/court-vision?setbar=1')
+                  }}
+                >
+                  Challenge a friend
+                </button>
+                <span className="soc-badge-wrap">
+                  <button
+                    type="button"
+                    className="ffa-btn ffa-btn--ghost"
+                    onClick={() => {
+                      playSelect()
+                      setRivalsOpen(true)
+                    }}
+                  >
+                    Rivals
+                  </button>
+                  {unread > 0 ? (
+                    <span className="soc-badge" aria-label={`${unread} new`}>
+                      {unread > 9 ? '9+' : unread}
+                    </span>
+                  ) : null}
+                </span>
+              </div>
+            ) : null}
+
+            {game.route ? <TopFiveBoard key={game.id} gameId={game.id} title={game.title} /> : null}
+
+            {rivalsOpen ? (
+              <RivalsSheet
+                onClose={() => {
+                  setRivalsOpen(false)
+                  if (params.get('rivals')) setParams({}, { replace: true })
+                }}
+              />
+            ) : null}
 
             <nav className="ffa-dock" aria-label="Fifth Dimension destinations">
               {DOCK_LINKS.map((item) => (
