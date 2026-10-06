@@ -110,6 +110,8 @@ if (want('video')) {
   }
   execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-framerate', '30', '-i', path.join(dir, 'f%03d.png'), '-vf', 'scale=780:1688:flags=lanczos,format=yuv420p', '-c:v', 'libx264', '-crf', '20', '-movflags', '+faststart', path.join(OUT, 'fr-gear-run.mp4')])
   console.log('wrote fr-gear-run.mp4 frames', f)
+  fs.copyFileSync(path.join(OUT, 'fr-gear-run.mp4'), path.join(OUT, 'fr-gear-cars-run.mp4'))
+  console.log('wrote fr-gear-cars-run.mp4')
 }
 
 if (want('run')) {
@@ -117,6 +119,7 @@ if (want('run')) {
   await until((s) => !s.air && s.slide === 0 && !s.near, 6000)
   await settle()
   await shot('fr-gear-run.png')
+  await shot('fr-gear-cars-run.png')
 }
 
 if (want('jump')) {
