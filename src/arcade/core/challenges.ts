@@ -2,7 +2,21 @@ import { challengePublicUrl } from './config'
 
 export { challengePublicUrl }
 
-const GAME_TITLES: Record<string, string> = { 'court-vision': 'Court Vision', 'fifth-run': 'Fifth Run' }
+export const GAME_TITLES: Record<string, string> = { 'court-vision': 'Court Vision', 'fifth-run': 'Fifth Run' }
+
+export const gameTitle = (game?: string | null) => GAME_TITLES[game ?? ''] ?? 'Court Vision'
+
+/** Same-seed promise shown on challenge cards. */
+export function sameSeedCopy(game: string | null | undefined, rivalHandle?: string | null): string {
+  if (game === 'fifth-run') {
+    return rivalHandle
+      ? `${rivalHandle} gets an alert. Same highway, same keys, same traffic.`
+      : 'Your friend runs the exact same highway — same keys, same traffic.'
+  }
+  return rivalHandle
+    ? `${rivalHandle} gets an alert. Same court, same sway, same wind.`
+    : 'Your friend plays the exact same court — same sway, same wind.'
+}
 
 export function challengeShareText(handle: string, score: number, game = 'court-vision'): string {
   return `${handle} scored ${score} in ${GAME_TITLES[game] ?? 'Court Vision'}. Can you beat it?`

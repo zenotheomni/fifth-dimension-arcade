@@ -40,7 +40,7 @@ export const GAMES: ArcadeGame[] = [
     id: 'fifth-run',
     title: 'Fifth Run',
     tagline: 'Key runner. Keep moving.',
-    status: 'live',
+    status: 'new',
     boxArt: art('box-fifth-run.webp'),
     route: '/fifth-run',
     accent: '#00C8C4',

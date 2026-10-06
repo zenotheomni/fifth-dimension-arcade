@@ -1,0 +1,966 @@
+/**
+ * Fifth Run — three.js scene. Neon highway into a night city: wet road with planar reflections,
+ * instanced towers, palms, gates, ’59-style Cadillacs, gold keys, bloom.
+ *
+ * World convention: the runner stays at z = 0; track objects live in `world` at z = −s and the
+ * group is translated by +runnerS each frame. Sky, planet, stars and skyline are camera-locked.
+ */
+import * as THREE from 'three'
+import { BloomEffect, EffectComposer, EffectPass, RenderPass, ToneMappingEffect, ToneMappingMode } from 'postprocessing'
+import { laneX } from '../sim/constants'
+import type { KeyItem, Obstacle, Pickup, PowerKind } from '../sim/track'
+import {
+  buildBarrier,
+  buildCar,
+  buildGantry,
+  buildGap,
+  buildGate,
+  buildLamp,
+  buildPickup,
+  CAR_COLORS,
+  keyGeometry,
+  palmGeometry,
+  palmMaterial,
+  type CarParts,
+} from './props'
+import { RunnerFigure, type PoseInput } from './runnerFigure'
+import { mergeStatic } from './merge'
+import { glowMaterial, PALETTE, roadMaterial, skyMaterial, towerMaterial } from './shaders'
+import { blobTexture, chevronTexture, glowTexture, planetTexture, streakTexture } from './textures'
+
+export type QualityTier = 'high' | 'low'
+
+export type ViewState = {
+  time: number
+  s: number
+  x: number
+  y: number
+  vy: number
+  air: boolean
+  sliding: boolean
+  speed: number
+  dead: boolean
+  deadT: number
+  deathKind: string | null
+  idle: boolean
+  shield: boolean
+  magnet: number
+  five: number
+  invuln: boolean
+  stumble: number
+  obstacles: Obstacle[]
+  keys: KeyItem[]
+  pickups: Pickup[]
+  tick: number
+  hz: number
+  shake: number
+}
+
+const REFL = 1
+const VIEW_AHEAD = 175
+const rnd = (() => {
+  let t = 12345
+  return () => {
+    t = (t * 1664525 + 1013904223) >>> 0
+    return t / 4294967296
+  }
+})()
+
+type Deco = { s: number; side: number; x: number; w: number; h: number; d: number; seed: number }
+
+export class FrScene {
+  renderer: THREE.WebGLRenderer
+  scene = new THREE.Scene()
+  camera: THREE.PerspectiveCamera
+  tier: QualityTier
+  composer: EffectComposer | null = null
+  bloom: BloomEffect | null = null
+  dprScale = 1
+  dprCap = 2
+  width = 1
+  height = 1
+  runner = new RunnerFigure()
+
+  private world = new THREE.Group()
+  private skyGroup = new THREE.Group()
+  private sky: THREE.Mesh
+  private skyMat: THREE.ShaderMaterial
+  private road: THREE.Mesh
+  private roadMat: THREE.ShaderMaterial
+  private reflRT: THREE.WebGLRenderTarget | null = null
+  private mirrorCam = new THREE.PerspectiveCamera()
+  private texMat = new THREE.Matrix4()
+  private glow: THREE.Texture
+  private stars!: THREE.Points
+  private starMat!: THREE.ShaderMaterial
+  private comets: { mesh: THREE.Mesh; t: number; dur: number; x: number; y: number; dx: number; dy: number; wait: number }[] = []
+  private towers!: THREE.InstancedMesh
+  private towerDeco: Deco[] = []
+  private towerMat!: THREE.ShaderMaterial
+  private farMat!: THREE.ShaderMaterial
+  private palms!: THREE.InstancedMesh
+  private palmDeco: Deco[] = []
+  private lamps: { g: THREE.Group; s: number; side: number }[] = []
+  private gates: { g: THREE.Group; s: number; tubes: THREE.MeshStandardMaterial[] }[] = []
+  private keys!: THREE.InstancedMesh
+  private keyHalos!: THREE.InstancedMesh
+  private keyMat!: THREE.MeshStandardMaterial
+  private pools: {
+    barrier: { group: THREE.Group; lamp: THREE.MeshStandardMaterial }[]
+    overhead: { group: THREE.Group }[]
+    car: CarParts[]
+    gap: ReturnType<typeof buildGap>[]
+  } = { barrier: [], overhead: [], car: [], gap: [] }
+  private pickupPools: Record<PowerKind, ReturnType<typeof buildPickup>[]> = { magnet: [], five: [], shield: [] }
+  private smashT = new Map<number, number>()
+  private blob: THREE.Mesh
+  private shieldMesh: THREE.Mesh
+  private shieldMat: THREE.ShaderMaterial
+  private fiveRing: THREE.Mesh
+  private magnetRing: THREE.Mesh
+  private speedLines!: THREE.InstancedMesh
+  private speedLineState: { a: number; r: number; z: number; len: number }[] = []
+  private speedMat!: THREE.MeshBasicMaterial
+  private sparks!: THREE.Points
+  private sparkData: { p: THREE.Vector3; v: THREE.Vector3; life: number; max: number }[] = []
+  private sparkGeo!: THREE.BufferGeometry
+  private camX = 0
+  private camY = 3.4
+  private fov = 64
+  private tmpM = new THREE.Matrix4()
+  private tmpQ = new THREE.Quaternion()
+  private tmpV = new THREE.Vector3()
+  private tmpS = new THREE.Vector3()
+  private tmpE = new THREE.Euler()
+  private lookT = new THREE.Vector3()
+
+  constructor(canvas: HTMLCanvasElement, tier: QualityTier, emblem: THREE.Texture | null) {
+    this.tier = tier
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: tier === 'high', powerPreference: 'high-performance', alpha: false })
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping
+    this.renderer.toneMappingExposure = 1.05
+    this.camera = new THREE.PerspectiveCamera(64, 1, 0.1, 1600)
+    this.camera.layers.enable(REFL)
+    this.mirrorCam.layers.set(REFL)
+    this.scene.add(this.camera)
+    this.scene.background = new THREE.Color('#12061f')
+    this.glow = glowTexture()
+
+    // ── sky / env ──
+    this.skyMat = skyMaterial()
+    this.sky = new THREE.Mesh(new THREE.SphereGeometry(900, 32, 16), this.skyMat)
+    this.sky.frustumCulled = false
+    this.sky.renderOrder = -10
+    this.sky.layers.enable(REFL)
+    this.scene.add(this.sky)
+    this.scene.add(this.skyGroup)
+    this.buildEnv()
+    this.buildStars()
+    this.buildPlanet()
+    this.buildComets()
+    this.buildSkyline()
+
+    // ── lights ──
+    const hemi = new THREE.HemisphereLight('#8a6cff', '#1a0820', 0.75)
+    const key = new THREE.DirectionalLight('#c0a8ff', 1.4)
+    key.position.set(-6, 10, -10)
+    const back = new THREE.DirectionalLight('#ff6aa0', 0.9)
+    back.position.set(4, 5, 10)
+    for (const l of [hemi, key, back]) {
+      l.layers.enable(REFL)
+      this.scene.add(l)
+    }
+
+    // ── road + reflections ──
+    if (tier === 'high') {
+      this.reflRT = new THREE.WebGLRenderTarget(256, 256, { type: THREE.HalfFloatType, colorSpace: THREE.LinearSRGBColorSpace })
+    }
+    this.roadMat = roadMaterial(this.reflRT?.texture ?? null)
+    this.road = new THREE.Mesh(new THREE.PlaneGeometry(80, 440, 1, 1), this.roadMat)
+    this.road.rotation.x = -Math.PI / 2
+    this.road.position.set(0, 0, -190)
+    this.scene.add(this.road)
+
+    this.scene.add(this.world)
+    this.buildTowers()
+    this.buildPalms()
+    this.buildLampsAndGates(emblem)
+    this.buildPools(emblem)
+    this.buildKeys()
+
+    // ── runner + fx ──
+    for (const m of this.runner.meshes) m.layers.enable(REFL)
+    this.scene.add(this.runner.group)
+    this.blob = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 1.6), new THREE.MeshBasicMaterial({ map: blobTexture(), transparent: true, depthWrite: false, opacity: 0.8 }))
+    this.blob.rotation.x = -Math.PI / 2
+    this.blob.position.y = 0.012
+    this.scene.add(this.blob)
+    this.shieldMat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      uniforms: { uTime: { value: 0 }, uAlpha: { value: 1 } },
+      vertexShader: 'varying vec3 vN; varying vec3 vV; void main(){ vec4 mv = modelViewMatrix*vec4(position,1.0); vN = normalize(normalMatrix*normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix*mv; }',
+      fragmentShader:
+        'uniform float uTime; uniform float uAlpha; varying vec3 vN; varying vec3 vV; void main(){ float f = pow(1.0 - abs(dot(vN, vV)), 2.2); float hex = 0.5 + 0.5*sin(vN.y*40.0 + uTime*3.0); gl_FragColor = vec4(vec3(0.1,1.0,0.9) * (f*1.6 + hex*0.06) * uAlpha, 1.0); }',
+    })
+    this.shieldMesh = new THREE.Mesh(new THREE.SphereGeometry(1.05, 28, 18), this.shieldMat)
+    this.shieldMesh.scale.set(0.85, 1.15, 0.85)
+    this.scene.add(this.shieldMesh)
+    this.fiveRing = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 2.4), glowMaterial(this.glow, '#ffc83c', 0.9))
+    this.fiveRing.rotation.x = -Math.PI / 2
+    this.fiveRing.position.y = 0.03
+    this.scene.add(this.fiveRing)
+    this.magnetRing = new THREE.Mesh(
+      new THREE.TorusGeometry(0.75, 0.025, 6, 40),
+      new THREE.MeshBasicMaterial({ color: '#ff4060', transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }),
+    )
+    this.magnetRing.rotation.x = Math.PI / 2
+    this.scene.add(this.magnetRing)
+    this.buildSpeedLines()
+    this.buildSparks()
+
+    if (tier === 'high') this.enableComposer()
+  }
+
+  // ───────────────────────── builders ─────────────────────────
+  private buildEnv() {
+    const env = new THREE.Scene()
+    const sky = new THREE.Mesh(new THREE.SphereGeometry(50, 24, 12), skyMaterial())
+    env.add(sky)
+    const panel = (c: string, x: number, y: number, z: number, w: number, h: number, k = 3) => {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: new THREE.Color(c).multiplyScalar(k), side: THREE.DoubleSide }))
+      m.position.set(x, y, z)
+      m.lookAt(0, 0, 0)
+      env.add(m)
+    }
+    panel('#00e0d0', -30, 4, -20, 10, 3)
+    panel('#ff3d8a', 30, 6, -16, 12, 3)
+    panel('#ffc83c', 0, 14, -30, 18, 4, 2)
+    panel('#8a4dff', 0, 25, 10, 30, 10, 1.4)
+    panel('#ff6a3c', -10, 3, 30, 14, 4, 1.5)
+    const pm = new THREE.PMREMGenerator(this.renderer)
+    const rt = pm.fromScene(env, 0.02)
+    this.scene.environment = rt.texture
+    pm.dispose()
+  }
+
+  private buildStars() {
+    const N = 900
+    const pos = new Float32Array(N * 3)
+    const ph = new Float32Array(N)
+    const sz = new Float32Array(N)
+    for (let i = 0; i < N; i++) {
+      const az = (rnd() - 0.5) * Math.PI * 1.2
+      const el = 0.05 + Math.pow(rnd(), 0.7) * 1.25
+      const r = 800
+      pos[i * 3] = Math.sin(az) * Math.cos(el) * r
+      pos[i * 3 + 1] = Math.sin(el) * r
+      pos[i * 3 + 2] = -Math.cos(az) * Math.cos(el) * r
+      ph[i] = rnd() * 6.28
+      sz[i] = rnd() < 0.08 ? 3.2 : 1.2 + rnd() * 1.4
+    }
+    const g = new THREE.BufferGeometry()
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3))
+    g.setAttribute('aPh', new THREE.BufferAttribute(ph, 1))
+    g.setAttribute('aSize', new THREE.BufferAttribute(sz, 1))
+    this.starMat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      uniforms: { uTime: { value: 0 }, uPx: { value: 1 } },
+      vertexShader:
+        'attribute float aPh; attribute float aSize; uniform float uTime; uniform float uPx; varying float vA; void main(){ vec4 p = projectionMatrix*modelViewMatrix*vec4(position,1.0); gl_Position = p; vA = 0.55 + 0.45*sin(uTime*1.7 + aPh*3.0); gl_PointSize = aSize * uPx; }',
+      fragmentShader:
+        'varying float vA; void main(){ vec2 c = gl_PointCoord - 0.5; float d = length(c); if (d > 0.5) discard; float a = smoothstep(0.5, 0.0, d); gl_FragColor = vec4(vec3(1.0,0.92,1.0)*a*vA*1.4, 1.0); }',
+    })
+    this.stars = new THREE.Points(g, this.starMat)
+    this.stars.frustumCulled = false
+    this.skyGroup.add(this.stars)
+  }
+
+  private buildPlanet() {
+    const tex = planetTexture()
+    const mat = new THREE.ShaderMaterial({
+      uniforms: { uTex: { value: tex }, uLight: { value: new THREE.Vector3(-0.8, 0.35, 0.55).normalize() } },
+      vertexShader: 'varying vec2 vUv; varying vec3 vN; varying vec3 vV; void main(){ vUv = uv; vec4 mv = modelViewMatrix*vec4(position,1.0); vN = normalize(normalMatrix*normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix*mv; }',
+      fragmentShader: /* glsl */ `
+        uniform sampler2D uTex; uniform vec3 uLight; varying vec2 vUv; varying vec3 vN; varying vec3 vV;
+        void main(){
+          vec3 albedo = texture2D(uTex, vUv).rgb;
+          float l = clamp(dot(vN, uLight) * 0.9 + 0.25, 0.0, 1.0);
+          float rim = pow(1.0 - clamp(dot(vN, vV), 0.0, 1.0), 2.5);
+          vec3 col = albedo * vec3(0.55, 0.78, 1.25) * l * 0.42 + vec3(0.2, 0.45, 1.0) * rim * 0.5;
+          gl_FragColor = vec4(col, 1.0);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }`,
+    })
+    const planet = new THREE.Mesh(new THREE.SphereGeometry(96, 48, 32), mat)
+    const dir = new THREE.Vector3(0.2, 0.3, -1).normalize()
+    planet.position.copy(dir.multiplyScalar(620))
+    planet.rotation.set(0.3, -0.6, 0.2)
+    planet.layers.enable(REFL)
+    this.skyGroup.add(planet)
+    const halo = new THREE.Mesh(new THREE.PlaneGeometry(330, 330), glowMaterial(this.glow, '#5a8cff', 0.5))
+    halo.position.copy(planet.position).multiplyScalar(1.02)
+    halo.lookAt(0, 0, 0)
+    this.skyGroup.add(halo)
+  }
+
+  private buildComets() {
+    const tex = streakTexture()
+    for (let i = 0; i < 4; i++) {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(170, 7), glowMaterial(tex, '#ffd27a', 1))
+      m.visible = false
+      m.layers.enable(REFL)
+      this.skyGroup.add(m)
+      this.comets.push({ mesh: m, t: 0, dur: 1.4, x: 0, y: 0, dx: -1, dy: -0.5, wait: 0.4 + i * 1.3 })
+    }
+  }
+
+  private buildSkyline() {
+    const geo = new THREE.BoxGeometry(1, 1, 1)
+    geo.translate(0, 0.5, 0)
+    this.farMat = towerMaterial(350, 1200)
+    const N = 120
+    const mesh = new THREE.InstancedMesh(geo, this.farMat, N)
+    const seeds = new Float32Array(N)
+    let i = 0
+    while (i < N) {
+      const x = (rnd() - 0.5) * 900
+      const z = -380 - rnd() * 320
+      const ax = Math.abs(x)
+      if (ax < 16) continue
+      const center = Math.exp(-ax / 140)
+      const h = 20 + rnd() * 55 + center * 95 * rnd()
+      const w = 14 + rnd() * 26
+      this.tmpM.compose(this.tmpV.set(x, -8, z), this.tmpQ.identity(), this.tmpS.set(w, h, w * (0.7 + rnd() * 0.6)))
+      mesh.setMatrixAt(i, this.tmpM)
+      seeds[i] = rnd()
+      i++
+    }
+    geo.setAttribute('aSeed', new THREE.InstancedBufferAttribute(seeds, 1))
+    mesh.frustumCulled = false
+    mesh.layers.enable(REFL)
+    this.skyGroup.add(mesh)
+    // vanishing-point glow
+    const vg = new THREE.Mesh(new THREE.PlaneGeometry(260, 120), glowMaterial(this.glow, '#ff7ad8', 0.55))
+    vg.position.set(0, 4, -360)
+    vg.layers.enable(REFL)
+    this.skyGroup.add(vg)
+  }
+
+  private newTower(d: Deco, s: number) {
+    d.s = s
+    const near = rnd() < 0.45
+    d.w = 6 + rnd() * 9
+    d.d = 8 + rnd() * 10
+    d.h = near ? 6 + rnd() * 10 : rnd() < 0.15 ? 40 + rnd() * 30 : 16 + rnd() * 24
+    d.x = d.side * ((near ? 11 : 20 + rnd() * 14) + d.w / 2)
+    d.seed = rnd()
+  }
+
+  private buildTowers() {
+    const geo = new THREE.BoxGeometry(1, 1, 1)
+    geo.translate(0, 0.5, 0)
+    this.towerMat = towerMaterial(70, 340)
+    const N = 64
+    this.towers = new THREE.InstancedMesh(geo, this.towerMat, N)
+    const seeds = new Float32Array(N)
+    for (let i = 0; i < N; i++) {
+      const side = i % 2 ? 1 : -1
+      const d: Deco = { s: 0, side, x: 0, w: 1, h: 1, d: 1, seed: 0 }
+      this.newTower(d, -20 + Math.floor(i / 2) * 12 + rnd() * 5)
+      this.towerDeco.push(d)
+      seeds[i] = d.seed
+    }
+    geo.setAttribute('aSeed', new THREE.InstancedBufferAttribute(seeds, 1))
+    this.towers.frustumCulled = false
+    this.towers.layers.enable(REFL)
+    this.world.add(this.towers)
+    this.writeTowers(true)
+  }
+
+  private writeTowers(all: boolean, runnerS = 0) {
+    const seedAttr = this.towers.geometry.getAttribute('aSeed') as THREE.InstancedBufferAttribute
+    let dirty = all
+    const span = 32 * 12
+    for (let i = 0; i < this.towerDeco.length; i++) {
+      const d = this.towerDeco[i]
+      if (!all && d.s > runnerS - 25) continue
+      if (!all) this.newTower(d, d.s + span)
+      this.tmpM.compose(this.tmpV.set(d.x, 0, -d.s), this.tmpQ.identity(), this.tmpS.set(d.w, d.h, d.d))
+      this.towers.setMatrixAt(i, this.tmpM)
+      seedAttr.setX(i, d.seed)
+      dirty = true
+    }
+    if (dirty) {
+      this.towers.instanceMatrix.needsUpdate = true
+      seedAttr.needsUpdate = true
+    }
+  }
+
+  private buildPalms() {
+    const N = 30
+    this.palms = new THREE.InstancedMesh(palmGeometry(), palmMaterial(), N)
+    for (let i = 0; i < N; i++) {
+      const side = i % 2 ? 1 : -1
+      this.palmDeco.push({ s: -10 + Math.floor(i / 2) * 22 + (side > 0 ? 11 : 0), side, x: side * 6.4, w: 0.85 + rnd() * 0.35, h: 0, d: 0, seed: rnd() * 6.28 })
+    }
+    this.palms.frustumCulled = false
+    this.palms.layers.enable(REFL)
+    this.world.add(this.palms)
+    this.writePalms(true)
+  }
+
+  private writePalms(all: boolean, runnerS = 0) {
+    let dirty = all
+    for (let i = 0; i < this.palmDeco.length; i++) {
+      const d = this.palmDeco[i]
+      if (!all && d.s > runnerS - 15) continue
+      if (!all) {
+        d.s += 15 * 22
+        d.w = 0.85 + rnd() * 0.35
+        d.seed = rnd() * 6.28
+      }
+      // lean outward, random spin
+      this.tmpE.set(0, d.side > 0 ? Math.PI + d.seed * 0.2 : d.seed * 0.2, 0)
+      this.tmpQ.setFromEuler(this.tmpE)
+      this.tmpM.compose(this.tmpV.set(d.x, 0, -d.s), this.tmpQ, this.tmpS.set(d.w, d.w, d.w))
+      this.palms.setMatrixAt(i, this.tmpM)
+      dirty = true
+    }
+    if (dirty) this.palms.instanceMatrix.needsUpdate = true
+  }
+
+  private buildLampsAndGates(emblem: THREE.Texture | null) {
+    const metal = new THREE.MeshStandardMaterial({ color: '#2a2438', metalness: 0.7, roughness: 0.35 })
+    for (let i = 0; i < 14; i++) {
+      const side = i % 2 ? 1 : -1
+      const g = mergeStatic(buildLamp(this.glow, metal, side)) as THREE.Group
+      g.position.x = side * 5.1
+      g.traverse((o) => o.layers.enable(REFL))
+      this.world.add(g)
+      this.lamps.push({ g, s: 12 + Math.floor(i / 2) * 28 + (side > 0 ? 14 : 0), side })
+    }
+    for (let i = 0; i < 3; i++) {
+      const { group, tubes } = buildGate(this.glow, i % 3 === 0 ? emblem : null, metal)
+      mergeStatic(group)
+      group.traverse((o) => o.layers.enable(REFL))
+      this.world.add(group)
+      this.gates.push({ g: group, s: 60 + i * 70, tubes })
+    }
+  }
+
+  private buildPools(emblem: THREE.Texture | null) {
+    const chev = chevronTexture()
+    const metal = new THREE.MeshStandardMaterial({ color: '#3a3448', metalness: 0.8, roughness: 0.3 })
+    const shared = {
+      chrome: new THREE.MeshStandardMaterial({ color: '#f4f6ff', metalness: 1, roughness: 0.08 }),
+      glass: new THREE.MeshStandardMaterial({ color: '#0c0a18', metalness: 0.9, roughness: 0.05, envMapIntensity: 1.6 }),
+      tire: new THREE.MeshStandardMaterial({ color: '#0a0a0c', roughness: 0.9 }),
+      white: new THREE.MeshStandardMaterial({ color: '#f2f0ea', roughness: 0.6 }),
+      glow: this.glow,
+    }
+    for (let i = 0; i < 12; i++) {
+      const b = buildBarrier(chev, metal)
+      mergeStatic(b.group)
+      b.group.visible = false
+      b.group.traverse((o) => o.layers.enable(REFL))
+      this.world.add(b.group)
+      this.pools.barrier.push(b)
+      const o = buildGantry(chev, metal, this.glow)
+      mergeStatic(o.group)
+      o.group.visible = false
+      o.group.traverse((x) => x.layers.enable(REFL))
+      this.world.add(o.group)
+      this.pools.overhead.push(o)
+    }
+    for (let i = 0; i < 16; i++) {
+      const c = buildCar(shared)
+      mergeStatic(c.group)
+      c.group.visible = false
+      c.group.traverse((o) => o.layers.enable(REFL))
+      this.world.add(c.group)
+      this.pools.car.push(c)
+    }
+    for (let i = 0; i < 9; i++) {
+      const g = buildGap(this.glow)
+      g.group.visible = false
+      this.world.add(g.group)
+      this.pools.gap.push(g)
+    }
+    for (const k of ['magnet', 'five', 'shield'] as PowerKind[]) {
+      for (let i = 0; i < 2; i++) {
+        const p = buildPickup(k, this.glow, emblem)
+        p.group.visible = false
+        p.spin.traverse((o) => o.layers.enable(REFL))
+        this.world.add(p.group)
+        this.pickupPools[k].push(p)
+      }
+    }
+  }
+
+  private buildKeys() {
+    this.keyMat = new THREE.MeshStandardMaterial({ color: '#ffc93a', metalness: 1, roughness: 0.22, emissive: new THREE.Color('#ff9a10'), emissiveIntensity: 0.75, envMapIntensity: 1.6 })
+    this.keys = new THREE.InstancedMesh(keyGeometry(), this.keyMat, 160)
+    this.keys.frustumCulled = false
+    this.keys.layers.enable(REFL)
+    this.keys.count = 0
+    this.world.add(this.keys)
+    this.keyHalos = new THREE.InstancedMesh(new THREE.PlaneGeometry(1.25, 1.25), glowMaterial(this.glow, '#ffb02a', 0.55), 160)
+    this.keyHalos.frustumCulled = false
+    this.keyHalos.count = 0
+    this.world.add(this.keyHalos)
+  }
+
+  private buildSpeedLines() {
+    const N = 40
+    this.speedMat = new THREE.MeshBasicMaterial({ color: '#cfe8ff', transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false })
+    const g = new THREE.PlaneGeometry(0.035, 1)
+    g.rotateX(-Math.PI / 2)
+    this.speedLines = new THREE.InstancedMesh(g, this.speedMat, N)
+    this.speedLines.frustumCulled = false
+    for (let i = 0; i < N; i++) this.speedLineState.push({ a: rnd() * Math.PI * 2, r: 2.2 + rnd() * 4, z: -rnd() * 40, len: 2 + rnd() * 4 })
+    this.camera.add(this.speedLines)
+  }
+
+  private buildSparks() {
+    const N = 140
+    this.sparkGeo = new THREE.BufferGeometry()
+    this.sparkGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(N * 3), 3))
+    this.sparkGeo.setAttribute('aA', new THREE.BufferAttribute(new Float32Array(N), 1))
+    for (let i = 0; i < N; i++) this.sparkData.push({ p: new THREE.Vector3(), v: new THREE.Vector3(), life: 0, max: 1 })
+    const mat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      uniforms: { uPx: { value: 1 } },
+      vertexShader:
+        'attribute float aA; uniform float uPx; varying float vA; void main(){ vA = aA; vec4 mv = modelViewMatrix*vec4(position,1.0); gl_Position = projectionMatrix*mv; gl_PointSize = (aA > 0.0 ? 34.0 : 0.0) * uPx / max(1.0, -mv.z); }',
+      fragmentShader: 'varying float vA; void main(){ float d = length(gl_PointCoord-0.5); if (d>0.5) discard; gl_FragColor = vec4(vec3(1.0,0.8,0.35)*smoothstep(0.5,0.0,d)*vA*2.0, 1.0); }',
+    })
+    this.sparks = new THREE.Points(this.sparkGeo, mat)
+    this.sparks.frustumCulled = false
+    this.world.add(this.sparks)
+  }
+
+  // ───────────────────────── fx hooks ─────────────────────────
+  burst(lane: number, s: number, y: number, n = 10, color?: 'gold') {
+    void color
+    let made = 0
+    for (const sp of this.sparkData) {
+      if (sp.life > 0) continue
+      sp.p.set(laneX(lane), y, -s)
+      sp.v.set((Math.random() - 0.5) * 5, 1.5 + Math.random() * 4, (Math.random() - 0.5) * 5)
+      sp.max = 0.35 + Math.random() * 0.3
+      sp.life = sp.max
+      if (++made >= n) break
+    }
+  }
+
+  enableComposer() {
+    if (this.composer) return
+    const composer = new EffectComposer(this.renderer, { frameBufferType: THREE.HalfFloatType, multisampling: 0 })
+    composer.addPass(new RenderPass(this.scene, this.camera))
+    this.bloom = new BloomEffect({ intensity: 1.15, luminanceThreshold: 0.62, luminanceSmoothing: 0.25, mipmapBlur: true, radius: 0.72, levels: 6 })
+    composer.addPass(new EffectPass(this.camera, this.bloom, new ToneMappingEffect({ mode: ToneMappingMode.ACES_FILMIC })))
+    this.composer = composer
+    this.renderer.toneMapping = THREE.NoToneMapping
+    composer.setSize(this.width, this.height, false)
+  }
+
+  disableComposer() {
+    if (!this.composer) return
+    this.composer.dispose()
+    this.composer = null
+    this.bloom = null
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping
+  }
+
+  resize(w: number, h: number) {
+    this.width = w
+    this.height = h
+    const dpr = Math.min(window.devicePixelRatio || 1, this.dprCap) * this.dprScale
+    this.renderer.setPixelRatio(Math.max(0.75, dpr))
+    this.renderer.setSize(w, h, false)
+    this.composer?.setSize(w, h, false)
+    this.camera.aspect = w / h
+    this.camera.updateProjectionMatrix()
+    const pr = this.renderer.getPixelRatio()
+    if (this.reflRT) this.reflRT.setSize(Math.max(64, Math.round((w * pr) / 2)), Math.max(64, Math.round((h * pr) / 2)))
+    this.starMat.uniforms.uPx.value = pr
+    ;(this.sparks.material as THREE.ShaderMaterial).uniforms.uPx.value = pr * (h / 844) * 1.4
+  }
+
+  // ───────────────────────── per-frame ─────────────────────────
+  update(v: ViewState, dt: number) {
+    const t = v.time
+    const S = v.s
+    this.world.position.z = S
+
+    // runner
+    this.runner.group.position.set(v.x, v.y, 0)
+    const pose: PoseInput = {
+      dt,
+      speed: v.speed,
+      air: v.air,
+      vy: v.vy,
+      sliding: v.sliding,
+      bank: THREE.MathUtils.clamp((v.x - this.runner.group.userData.prevX || 0) / Math.max(dt, 1e-3) / 14, -1, 1),
+      dead: v.dead,
+      deadT: v.deadT,
+      deathKind: v.deathKind,
+      idle: v.idle,
+    }
+    this.runner.group.userData.prevX = v.x
+    this.runner.update(pose)
+    if (v.dead && v.deathKind === 'gap') this.runner.group.position.y = -Math.min(6, v.deadT * v.deadT * 9)
+    const flick = v.invuln ? (Math.floor(t * 18) % 2 ? 0.35 : 1) : 1
+    this.runner.group.visible = flick > 0.5 || !v.invuln
+    this.blob.position.set(v.x, 0.012, 0.05)
+    const bs = Math.max(0.35, 1 - v.y * 0.35)
+    this.blob.scale.set(bs, bs, bs)
+    this.blob.visible = !(v.dead && v.deathKind === 'gap')
+
+    // power-up fx
+    this.shieldMesh.visible = v.shield
+    this.shieldMesh.position.set(v.x, v.y + 0.95 - (v.sliding ? 0.45 : 0), 0)
+    this.shieldMat.uniforms.uTime.value = t
+    this.shieldMat.uniforms.uAlpha.value = 0.75 + 0.25 * Math.sin(t * 6)
+    this.fiveRing.visible = v.five > 0 && !v.dead
+    this.fiveRing.position.x = v.x
+    ;(this.fiveRing.material as THREE.MeshBasicMaterial).opacity = 0.55 + 0.35 * Math.sin(t * 10) * (v.five < 1.5 ? Math.sin(t * 20) : 1)
+    const rim = this.runner.hoodieMat.userData.rim as { uRimColor: { value: THREE.Color } } | undefined
+    if (rim) rim.uRimColor.value.set(v.five > 0 ? '#ffc83c' : '#ff3fc8')
+    this.magnetRing.visible = v.magnet > 0 && !v.dead
+    this.magnetRing.position.set(v.x, v.y + 0.9, 0)
+    this.magnetRing.rotation.z = t * 4
+    this.magnetRing.scale.setScalar(1 + 0.08 * Math.sin(t * 12))
+
+    // decor recycling
+    this.writeTowers(false, S)
+    this.writePalms(false, S)
+    for (const l of this.lamps) {
+      if (l.s < S - 12) l.s += 7 * 28
+      l.g.position.z = -l.s
+    }
+    for (const g of this.gates) {
+      if (g.s < S - 15) g.s += 3 * 70
+      g.g.position.z = -g.s
+      g.tubes.forEach((m, i) => (m.emissiveIntensity = 2.4 + 1.4 * Math.max(0, Math.sin(t * 3 - i * 1.2 + g.s))))
+    }
+
+    this.updateObstacles(v)
+    this.updateKeys(v, dt)
+    this.updatePickups(v)
+    this.updateSparks(dt)
+    this.updateSky(v, dt)
+    this.updateCamera(v, dt)
+
+    this.roadMat.uniforms.uScroll.value = S
+    this.roadMat.uniforms.uTime.value = t
+    this.roadMat.uniforms.uCam.value.copy(this.camera.position)
+    this.roadMat.uniforms.uBoost.value = v.five > 0 ? 0.5 : 0
+    this.towerMat.uniforms.uTime.value = t
+  }
+
+  private updateObstacles(v: ViewState) {
+    const S = v.s
+    const idx = { barrier: 0, overhead: 0, car: 0, gap: 0 }
+    const now = v.time
+    for (const o of v.obstacles) {
+      // passed props would otherwise fill the foreground between camera and runner
+      const behind = o.kind === 'gap' || v.dead ? 12 : o.kind === 'car' ? 2.2 : 2.6
+      if (o.s + o.len < S - behind) continue
+      if (o.s > S + VIEW_AHEAD) break
+      let scale = 1
+      let lift = 0
+      if (o.smashed) {
+        if (!this.smashT.has(o.id)) {
+          this.smashT.set(o.id, now)
+          this.burst(o.lane, o.s, 0.8, 18)
+        }
+        const k = (now - this.smashT.get(o.id)!) / 0.35
+        if (k >= 1) continue
+        scale = 1 - k
+        lift = k * 2
+      }
+      const x = laneX(o.lane)
+      if (o.kind === 'barrier') {
+        const b = this.pools.barrier[idx.barrier++]
+        if (!b) continue
+        b.group.visible = true
+        b.group.position.set(x, lift, -(o.s + o.len / 2))
+        b.group.scale.setScalar(scale)
+        b.lamp.emissiveIntensity = Math.floor(now * 3 + o.id) % 2 ? 4 : 0.6
+      } else if (o.kind === 'overhead') {
+        const g = this.pools.overhead[idx.overhead++]
+        if (!g) continue
+        g.group.visible = true
+        g.group.position.set(x, lift, -(o.s + o.len / 2))
+        g.group.scale.setScalar(scale)
+      } else if (o.kind === 'car') {
+        const c = this.pools.car[idx.car++]
+        if (!c) continue
+        c.group.visible = true
+        c.group.position.set(x, lift, -(o.s + o.len / 2))
+        c.group.scale.setScalar(scale)
+        const facing = o.variant % 5 === 0
+        c.group.rotation.y = facing ? Math.PI : 0
+        c.paint.color.set(CAR_COLORS[o.variant % CAR_COLORS.length])
+        c.head.emissiveIntensity = facing ? 6 : 0.4
+        c.tail.emissiveIntensity = facing ? 1.5 : 4.5
+      } else {
+        const g = this.pools.gap[idx.gap++]
+        if (!g) continue
+        g.group.visible = true
+        g.group.position.set(x, 0, 0)
+        g.hole.scale.set(1.98, o.len, 1)
+        g.hole.position.z = -(o.s + o.len / 2)
+        g.near.scale.x = 1.98
+        g.near.position.set(0, 0.02, -o.s)
+        g.far.scale.x = 1.98
+        g.far.position.set(0, 0.02, -(o.s + o.len))
+        g.nearGlow.scale.x = 1.6
+        g.nearGlow.position.z = -o.s + 0.3
+      }
+    }
+    for (const k of ['barrier', 'overhead', 'car', 'gap'] as const) {
+      const pool = this.pools[k] as { group: THREE.Group }[]
+      for (let i = idx[k]; i < pool.length; i++) pool[i].group.visible = false
+    }
+    if (this.smashT.size > 40) this.smashT.clear()
+  }
+
+  private updateKeys(v: ViewState, dt: number) {
+    void dt
+    const S = v.s
+    let n = 0
+    const t = v.time
+    const spin = t * 2.6
+    for (const k of v.keys) {
+      if (k.s < S - 3 && k.state !== 1) continue
+      if (k.s > S + VIEW_AHEAD) break
+      if (k.state === 2) continue
+      let x = laneX(k.lane)
+      let y = k.y - 0.05 + Math.sin(t * 3 + k.id) * 0.06
+      let z = -k.s
+      let sc = 1
+      if (k.state === 1) {
+        const age = (v.tick - k.takenTick) / v.hz
+        const dur = k.magnet ? 0.22 : 0.18
+        if (age > dur || age < 0) continue
+        const f = age / dur
+        if (k.magnet) {
+          x = x + (v.x - x) * f
+          y = y + (v.y + 1.0 - y) * f
+          z = z + (-S - z) * f
+          sc = 1 - f * 0.6
+        } else {
+          y += f * 0.8
+          sc = 1 + f * 0.6
+          if (f > 0.5) sc *= 1 - (f - 0.5) * 2
+        }
+        z = z + 0 // world-space key position stays in the track frame
+      }
+      if (n >= 160) break
+      this.tmpE.set(0, spin + k.id * 0.37, 0)
+      this.tmpQ.setFromEuler(this.tmpE)
+      this.tmpM.compose(this.tmpV.set(x, y, z), this.tmpQ, this.tmpS.set(sc, sc, sc))
+      this.keys.setMatrixAt(n, this.tmpM)
+      this.tmpM.compose(this.tmpV.set(x, y + 0.2, z + 0.05), this.tmpQ.identity(), this.tmpS.set(sc, sc, sc))
+      this.keyHalos.setMatrixAt(n, this.tmpM)
+      n++
+    }
+    this.keys.count = n
+    this.keyHalos.count = n
+    this.keys.instanceMatrix.needsUpdate = true
+    this.keyHalos.instanceMatrix.needsUpdate = true
+    this.keyMat.emissiveIntensity = v.five > 0 ? 1.6 : 0.75
+  }
+
+  private updatePickups(v: ViewState) {
+    const idx: Record<PowerKind, number> = { magnet: 0, five: 0, shield: 0 }
+    const t = v.time
+    for (const p of v.pickups) {
+      if (p.s < v.s - 3) continue
+      if (p.s > v.s + VIEW_AHEAD) break
+      const item = this.pickupPools[p.kind][idx[p.kind]++]
+      if (!item) continue
+      if (p.taken) {
+        const age = (v.tick - p.takenTick) / v.hz
+        if (age > 0.3) {
+          item.group.visible = false
+          continue
+        }
+        item.group.scale.setScalar(1 + age * 4)
+        ;(item.halo.material as THREE.MeshBasicMaterial).opacity = 0.65 * (1 - age / 0.3)
+      } else {
+        item.group.scale.setScalar(1)
+        ;(item.halo.material as THREE.MeshBasicMaterial).opacity = 0.65
+      }
+      item.group.visible = true
+      item.group.position.set(laneX(p.lane), 0, -p.s)
+      item.spin.rotation.y = t * 2.2
+      item.spin.position.y = 1.0 + Math.sin(t * 3 + p.id) * 0.1
+      item.ring.scale.setScalar(1 + 0.15 * Math.sin(t * 5))
+    }
+    for (const k of ['magnet', 'five', 'shield'] as PowerKind[]) for (let i = idx[k]; i < this.pickupPools[k].length; i++) this.pickupPools[k][i].group.visible = false
+  }
+
+  private updateSparks(dt: number) {
+    const pos = this.sparkGeo.getAttribute('position') as THREE.BufferAttribute
+    const a = this.sparkGeo.getAttribute('aA') as THREE.BufferAttribute
+    this.sparkData.forEach((sp, i) => {
+      if (sp.life > 0) {
+        sp.life -= dt
+        sp.v.y -= 9 * dt
+        sp.p.addScaledVector(sp.v, dt)
+      }
+      pos.setXYZ(i, sp.p.x, sp.p.y, sp.p.z)
+      a.setX(i, Math.max(0, sp.life / sp.max))
+    })
+    pos.needsUpdate = true
+    a.needsUpdate = true
+  }
+
+  private updateSky(v: ViewState, dt: number) {
+    this.sky.position.copy(this.camera.position)
+    this.skyGroup.position.set(this.camera.position.x * 0.9, 0, this.camera.position.z)
+    this.starMat.uniforms.uTime.value = v.time
+    this.skyMat.uniforms.uTime.value = v.time
+    for (const c of this.comets) {
+      if (c.wait > 0) {
+        c.wait -= dt
+        c.mesh.visible = false
+        if (c.wait <= 0) {
+          c.t = 0
+          c.dur = 1.1 + Math.random() * 0.8
+          c.x = -60 + Math.random() * 260
+          c.y = 150 + Math.random() * 160
+          const ang = Math.PI + 0.32 + Math.random() * 0.25
+          c.dx = Math.cos(ang)
+          c.dy = Math.sin(ang)
+        }
+        continue
+      }
+      c.t += dt
+      const f = c.t / c.dur
+      if (f >= 1) {
+        c.wait = 0.6 + Math.random() * 2.6
+        c.mesh.visible = false
+        continue
+      }
+      c.mesh.visible = true
+      const travel = 230 * f
+      c.mesh.position.set(c.x + c.dx * travel, c.y + c.dy * travel, -600)
+      c.mesh.rotation.z = Math.atan2(c.dy, c.dx)
+      ;(c.mesh.material as THREE.MeshBasicMaterial).opacity = Math.sin(Math.PI * Math.min(1, f * 1.15))
+    }
+  }
+
+  private updateCamera(v: ViewState, dt: number) {
+    const k = 1 - Math.exp(-dt * 7)
+    this.camX += (v.x * 0.62 - this.camX) * k
+    const ty = 3.35 + Math.max(0, v.y) * 0.32 - (v.sliding ? 0.25 : 0)
+    this.camY += (ty - this.camY) * (1 - Math.exp(-dt * 5))
+    const speedF = THREE.MathUtils.clamp((v.speed - 12) / 18, 0, 1)
+    const aspect = this.camera.aspect
+    const baseFov = aspect > 0.8 ? 52 : 64
+    const tf = baseFov + speedF * 9 + (v.five > 0 ? 3 : 0)
+    this.fov += (tf - this.fov) * (1 - Math.exp(-dt * 3))
+    const sh = v.shake
+    const sx = sh ? (Math.sin(v.time * 61) + Math.sin(v.time * 37)) * 0.06 * sh : 0
+    const sy = sh ? Math.sin(v.time * 53) * 0.05 * sh : 0
+    let dz = 6.7 - speedF * 0.5
+    if (v.dead) dz -= Math.min(1.2, v.deadT * 1.5)
+    this.camera.position.set(this.camX + sx, this.camY + sy, dz)
+    this.lookT.set(v.x * 0.5, 1.2, -14)
+    this.camera.lookAt(this.lookT)
+    this.camera.rotation.z += (this.runner.group.rotation.z || 0) * 0.15
+    this.camera.fov = this.fov
+    this.camera.updateProjectionMatrix()
+    this.camera.updateMatrixWorld(true)
+
+    // speed lines
+    const op = THREE.MathUtils.clamp((v.speed - 15) / 12, 0, 1) * 0.42 + (v.five > 0 ? 0.25 : 0)
+    this.speedMat.opacity = v.idle || v.dead ? 0 : op
+    this.speedLines.visible = this.speedMat.opacity > 0.01
+    if (this.speedLines.visible) {
+      this.speedLineState.forEach((l, i) => {
+        l.z += v.speed * 2.2 * dt
+        if (l.z > 2) {
+          l.z = -40 - Math.random() * 10
+          l.a = Math.random() * Math.PI * 2
+          l.r = 2.2 + Math.random() * 4
+        }
+        this.tmpE.set(0, 0, l.a - Math.PI / 2)
+        this.tmpQ.setFromEuler(this.tmpE)
+        this.tmpM.compose(this.tmpV.set(Math.cos(l.a) * l.r, Math.sin(l.a) * l.r * 0.8, l.z), this.tmpQ, this.tmpS.set(1, 1, l.len * (0.6 + speedF)))
+        this.speedLines.setMatrixAt(i, this.tmpM)
+      })
+      this.speedLines.instanceMatrix.needsUpdate = true
+    }
+  }
+
+  private renderReflection() {
+    if (!this.reflRT) return
+    const cam = this.camera
+    const m = this.mirrorCam
+    m.fov = cam.fov
+    m.aspect = cam.aspect
+    m.near = cam.near
+    m.far = cam.far
+    m.position.set(cam.position.x, -cam.position.y, cam.position.z)
+    m.up.set(0, -1, 0)
+    m.lookAt(this.lookT.x, -this.lookT.y, this.lookT.z)
+    m.updateProjectionMatrix()
+    m.updateMatrixWorld(true)
+    this.texMat.set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1)
+    this.texMat.multiply(m.projectionMatrix).multiply(m.matrixWorldInverse)
+    this.roadMat.uniforms.uTexMat.value.copy(this.texMat)
+    const r = this.renderer
+    const prevTarget = r.getRenderTarget()
+    const prevTM = r.toneMapping
+    r.toneMapping = THREE.NoToneMapping
+    this.road.visible = false
+    r.setRenderTarget(this.reflRT)
+    r.clear()
+    r.render(this.scene, m)
+    r.setRenderTarget(prevTarget)
+    r.toneMapping = prevTM
+    this.road.visible = true
+  }
+
+  /** Render the planar reflection every Nth frame (adaptive quality step; it is blurred anyway). */
+  reflEvery = 1
+  private frameNo = 0
+
+  render() {
+    if (this.frameNo++ % this.reflEvery === 0) this.renderReflection()
+    if (this.composer) this.composer.render()
+    else this.renderer.render(this.scene, this.camera)
+  }
+
+  dispose() {
+    this.composer?.dispose()
+    this.reflRT?.dispose()
+    this.scene.traverse((o) => {
+      const m = o as THREE.Mesh
+      if (m.geometry) m.geometry.dispose()
+      const mat = m.material as THREE.Material | THREE.Material[] | undefined
+      const mats = Array.isArray(mat) ? mat : mat ? [mat] : []
+      for (const mm of mats) {
+        for (const val of Object.values(mm)) if (val instanceof THREE.Texture) val.dispose()
+        mm.dispose()
+      }
+    })
+    this.scene.environment?.dispose()
+    this.renderer.dispose()
+  }
+}
+
+export { PALETTE }

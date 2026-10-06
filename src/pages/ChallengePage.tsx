@@ -7,16 +7,19 @@ import {
   type ChallengeView,
   type RunResult,
 } from '../arcade/core/arcadeApi'
+import { gameTitle } from '../arcade/core/challenges'
 import { getCachedPlayer, hasSession } from '../arcade/core/session'
 import type { CvChallengeConfig } from '../arcade/courtVisionPhaser/types'
 import HandlePrompt from '../arcade/social/HandlePrompt'
 import SharePanel from '../arcade/social/SharePanel'
 import VsResult from '../arcade/social/VsResult'
 import { requestAlertsRefresh } from '../arcade/social/alertStore'
+import FifthRunLoading from '../arcade/fifthRun/FifthRunLoading'
 import '../arcade/courtVisionPhaser/courtVisionPhaser.css'
 import '../arcade/social/social.css'
 
 const CourtVision3D = lazy(() => import('../arcade/courtVision3d/CourtVision3D'))
+const FifthRun = lazy(() => import('../arcade/fifthRun/FifthRun'))
 
 type Phase = 'loading' | 'ready' | 'handle' | 'starting' | 'playing' | 'vs' | 'creator' | 'error'
 
@@ -106,6 +109,10 @@ export default function ChallengePage() {
     else setPhase('handle')
   }
 
+  const gameId = view?.game_id ?? 'court-vision'
+  const isFifthRun = gameId === 'fifth-run'
+  const title = gameTitle(gameId)
+
   const onRunResult = useCallback(
     (run: RunResult | null, final: { score: number }) => {
       const m = run?.match
@@ -114,7 +121,7 @@ export default function ChallengePage() {
         myScore: m?.counted ? (m.my_score ?? final.score) : (m?.my_score ?? final.score),
         result: m?.result ?? (view ? (final.score > view.target_score ? 'win' : final.score < view.target_score ? 'loss' : 'tie') : null),
         h2h: m?.h2h ?? view?.h2h ?? null,
-        boardLine: run?.board?.alltime ? `All-time #${run.board.alltime.rank} on the Court Vision board` : null,
+        boardLine: run?.board?.alltime ? `All-time #${run.board.alltime.rank} on the ${gameTitle(view?.game_id)} board` : null,
       })
       setPhase('vs')
       track('arcade_challenge_resolved', { challengeId: id ?? 'unknown', result: m?.result ?? 'unknown', score: final.score })
@@ -127,6 +134,16 @@ export default function ChallengePage() {
   const cvChallenge: CvChallengeConfig | null = view
     ? { id: view.id, targetScore: view.target_score, seed: view.seed || '', creatorHandle: view.creator_handle }
     : null
+
+  if (phase === 'playing' && cvChallenge && isFifthRun) {
+    return (
+      <div className="arcade-root arcade-root--game">
+        <Suspense fallback={<FifthRunLoading />}>
+          <FifthRun challenge={cvChallenge} onRunResult={onRunResult} />
+        </Suspense>
+      </div>
+    )
+  }
 
   if (phase === 'playing' && cvChallenge) {
     return (
@@ -152,6 +169,7 @@ export default function ChallengePage() {
           nextChallengeId={next?.id ?? null}
           nextTarget={next?.target_score ?? null}
           boardLine={vs.boardLine}
+          game={gameId}
         />
       </div>
     )
@@ -160,7 +178,7 @@ export default function ChallengePage() {
   return (
     <div className="arcade-root arcade-root--game">
       <div className="cvp-challenger">
-        <div className="cvp-challenger__bg" style={{ backgroundImage: `url(${BASE}art/court-bg.webp)` }} aria-hidden />
+        <div className="cvp-challenger__bg" style={{ backgroundImage: `url(${BASE}art/${isFifthRun ? 'box-fifth-run.webp' : 'court-bg.webp'})` }} aria-hidden />
         <div className="cvp-challenger__scan" aria-hidden />
         <div className="cvp-challenger__vignette" aria-hidden />
 
@@ -168,7 +186,7 @@ export default function ChallengePage() {
           {phase === 'loading' || phase === 'starting' ? (
             <>
               <p className="cvp-challenger__badge">Challenge</p>
-              <h1 className="cvp-challenger__title">{phase === 'starting' ? 'Racking up…' : 'Loading…'}</h1>
+              <h1 className="cvp-challenger__title">{phase === 'starting' ? (isFifthRun ? 'Paving the road…' : 'Racking up…') : 'Loading…'}</h1>
               <p className="cvp-challenger__copy">Pulling the challenge card.</p>
             </>
           ) : null}
@@ -179,7 +197,7 @@ export default function ChallengePage() {
               <h1 className="cvp-challenger__title">Challenge offline</h1>
               <p className="cvp-challenger__copy">
                 {error === 'challenge_expired'
-                  ? 'This challenge expired. Run a fresh one from Court Vision.'
+                  ? `This challenge expired. Run a fresh one from ${title}.`
                   : error === 'rate_limited'
                     ? 'Too many challenges this hour — try again soon.'
                     : 'Could not find that challenge.'}
@@ -214,7 +232,7 @@ export default function ChallengePage() {
               ) : (
                 <p className="cvp-challenger__copy">Nobody’s taken it yet. Send it again:</p>
               )}
-              {view.url ? <SharePanel handle={view.creator_handle} score={view.target_score} url={view.url} /> : null}
+              {view.url ? <SharePanel game={gameId} handle={view.creator_handle} score={view.target_score} url={view.url} /> : null}
               <Link to="/" className="ffa-btn ffa-btn--ghost ffa-btn--sm">
                 ← Back to Fifth Floor Arcade
               </Link>
@@ -229,7 +247,7 @@ export default function ChallengePage() {
                 <span className="cvp-challenger__dot" />
               </p>
               <HandlePrompt
-                title="Who’s shooting?"
+                title={isFifthRun ? 'Who’s running?' : 'Who’s shooting?'}
                 subtitle={`So ${view.creator_handle} knows who beat them.`}
                 cta="Play"
                 onDone={() => void begin()}
@@ -265,7 +283,9 @@ export default function ChallengePage() {
               <p className="cvp-challenger__target">{view.target_score}</p>
               {view.h2h && view.h2h.games > 0 ? <p className="soc-vs__series">{view.h2h.text}</p> : null}
               <p className="cvp-challenger__copy">
-                Court Vision · same court, same {view.seed.startsWith('still:') ? 'setup' : 'sway & wind'} · 60 seconds.
+                {isFifthRun
+                  ? 'Fifth Run · same highway, same keys, same traffic · one hit ends it.'
+                  : `Court Vision · same court, same ${view.seed.startsWith('still:') ? 'setup' : 'sway & wind'} · 60 seconds.`}
               </p>
 
               <button type="button" className="ffa-btn ffa-btn--primary" onClick={onAccept}>

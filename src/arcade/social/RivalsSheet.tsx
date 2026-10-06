@@ -14,7 +14,7 @@ function ago(iso: string | null): string {
   return `${Math.round(s / 86400)}d ago`
 }
 
-export default function RivalsSheet({ onClose }: { onClose: () => void }) {
+export default function RivalsSheet({ onClose, gameId = 'court-vision' }: { onClose: () => void; gameId?: string }) {
   const navigate = useNavigate()
   const [rivals, setRivals] = useState<Rival[] | null>(null)
   const [alerts, setAlerts] = useState<Alert[]>([])
@@ -27,7 +27,7 @@ export default function RivalsSheet({ onClose }: { onClose: () => void }) {
     }
     let cancelled = false
     void (async () => {
-      const [r, inbox] = await Promise.all([fetchRivals(), fetchInbox(0)])
+      const [r, inbox] = await Promise.all([fetchRivals(gameId), fetchInbox(0)])
       if (cancelled) return
       if (r.ok) setRivals(r.rivals)
       else {
@@ -46,7 +46,7 @@ export default function RivalsSheet({ onClose }: { onClose: () => void }) {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [gameId])
 
   const go = (path: string) => {
     onClose()
@@ -87,7 +87,7 @@ export default function RivalsSheet({ onClose }: { onClose: () => void }) {
           <div className="soc-sheet__empty">
             <p>No rivals yet.</p>
             <p>Send a challenge — whoever plays it becomes your rival, and the record keeps score.</p>
-            <button type="button" className="ffa-btn ffa-btn--primary" onClick={() => go('/court-vision?setbar=1')}>
+            <button type="button" className="ffa-btn ffa-btn--primary" onClick={() => go(`/${gameId}?setbar=1`)}>
               Challenge a friend
             </button>
           </div>
@@ -125,7 +125,7 @@ export default function RivalsSheet({ onClose }: { onClose: () => void }) {
                   <button
                     type="button"
                     className="soc-chip soc-chip--ready"
-                    onClick={() => go(`/court-vision?rival=${r.rival_player_id}${r.last_challenge_id ? `&parent=${r.last_challenge_id}` : ''}`)}
+                    onClick={() => go(`/${gameId}?rival=${r.rival_player_id}${r.last_challenge_id ? `&parent=${r.last_challenge_id}` : ''}`)}
                   >
                     Run it back
                   </button>

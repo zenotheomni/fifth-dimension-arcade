@@ -411,15 +411,15 @@ export default function LobbyPage() {
               {game.route ? `Play ${game.title}` : 'Coming Up'}
             </button>
 
-            {game.id === 'court-vision' ? (
+            {game.id === 'court-vision' || game.id === 'fifth-run' ? (
               <div className="soc-actions">
                 <button
                   type="button"
                   className="ffa-btn ffa-btn--secondary"
                   onClick={() => {
                     playUiConfirm()
-                    track('arcade_menu_challenge')
-                    navigate('/court-vision?setbar=1')
+                    track('arcade_menu_challenge', { game: game.id })
+                    navigate(`${game.route}?setbar=1`)
                   }}
                 >
                   Challenge a friend
@@ -457,6 +457,7 @@ export default function LobbyPage() {
 
             {rivalsOpen ? (
               <RivalsSheet
+                gameId={game.id === 'fifth-run' ? 'fifth-run' : 'court-vision'}
                 onClose={() => {
                   setRivalsOpen(false)
                   if (params.get('rivals')) setParams({}, { replace: true })
