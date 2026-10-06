@@ -1,0 +1,15 @@
+import { chromium } from 'playwright'
+const out = process.argv[2] || '/workspace/arcade-shots/inspect/r1-quick.png'
+const w = +(process.argv[3] || 390), h = +(process.argv[4] || 844)
+const browser = await chromium.launch({ headless: true, args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] })
+const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 2, hasTouch: true, isMobile: true })
+const page = await ctx.newPage()
+page.on('pageerror', (e) => console.log('PAGEERROR', e.message))
+page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') console.log('CONSOLE', m.type(), m.text().slice(0, 300)) })
+const t0 = Date.now()
+await page.goto('http://127.0.0.1:4173/arcade/court-vision?q=high', { waitUntil: 'networkidle', timeout: 60000 })
+await page.waitForFunction(() => globalThis.__CV3D?.ready, null, { timeout: 60000 })
+console.log('ready in', Date.now() - t0, 'ms')
+await page.evaluate(() => { const s = globalThis.__CV3D; s.setManual(true); s.mode = 'endless'; s.advance(300) })
+await page.screenshot({ path: out })
+await browser.close()

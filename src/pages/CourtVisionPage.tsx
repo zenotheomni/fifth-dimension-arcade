@@ -1,9 +1,7 @@
 import { lazy, Suspense, useEffect } from 'react'
 import { track } from '../arcade/analytics'
 
-const CourtVisionPhaser = lazy(
-  () => import('../arcade/courtVisionPhaser/CourtVisionPhaser'),
-)
+const CourtVision3D = lazy(() => import('../arcade/courtVision3d/CourtVision3D'))
 
 export default function CourtVisionPage() {
   useEffect(() => {
@@ -31,7 +29,7 @@ export default function CourtVisionPage() {
           </div>
         }
       >
-        <CourtVisionPhaser />
+        <CourtVision3D />
       </Suspense>
     </div>
   )
