@@ -78,7 +78,7 @@ function noise(a: AudioContext, t: number, dur: number, type: BiquadFilterType, 
 }
 
 let lastKey = 0
-/** Key chime — pitch climbs with combo (pentatonic). */
+/** Star chime — pitch climbs with combo (pentatonic). */
 export function sfxKey(combo: number, five: boolean) {
   const a = ac()
   if (!a || muted) return

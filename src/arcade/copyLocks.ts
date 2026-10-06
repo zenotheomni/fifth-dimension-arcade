@@ -18,7 +18,7 @@ export const COURT_VISION_COPY = {
 
 export const FIFTH_RUN_COPY = {
   START: "You're already moving.",
-  FIRST_KEY: 'Key acquired.',
+  FIRST_KEY: 'Star acquired.',
   MULTIPLIER_X2: COPY.FLOW_STATE,
   NEW_PB: COPY.FIFTH_STATE_UNLOCKED,
   CRASH: 'Glitch. Rearrange. Run it back.',

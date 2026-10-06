@@ -1,4 +1,4 @@
-/** Fifth Run — procedural props: keys, ’59-style Cadillac, barriers, gantries, gaps, power-ups, palms, gates, lamps. */
+/** Fifth Run — procedural props: shooting stars, ’59-style Cadillac, barriers, gantries, gaps, power-ups, palms, gates, lamps. */
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { addRim, glowMaterial } from './shaders'
@@ -9,22 +9,59 @@ const box = (w: number, h: number, d: number, x = 0, y = 0, z = 0) => {
   return g
 }
 
-/** Upright key: bow ring on top, shaft, two teeth. ~0.62 m tall. */
-export function keyGeometry() {
-  const bow = new THREE.TorusGeometry(0.15, 0.048, 10, 22)
-  bow.translate(0, 0.42, 0)
-  const inner = new THREE.CylinderGeometry(0.05, 0.05, 0.03, 12)
-  inner.rotateX(Math.PI / 2)
-  inner.translate(0, 0.42, 0)
-  const collar = box(0.13, 0.05, 0.06, 0, 0.25, 0)
-  const shaft = new THREE.CylinderGeometry(0.035, 0.035, 0.42, 10)
-  shaft.translate(0, 0.02, 0)
-  const t1 = box(0.12, 0.05, 0.05, 0.07, -0.12, 0)
-  const t2 = box(0.08, 0.05, 0.05, 0.05, -0.03, 0)
-  const g = mergeGeometries([bow.toNonIndexed(), collar.toNonIndexed(), shaft.toNonIndexed(), t1.toNonIndexed(), t2.toNonIndexed()])!
-  void inner
+/**
+ * Gold shooting star (💫 vibe): 5-point head + tapered trail.
+ * Used as a fallback mesh; the live scene prefers a textured billboard.
+ * ~0.95 m tip-to-tail.
+ */
+export function shootingStarGeometry() {
+  const outer = 0.26
+  const inner = 0.11
+  const shape = new THREE.Shape()
+  for (let i = 0; i < 10; i++) {
+    const r = i % 2 === 0 ? outer : inner
+    const a = -Math.PI / 2 + (i * Math.PI) / 5
+    const x = Math.cos(a) * r
+    const y = Math.sin(a) * r
+    if (i === 0) shape.moveTo(x, y)
+    else shape.lineTo(x, y)
+  }
+  shape.closePath()
+  const head = new THREE.ExtrudeGeometry(shape, {
+    depth: 0.07,
+    bevelEnabled: true,
+    bevelThickness: 0.018,
+    bevelSize: 0.018,
+    bevelSegments: 1,
+    steps: 1,
+  })
+  head.translate(0, 0, -0.035)
+
+  const trailShape = new THREE.Shape()
+  trailShape.moveTo(0.02, 0)
+  trailShape.lineTo(-0.78, 0.09)
+  trailShape.lineTo(-0.78, -0.09)
+  trailShape.closePath()
+  const trail = new THREE.ExtrudeGeometry(trailShape, { depth: 0.04, bevelEnabled: false, steps: 1 })
+  trail.translate(0, 0, -0.02)
+
+  const flareShape = new THREE.Shape()
+  flareShape.moveTo(-0.02, 0)
+  flareShape.lineTo(-0.88, 0.16)
+  flareShape.lineTo(-0.88, -0.16)
+  flareShape.closePath()
+  const flare = new THREE.ExtrudeGeometry(flareShape, { depth: 0.02, bevelEnabled: false, steps: 1 })
+  flare.translate(0, 0, -0.01)
+
+  const g = mergeGeometries([head.toNonIndexed(), trail.toNonIndexed(), flare.toNonIndexed()])!
   g.computeVertexNormals()
+  g.rotateZ(-0.4)
   return g
+}
+
+/** @deprecated Collectibles are shooting stars; kept as an alias for older imports. */
+export function keyGeometry() {
+  return shootingStarGeometry()
 }
 
 export const CAR_COLORS = ['#c8102e', '#ff8fb8', '#f2efe6', '#25cfc4', '#6b2fd6', '#141018']

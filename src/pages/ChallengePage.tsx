@@ -284,7 +284,7 @@ export default function ChallengePage() {
               {view.h2h && view.h2h.games > 0 ? <p className="soc-vs__series">{view.h2h.text}</p> : null}
               <p className="cvp-challenger__copy">
                 {isFifthRun
-                  ? 'Fifth Run · same highway, same keys, same traffic · one hit ends it.'
+                  ? 'Fifth Run · same highway, same stars, same traffic · one hit ends it.'
                   : `Court Vision · same court, same ${view.seed.startsWith('still:') ? 'setup' : 'sway & wind'} · 60 seconds.`}
               </p>
 

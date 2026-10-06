@@ -10,8 +10,8 @@ export const gameTitle = (game?: string | null) => GAME_TITLES[game ?? ''] ?? 'C
 export function sameSeedCopy(game: string | null | undefined, rivalHandle?: string | null): string {
   if (game === 'fifth-run') {
     return rivalHandle
-      ? `${rivalHandle} gets an alert. Same highway, same keys, same traffic.`
-      : 'Your friend runs the exact same highway — same keys, same traffic.'
+      ? `${rivalHandle} gets an alert. Same highway, same stars, same traffic.`
+      : 'Your friend runs the exact same highway — same stars, same traffic.'
   }
   return rivalHandle
     ? `${rivalHandle} gets an alert. Same court, same sway, same wind.`
