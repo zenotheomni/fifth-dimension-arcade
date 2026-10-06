@@ -280,13 +280,17 @@
   z-index: 7;
   margin: 0;
   padding: 0.55rem 1.4rem 0.6rem;
-  font-size: clamp(1.5rem, 8vw, 2.2rem);
+  font-size: clamp(1.35rem, 7vw, 2.1rem);
   font-weight: 900;
   font-style: italic;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
   line-height: 1.05;
   text-transform: uppercase;
-  white-space: nowrap;
+  white-space: normal;
+  width: max-content;
+  max-width: min(84vw, 400px);
+  box-sizing: border-box;
+  text-wrap: balance;
   color: #fff;
   background:
     linear-gradient(90deg, #7b3fe4 0 7px, transparent 7px),

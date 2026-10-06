@@ -118,6 +118,48 @@ if (want('video')) {
   }
   console.log('video frames', f)
 }
+if (want('r2')) {
+  const ready = () => page.evaluate(() => globalThis.__CV3D.lastReady)
+  // make: fresh ball ready while net still swinging
+  await waitIdle(page)
+  await step(page, 200)
+  await page.evaluate(() => globalThis.__CV3D.debugFlick({ speed: 1.05, dx: 0 }))
+  await advanceUntil(page, () => false, 0)
+  for (let i = 0; i < 300; i++) {
+    const r = await ready()
+    if (r && r.cause === 'make' && r.poppedAfterMs != null) break
+    await step(page, 1000 / 60)
+  }
+  await step(page, 40)
+  await page.waitForTimeout(800)
+  await page.screenshot({ path: path.join(OUT, 'r2-respawn-make.png') })
+  console.log('make ready', await ready(), await page.evaluate(() => ({ canShoot: globalThis.__CV3D.canShoot(), ghost: !!globalThis.__CV3D.ghost })))
+  // miss: front rim clank
+  await waitIdle(page)
+  await step(page, 200)
+  await page.evaluate(() => globalThis.__CV3D.debugFlick({ speed: 1.05, dx: 70 }))
+  for (let i = 0; i < 300; i++) {
+    const r = await ready()
+    if (r && r.cause === 'miss' && r.poppedAfterMs != null) break
+    await step(page, 1000 / 60)
+  }
+  await page.waitForTimeout(800)
+  await page.screenshot({ path: path.join(OUT, 'r2-respawn-miss.png') })
+  console.log('miss ready', await ready(), await page.evaluate(() => globalThis.__CV3D.lastShotMeta))
+  // flick the new ball mid-fade: allowed
+  await page.evaluate(() => globalThis.__CV3D.debugFlick({ speed: 0.6, dx: 0 }))
+  for (let i = 0; i < 300; i++) {
+    const r = await ready()
+    if (r && r.cause === 'miss' && r.poppedAfterMs == null) break
+    await step(page, 1000 / 60)
+  }
+  const flickedDuringFade = await page.evaluate(() => {
+    const s = globalThis.__CV3D
+    s.advance(60)
+    return { ghost: !!s.ghost, shotFired: s.debugFlick({ speed: 1.05, dx: 0 }) }
+  })
+  console.log('flick during fade', flickedDuringFade)
+}
 if (want('tall')) {
   const { page: p2 } = await makePage(430, 932)
   await p2.screenshot({ path: path.join(OUT, 'r1-idle-tall.png') })

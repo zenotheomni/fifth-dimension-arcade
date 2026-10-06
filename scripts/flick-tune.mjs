@@ -32,10 +32,18 @@ function flick(speed, dx = 0) {
   return { speed, angle }
 }
 
+const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0)
+
 function run(name, shots, ctxFn = () => baseCtx, hoopFn) {
+  let cutOff = 0
   const res = shots.map((s, i) => {
     const ctx = ctxFn(i)
-    return simulateShot(flick(s.speed, s.dx), ctx, hoopFn ? (t) => hoopFn(i, t) : undefined)
+    const hf = hoopFn ? (t) => hoopFn(i, t) : undefined
+    const r = simulateShot(flick(s.speed, s.dx), ctx, hf)
+    // early miss decisions must never cut off a ball that would still drop
+    const legacy = simulateShot(flick(s.speed, s.dx), ctx, hf, { legacyResolve: true })
+    if (legacy.outcome.made !== r.outcome.made) cutOff++
+    return r
   })
   const n = res.length
   const c = (f) => res.filter(f).length
@@ -50,6 +58,9 @@ function run(name, shots, ctxFn = () => baseCtx, hoopFn) {
     over: c((r) => r.outcome.overBoard),
     boardHit: c((r) => r.outcome.boardHits > 0),
     rimHit: c((r) => r.outcome.rimHits > 0),
+    makeDecideS: +(avg(res.filter((r) => r.outcome.made).map((r) => r.outcome.steps / 240))).toFixed(2),
+    missDecideS: +(avg(res.filter((r) => !r.outcome.made).map((r) => r.outcome.steps / 240))).toFixed(2),
+    cutOff,
     misses: Object.entries(
       res
         .filter((r) => !r.outcome.made)
@@ -104,6 +115,7 @@ if (process.argv.includes('--json')) {
 const get = (n) => suites.find((s) => s.name === n)
 const checks = [
   ['penetration 0 (all suites)', suites.every((s) => s.penetrate === 0)],
+  ['early miss never cuts off a make', suites.every((s) => s.cutOff === 0)],
   ['straight_medium ~100%', get('straight_medium').makeRate >= 0.95],
   ['decent_spread 60–75%', get('decent_spread').makeRate >= 0.6 && get('decent_spread').makeRate <= 0.75],
   ['weak_front misses', get('weak_front').makeRate <= 0.2],

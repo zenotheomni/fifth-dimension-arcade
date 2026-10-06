@@ -15,6 +15,11 @@ import {
   unlockSfx,
 } from './sfx3d'
 import { DIM, SIM_DT } from './sim/constants'
+
+/** Sim runs a touch faster than real time for snappier flights (harness is time-agnostic). */
+const SIM_SPEED = 1.12
+const RESPAWN_POP_S = 0.18
+const GHOST_FADE_S = 0.15
 import { hoopPoseAt } from './sim/hoop'
 import { integrateSpin, makeBall, stepBall, type BallState, type SimEvent, type V3 } from './sim/physics'
 import {
@@ -98,6 +103,14 @@ class Engine {
   home: V3
   shot: Shot | null = null
   respawnT = 1
+  /** Previous shot ball fading out (visual only) */
+  ghost: { b: BallState; prev: V3; fade: number; quat: [number, number, number, number] } | null = null
+  /** QA: last ready-latency measurement */
+  lastReady: { cause: 'make' | 'miss'; decidedAtSimS: number; flickableAfterMs: number; poppedAfterMs: number | null; decidedClock: number } | null = null
+  /** real-time clock (s), advances with update(dt) — QA timing */
+  clock = 0
+  /** clock at which the make was registered / the miss decided */
+  decideClock = 0
   quat: [number, number, number, number] = [0.12, 0.3, 0.05, 0.94]
   drag: { id: number; samples: FlickSample[]; startY: number } | null = null
   grip = 0
@@ -191,8 +204,8 @@ class Engine {
     return { x: e.clientX - r.left, y: e.clientY - r.top, w: r.width, h: r.height }
   }
 
-  private canShoot() {
-    return this.ready && this.phase === 'playing' && !this.ended && !this.shot && this.respawnT >= 1
+  canShoot() {
+    return this.ready && this.phase === 'playing' && !this.ended && !this.shot
   }
 
   onDown = (e: PointerEvent) => {
@@ -242,7 +255,7 @@ class Engine {
     return Boolean(this.shot && !this.shot.resolved)
   }
   get respawning() {
-    return Boolean(this.shot && this.shot.resolved) || this.respawnT < 1
+    return this.respawnT < 1
   }
 
   shoot(input: FlickInput) {
@@ -251,6 +264,10 @@ class Engine {
     const plan = planShot(input, { ball: this.home, hoop: pose, windBias: wind })
     const b = makeBall(this.home, plan.v, plan.w, wind * FLICK3D.windAccel)
     this.shot = { b, plan, prev: { ...b.p }, resolved: false, resolvedAt: 0, outcome: null, minRimDist: Infinity }
+    // a new shot never inherits the previous swish's slow-mo or pop-in
+    this.slowMo = 0
+    this.timeScale = 1
+    this.respawnT = 1
     sfxRelease(plan.power)
   }
 
@@ -274,25 +291,37 @@ class Engine {
         if (d < s.minRimDist) s.minRimDist = d
       }
       for (const e of ev) this.onEvent(e, s)
-      if (!s.resolved && shotResolved(s.b)) {
+      if (!s.resolved && shotResolved(s.b, pose)) {
         s.resolved = true
         s.resolvedAt = s.b.t
         s.outcome = classify(s.b, s.minRimDist)
         if (!s.outcome.made) this.resolveMiss(s)
+        // Outcome is final → hand the old ball to a fade-out ghost and
+        // put a fresh, flickable ball on the spot right away.
+        this.startRespawn(s)
       }
-      const hold = s.outcome?.made ? 1.05 : 0.9
-      if (s.resolved && s.b.t - s.resolvedAt > hold) {
-        this.shot = null
-        this.respawnT = 0
-        this.placeBallAtHome()
+    }
+    // Ghost keeps falling (net still reacts) but never bounces or rolls
+    const gh = this.ghost
+    if (gh) {
+      gh.prev.x = gh.b.p.x
+      gh.prev.y = gh.b.p.y
+      gh.prev.z = gh.b.p.z
+      gh.b.v.y -= 9.81 * SIM_DT
+      if (gh.b.p.y < DIM.rimY + pose.y && gh.b.p.y > DIM.rimY + pose.y - 0.5 && Math.hypot(gh.b.p.x - pose.x, gh.b.p.z - DIM.rimZ) < DIM.rimInnerR) {
+        gh.b.v.y *= 1 - 2.6 * SIM_DT
       }
-    } else if (this.respawnT < 1) {
-      this.respawnT = Math.min(1, this.respawnT + SIM_DT / 0.32)
+      gh.b.p.x += gh.b.v.x * SIM_DT
+      gh.b.p.y += gh.b.v.y * SIM_DT
+      gh.b.p.z += gh.b.v.z * SIM_DT
+      integrateSpin(gh.quat, gh.b.w, SIM_DT)
     }
 
     this.netToggle = !this.netToggle
     if (this.netToggle) {
-      const b = s?.b
+      const near = (bb: BallState | undefined) =>
+        bb && Math.abs(bb.p.y - DIM.rimY) < 0.8 && Math.abs(bb.p.z - DIM.rimZ) < 0.7 ? bb : undefined
+      const b = near(this.shot?.b) ?? near(this.ghost?.b)
       const ball =
         b && Math.abs(b.p.y - DIM.rimY) < 0.8 && Math.abs(b.p.z - DIM.rimZ) < 0.7
           ? { x: b.p.x, y: b.p.y, z: b.p.z, vx: b.v.x, vy: b.v.y, vz: b.v.z }
@@ -333,7 +362,24 @@ class Engine {
     }
   }
 
+  startRespawn(s: Shot) {
+    const made = Boolean(s.outcome?.made)
+    this.ghost = { b: s.b, prev: { ...s.prev }, fade: 0, quat: [...this.quat] as [number, number, number, number] }
+    this.shot = null
+    this.respawnT = 0
+    this.quat = [0.12, 0.3, 0.05, 0.94]
+    this.placeBallAtHome()
+    this.lastReady = {
+      cause: made ? 'make' : 'miss',
+      decidedAtSimS: made ? s.b.scoreT : s.resolvedAt,
+      flickableAfterMs: Math.round((this.clock - this.decideClock) * 1000),
+      poppedAfterMs: null,
+      decidedClock: this.decideClock,
+    }
+  }
+
   resolveMake(s: Shot) {
+    this.decideClock = this.clock
     const b = s.b
     const swish = !b.rimBeforeScore && !b.bankedBeforeScore
     const banked = b.bankedBeforeScore
@@ -387,6 +433,7 @@ class Engine {
   }
 
   resolveMiss(s: Shot) {
+    this.decideClock = this.clock
     const b = s.b
     const out = s.outcome!
     const result = scoreShot({ kind: 'miss', streakBefore: this.streak, perfectRelease: false, banked5d: false })
@@ -482,6 +529,18 @@ class Engine {
         this.emitHud(null)
       }
     }
+    // Fresh-ball pop-in and old-ball fade run on real time (never slowed)
+    this.clock += dt
+    if (this.respawnT < 1) {
+      this.respawnT = Math.min(1, this.respawnT + dt / RESPAWN_POP_S)
+      if (this.respawnT >= 1 && this.lastReady && this.lastReady.poppedAfterMs == null) {
+        this.lastReady.poppedAfterMs = Math.round((this.clock - this.lastReady.decidedClock) * 1000)
+      }
+    }
+    if (this.ghost) {
+      this.ghost.fade += dt / GHOST_FADE_S
+      if (this.ghost.fade >= 1) this.ghost = null
+    }
     // Slow-mo on a swish
     if (this.slowMo > 0) {
       this.slowMo -= dt
@@ -489,7 +548,7 @@ class Engine {
     } else {
       this.timeScale = Math.min(1, this.timeScale + dt * 4)
     }
-    this.accum += dt * this.timeScale
+    this.accum += dt * this.timeScale * SIM_SPEED
     let steps = 0
     while (this.accum >= SIM_DT && steps < 80) {
       this.fixedStep()
@@ -513,15 +572,30 @@ class Engine {
       )
       ball.scale.setScalar(1)
     } else {
-      // respawn drop-in + grip lift while the finger is down
+      // quick pop-in (scale + small rise) + grip lift while the finger is down
       const t = this.respawnT
-      const ease = 1 - Math.pow(1 - t, 3)
-      const drop = (1 - ease) * 0.45 + Math.sin(Math.min(1, t) * Math.PI) * 0.02
+      const c = 1.70158
+      const back = 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2)
       this.grip += ((this.drag ? 1 : 0) - this.grip) * Math.min(1, dt * 14)
-      ball.position.set(this.home.x, this.home.y + drop + this.grip * 0.025, this.home.z)
-      ball.scale.setScalar(0.85 + 0.15 * ease)
+      ball.position.set(this.home.x, this.home.y - (1 - Math.min(1, t)) * 0.06 + this.grip * 0.025, this.home.z)
+      ball.scale.setScalar(Math.max(0.01, 0.35 + 0.65 * back))
     }
     ball.quaternion.set(this.quat[0], this.quat[1], this.quat[2], this.quat[3])
+
+    const gm = v.ballGhost
+    const gh = this.ghost
+    if (gh) {
+      gm.visible = true
+      gm.position.set(
+        gh.prev.x + (gh.b.p.x - gh.prev.x) * alpha,
+        gh.prev.y + (gh.b.p.y - gh.prev.y) * alpha,
+        gh.prev.z + (gh.b.p.z - gh.prev.z) * alpha,
+      )
+      gm.quaternion.set(gh.quat[0], gh.quat[1], gh.quat[2], gh.quat[3])
+      const f = Math.min(1, gh.fade)
+      gm.scale.setScalar(1 - 0.25 * f)
+      ;(gm.material as THREE.MeshPhysicalMaterial).opacity = 1 - f * f
+    } else gm.visible = false
 
     // Contact shadow
     const h = Math.max(0, ball.position.y - DIM.ballR)
