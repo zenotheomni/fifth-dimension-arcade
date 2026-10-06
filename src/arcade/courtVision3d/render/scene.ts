@@ -54,6 +54,7 @@ export class CourtScene {
   hoop = new THREE.Group()
   ball!: THREE.Mesh
   ballShadow!: THREE.Mesh
+  ballGhost!: THREE.Mesh
   net!: VerletNet
   rimMat!: THREE.MeshPhysicalMaterial
   backdrop!: THREE.Mesh
@@ -407,6 +408,12 @@ export class CourtScene {
     this.ball = new THREE.Mesh(new THREE.SphereGeometry(DIM.ballR, 64, 40), mat)
     this.ball.rotation.set(0.25, 0.6, 0.15)
     this.scene.add(this.ball)
+    const gmat = mat.clone()
+    gmat.transparent = true
+    gmat.depthWrite = false
+    this.ballGhost = new THREE.Mesh(this.ball.geometry, gmat)
+    this.ballGhost.visible = false
+    this.scene.add(this.ballGhost)
   }
 
   private buildShadows() {

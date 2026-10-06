@@ -223,13 +223,33 @@ export function classify(b: BallState, maxDistFromRim: number): ShotOutcome {
   }
 }
 
-/** True once the shot's fate is known (make confirmed or ball dead). */
-export function shotResolved(b: BallState): boolean {
+/** Airborne cap (sim seconds); a ball still working the rim gets a hard cap. */
+export const SHOT_CAP_S = 2.0
+export const SHOT_CAP_RIM_S = 3.0
+
+/**
+ * True once the shot's fate is certain (make confirmed, or it can no longer
+ * drop). Misses are decided as early as possible; rattles/roll-arounds that
+ * could still fall play out.
+ */
+export function shotResolved(b: BallState, hoop: HoopPose = { x: 0, y: 0 }): boolean {
   if (b.scored) return true
-  if (b.overBoard && b.t > 0.25) return true
+  if (b.overBoard) return true
   if (b.floorHits > 0) return true
-  if (b.p.z < DIM.baselineZ - 1.5) return true
-  return b.t > 5
+  const rimY = DIM.rimY + hoop.y
+  const dx = b.p.x - hoop.x
+  const dz = b.p.z - DIM.rimZ
+  const radial = Math.hypot(dx, dz)
+  // Left the rim area entirely (wide, long, behind the board)
+  if (!b.through && (Math.abs(dx) > 1.4 || b.p.z < DIM.baselineZ - 0.4 || (b.v.y < 0 && dz > 2.2))) return true
+  // Falling below the rim plane outside the cylinder: can never drop in.
+  // (Also covers short balls whose apex never reaches the rim.)
+  if (!b.through && b.v.y < 0 && b.p.y < rimY - DIM.ballR - DIM.rimTubeR - 0.01 && radial > DIM.rimInnerR - 0.01) {
+    return true
+  }
+  const onRim = Math.abs(b.p.y - rimY) < 0.25 && radial < DIM.rimInnerR + DIM.ballR + 0.08
+  if (b.t > (onRim ? SHOT_CAP_RIM_S : SHOT_CAP_S)) return true
+  return false
 }
 
 /** Headless: run a flick to resolution. */
@@ -237,6 +257,7 @@ export function simulateShot(
   input: FlickInput,
   ctx: ShotContext,
   hoopAt?: (t: number) => HoopPose,
+  opts: { legacyResolve?: boolean } = {},
 ): { plan: ShotPlan; outcome: ShotOutcome } {
   const plan = planShot(input, ctx)
   const b = makeBall(ctx.ball, plan.v, plan.w, ctx.windBias * FLICK3D.windAccel)
@@ -249,7 +270,7 @@ export function simulateShot(
       const d = Math.hypot(b.p.x - pose.x, b.p.z - DIM.rimZ)
       if (d < minRimDist) minRimDist = d
     }
-    if (shotResolved(b)) break
+    if (opts.legacyResolve ? b.scored || b.floorHits > 0 || b.t > 5 || b.p.z < DIM.baselineZ - 1.5 : shotResolved(b, pose)) break
   }
   return { plan, outcome: classify(b, minRimDist) }
 }
