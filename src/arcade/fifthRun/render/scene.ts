@@ -1,6 +1,6 @@
 /**
- * Fifth Gear — three.js scene. Drive a ’59 Cadillac through Miami night → galaxy biomes.
- * Wet road reflections, traffic Cadillacs, 💫 stars, bloom. Galaxy run: city → cosmos → deep space.
+ * Fifth Gear — three.js scene. Drive a sports coupe through Miami night → galaxy biomes.
+ * Wet road reflections, oncoming traffic, 💫 stars, bloom. Galaxy run: city → cosmos → deep space.
  *
  * World convention: the player car stays at z = 0; track objects live in `world` at z = −s and the
  * group is translated by +runnerS each frame. Sky, planet, stars and skyline are camera-locked.
@@ -26,6 +26,12 @@ import { PlayerCar, type PoseInput } from './playerCar'
 import { mergeStatic } from './merge'
 import { glowMaterial, PALETTE, roadMaterial, skyMaterial, towerMaterial } from './shaders'
 import { blobTexture, chevronTexture, glowTexture, planetTexture, shootingStarTexture, streakTexture } from './textures'
+import {
+  instantiateGltfCar,
+  loadCarTemplate,
+  recolorPaint,
+  setLightIntensity,
+} from './carGltf'
 
 export type QualityTier = 'high' | 'low'
 
@@ -79,7 +85,7 @@ export class FrScene {
   dprCap = 2
   width = 1
   height = 1
-  runner = new PlayerCar()
+  runner: PlayerCar
 
   private world = new THREE.Group()
   private skyGroup = new THREE.Group()
@@ -136,6 +142,7 @@ export class FrScene {
 
   constructor(canvas: HTMLCanvasElement, tier: QualityTier, emblem: THREE.Texture | null) {
     this.tier = tier
+    this.runner = new PlayerCar()
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: tier === 'high', powerPreference: 'high-performance', alpha: false })
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping
@@ -496,7 +503,7 @@ export class FrScene {
       this.world.add(o.group)
       this.pools.overhead.push(o)
     }
-    for (let i = 0; i < 16; i++) {
+    for (let i = 0; i < 28; i++) {
       const c = buildCar(shared)
       mergeStatic(c.group)
       c.group.visible = false
@@ -504,6 +511,7 @@ export class FrScene {
       this.world.add(c.group)
       this.pools.car.push(c)
     }
+    // GLTF upgrade happens in loadGltfCars() — procedural is the instant fallback
     for (let i = 0; i < 9; i++) {
       const g = buildGap(this.glow)
       g.group.visible = false
@@ -693,22 +701,60 @@ export class FrScene {
     this.towerMat.uniforms.uTime.value = t
   }
 
+  /** Swap procedural cars for the Draco sports-car GLTF (iPhone casual-game bar). */
+  async loadGltfCars() {
+    try {
+      const template = await loadCarTemplate()
+      // Replace player
+      const oldPlayer = this.runner
+      this.scene.remove(oldPlayer.group)
+      this.runner = new PlayerCar(instantiateGltfCar(template))
+      this.scene.add(this.runner.group)
+      this.runner.group.traverse((o) => o.layers.enable(REFL))
+
+      // Replace traffic pool
+      for (const c of this.pools.car) {
+        this.world.remove(c.group)
+        c.group.traverse((o) => {
+          const m = o as THREE.Mesh
+          if (m.isMesh) {
+            m.geometry?.dispose?.()
+          }
+        })
+      }
+      this.pools.car = []
+      for (let i = 0; i < 28; i++) {
+        const c = instantiateGltfCar(template)
+        c.group.visible = false
+        c.group.traverse((o: THREE.Object3D) => o.layers.enable(REFL))
+        this.world.add(c.group)
+        this.pools.car.push(c)
+      }
+      return true
+    } catch (e) {
+      console.warn('[Fifth Gear] GLTF cars failed, keeping procedural', e)
+      return false
+    }
+  }
+
   private updateObstacles(v: ViewState) {
     const S = v.s
     const idx = { barrier: 0, overhead: 0, car: 0, gap: 0 }
     const now = v.time
     for (const o of v.obstacles) {
-      // passed props would otherwise fill the foreground between camera and runner
+      // Oncoming cars sit ahead of their meet-point — look further by o.s before breaking
+      if (o.s > S + VIEW_AHEAD + 90) break
       const liveS = obstacleS(o, S)
-      const behind = o.kind === 'gap' || v.dead ? 12 : o.kind === 'car' ? 2.2 : 2.6
+      // passed props would otherwise fill the foreground between camera and runner
+      const behind = o.kind === 'gap' || v.dead ? 12 : o.kind === 'car' ? 3.5 : 2.6
       if (liveS + o.len < S - behind) continue
-      if (o.s > S + VIEW_AHEAD + 40) break
+      if (liveS > S + VIEW_AHEAD + 25) continue
       let scale = 1
       let lift = 0
       if (o.smashed) {
         if (!this.smashT.has(o.id)) {
           this.smashT.set(o.id, now)
-          this.burst(o.lane, o.s, 0.8, 18)
+          this.burst(o.lane, liveS, 0.8, 18)
         }
         const k = (now - this.smashT.get(o.id)!) / 0.35
         if (k >= 1) continue
@@ -734,13 +780,16 @@ export class FrScene {
         if (!c) continue
         c.group.visible = true
         c.group.position.set(x, lift, -(liveS + o.len / 2))
-        c.group.scale.setScalar(scale)
+        // Slight size variance so traffic doesn't look cloned
+        const sizeJitter = 0.92 + (o.variant % 7) * 0.02
+        c.group.scale.setScalar(scale * sizeJitter)
         // Oncoming: headlights toward the runner (rear of mesh faces +Z by default → rotate π)
         const oncoming = o.vs > 0
         c.group.rotation.y = oncoming ? Math.PI : 0
-        c.paint.color.set(CAR_COLORS[o.variant % CAR_COLORS.length])
-        c.head.emissiveIntensity = oncoming ? 7.5 : 0.35
-        c.tail.emissiveIntensity = oncoming ? 1.2 : 4.5
+        recolorPaint(c.paint, CAR_COLORS[o.variant % CAR_COLORS.length])
+        // Bright headlamps read as "coming AT you"; dim tails when facing us
+        setLightIntensity(c.head, oncoming ? 6.5 : 0.15, oncoming ? '#fff6d0' : '#fff2d0')
+        setLightIntensity(c.tail, oncoming ? 0.45 : 4.5, '#ff1a2a')
       } else {
         const g = this.pools.gap[idx.gap++]
         if (!g) continue

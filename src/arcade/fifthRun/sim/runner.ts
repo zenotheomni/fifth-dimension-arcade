@@ -127,7 +127,7 @@ function carBeside(track: Track, lane: number, s: number, from: number): boolean
   return false
 }
 
-const ONCOMING_LEAD = 30
+const ONCOMING_LEAD = 45
 
 /** Try to apply an action now. Returns false if it should stay buffered. */
 function applyAction(st: RunState, a: Action, track: Track, ev: RunEvent[] | null | undefined): boolean {
