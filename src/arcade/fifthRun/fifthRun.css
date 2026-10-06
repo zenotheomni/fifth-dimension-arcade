@@ -259,18 +259,18 @@
   color: rgba(255, 255, 255, 0.6);
 }
 
-.fr-keyicon {
-  display: inline-block;
-  width: 0.62rem;
-  height: 0.95rem;
+.fr-staricon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.05rem;
+  height: 1.05rem;
   align-self: center;
-  margin-right: 0.12rem;
-  background:
-    radial-gradient(circle at 50% 26%, transparent 0 0.13rem, #ffc83c 0.14rem 0.28rem, transparent 0.29rem),
-    linear-gradient(#ffc83c, #ffc83c) 50% 100% / 0.14rem 62% no-repeat,
-    linear-gradient(#ffc83c, #ffc83c) 80% 92% / 0.24rem 0.12rem no-repeat,
-    linear-gradient(#ffc83c, #ffc83c) 80% 76% / 0.2rem 0.12rem no-repeat;
-  filter: drop-shadow(0 0 4px rgba(255, 200, 60, 0.6));
+  margin-right: 0.1rem;
+  font-style: normal;
+  font-size: 0.95rem;
+  line-height: 1;
+  filter: drop-shadow(0 0 5px rgba(255, 200, 60, 0.75));
 }
 
 .fr-chips {

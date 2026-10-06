@@ -364,7 +364,7 @@ class Engine {
         break
       case 'power':
         sfxPower(e.kind)
-        this.say(e.kind === 'magnet' ? 'Magnet' : e.kind === 'five' ? '5× keys' : 'Shield up', e.kind === 'shield' ? 'teal' : 'gold', 1.0)
+        this.say(e.kind === 'magnet' ? 'Magnet' : e.kind === 'five' ? '5× stars' : 'Shield up', e.kind === 'shield' ? 'teal' : 'gold', 1.0)
         break
       case 'shield':
         sfxShieldBreak()

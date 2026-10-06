@@ -68,7 +68,7 @@ export default function FifthRunPage() {
         <p>
           {rival
             ? 'Fresh highway, same for both of you. Put up a score — your rival gets an alert that it’s their turn.'
-            : 'Run one fresh highway. Then send it — your friend gets the exact same keys, cars and gaps.'}
+            : 'Run one fresh highway. Then send it — your friend gets the exact same stars, cars and gaps.'}
         </p>
         {stage === 'error' ? <p style={{ color: '#ff7a9e', fontWeight: 700 }}>{err}</p> : null}
         <button type="button" className="ffa-btn ffa-btn--primary" disabled={stage === 'issuing'} onClick={() => void start()}>

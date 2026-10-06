@@ -261,9 +261,9 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
             <span className="fr-cell__value">{hud.score.toLocaleString('en-US')}</span>
           </div>
           <div className="fr-cell fr-cell--center">
-            <span className="fr-cell__label">Keys</span>
+            <span className="fr-cell__label">Stars</span>
             <span className="fr-cell__value">
-              <i className="fr-keyicon" aria-hidden />
+              <i className="fr-staricon" aria-hidden>💫</i>
               {hud.keys}
             </span>
           </div>
@@ -304,7 +304,7 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
           ) : null}
           {hud.five > 0 ? (
             <span className="fr-power fr-power--five" style={{ ['--p' as string]: hud.five }}>
-              <i aria-hidden>5</i>5× keys
+              <i aria-hidden>5</i>5× stars
             </span>
           ) : null}
         </div>
@@ -318,7 +318,7 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
         {hud.phase === 'intro' ? (
           <div className="fr-intro">
             <p className="fr-intro__title">Fifth Run</p>
-            <p className="fr-intro__tag">Key runner. Keep moving.</p>
+            <p className="fr-intro__tag">Star runner. Keep moving.</p>
             <div className="fr-intro__controls">
               <span>
                 <b>←→</b>Lanes
@@ -352,7 +352,7 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
               <b>{ended.distance}</b>m
             </span>
             <span>
-              <b>{ended.keys}</b>keys
+              <b>{ended.keys}</b>stars
             </span>
             <span>
               <b>{ended.maxCombo}</b>best streak

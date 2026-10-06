@@ -18,7 +18,7 @@ function rand(seed: number) {
   }
 }
 
-/** Soft radial glow (additive sprites, key halos, light pools). */
+/** Soft radial glow (additive sprites, star halos, light pools). */
 export function glowTexture(): THREE.Texture {
   const { c, g } = canvas(128, 128)
   const grd = g.createRadialGradient(64, 64, 0, 64, 64, 64)
@@ -30,6 +30,85 @@ export function glowTexture(): THREE.Texture {
   g.fillRect(0, 0, 128, 128)
   const t = new THREE.CanvasTexture(c)
   t.colorSpace = THREE.SRGBColorSpace
+  return t
+}
+
+/** Crisp gold/white shooting star (💫) — star head + diagonal trail for collectible billboards. */
+export function shootingStarTexture(): THREE.Texture {
+  const { c, g } = canvas(256, 256)
+  g.clearRect(0, 0, 256, 256)
+
+  // Soft gold bloom behind the mark
+  const bloom = g.createRadialGradient(168, 88, 4, 168, 88, 90)
+  bloom.addColorStop(0, 'rgba(255, 230, 140, 0.95)')
+  bloom.addColorStop(0.35, 'rgba(255, 180, 40, 0.45)')
+  bloom.addColorStop(1, 'rgba(255, 140, 20, 0)')
+  g.fillStyle = bloom
+  g.fillRect(0, 0, 256, 256)
+
+  // Trailing streak (bottom-left → star)
+  g.save()
+  g.translate(168, 88)
+  g.rotate((-38 * Math.PI) / 180)
+  const trail = g.createLinearGradient(-150, 0, 8, 0)
+  trail.addColorStop(0, 'rgba(255, 160, 40, 0)')
+  trail.addColorStop(0.45, 'rgba(255, 190, 70, 0.35)')
+  trail.addColorStop(0.82, 'rgba(255, 230, 160, 0.95)')
+  trail.addColorStop(1, 'rgba(255, 255, 255, 1)')
+  g.fillStyle = trail
+  g.beginPath()
+  g.moveTo(-150, 0)
+  g.lineTo(4, -14)
+  g.quadraticCurveTo(14, 0, 4, 14)
+  g.closePath()
+  g.fill()
+  // secondary thinner streak
+  g.globalAlpha = 0.55
+  g.beginPath()
+  g.moveTo(-120, 6)
+  g.lineTo(0, -4)
+  g.lineTo(0, 4)
+  g.closePath()
+  g.fill()
+  g.restore()
+
+  // 5-point star head
+  const cx = 168
+  const cy = 88
+  const outer = 34
+  const inner = 14
+  g.beginPath()
+  for (let i = 0; i < 10; i++) {
+    const r = i % 2 === 0 ? outer : inner
+    const a = -Math.PI / 2 + (i * Math.PI) / 5
+    const x = cx + Math.cos(a) * r
+    const y = cy + Math.sin(a) * r
+    if (i === 0) g.moveTo(x, y)
+    else g.lineTo(x, y)
+  }
+  g.closePath()
+  const starFill = g.createRadialGradient(cx - 4, cy - 4, 2, cx, cy, outer)
+  starFill.addColorStop(0, '#ffffff')
+  starFill.addColorStop(0.35, '#ffe9a0')
+  starFill.addColorStop(1, '#ffb020')
+  g.fillStyle = starFill
+  g.fill()
+  g.strokeStyle = 'rgba(255, 255, 255, 0.85)'
+  g.lineWidth = 2
+  g.stroke()
+
+  // Hot core
+  const core = g.createRadialGradient(cx, cy, 0, cx, cy, 12)
+  core.addColorStop(0, 'rgba(255,255,255,1)')
+  core.addColorStop(1, 'rgba(255,220,120,0)')
+  g.fillStyle = core
+  g.beginPath()
+  g.arc(cx, cy, 12, 0, Math.PI * 2)
+  g.fill()
+
+  const t = new THREE.CanvasTexture(c)
+  t.colorSpace = THREE.SRGBColorSpace
+  t.needsUpdate = true
   return t
 }
 

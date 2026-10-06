@@ -1,6 +1,6 @@
 /**
  * Fifth Run — three.js scene. Neon highway into a night city: wet road with planar reflections,
- * instanced towers, palms, gates, ’59-style Cadillacs, gold keys, bloom.
+ * instanced towers, palms, gates, ’59-style Cadillacs, gold shooting stars, bloom.
  *
  * World convention: the runner stays at z = 0; track objects live in `world` at z = −s and the
  * group is translated by +runnerS each frame. Sky, planet, stars and skyline are camera-locked.
@@ -18,7 +18,6 @@ import {
   buildLamp,
   buildPickup,
   CAR_COLORS,
-  keyGeometry,
   palmGeometry,
   palmMaterial,
   type CarParts,
@@ -26,7 +25,7 @@ import {
 import { RunnerFigure, type PoseInput } from './runnerFigure'
 import { mergeStatic } from './merge'
 import { glowMaterial, PALETTE, roadMaterial, skyMaterial, towerMaterial } from './shaders'
-import { blobTexture, chevronTexture, glowTexture, planetTexture, streakTexture } from './textures'
+import { blobTexture, chevronTexture, glowTexture, planetTexture, shootingStarTexture, streakTexture } from './textures'
 
 export type QualityTier = 'high' | 'low'
 
@@ -104,7 +103,7 @@ export class FrScene {
   private gates: { g: THREE.Group; s: number; tubes: THREE.MeshStandardMaterial[] }[] = []
   private keys!: THREE.InstancedMesh
   private keyHalos!: THREE.InstancedMesh
-  private keyMat!: THREE.MeshStandardMaterial
+  private keyMat!: THREE.MeshBasicMaterial
   private pools: {
     barrier: { group: THREE.Group; lamp: THREE.MeshStandardMaterial }[]
     overhead: { group: THREE.Group }[]
@@ -504,13 +503,22 @@ export class FrScene {
   }
 
   private buildKeys() {
-    this.keyMat = new THREE.MeshStandardMaterial({ color: '#ffc93a', metalness: 1, roughness: 0.22, emissive: new THREE.Color('#ff9a10'), emissiveIntensity: 0.75, envMapIntensity: 1.6 })
-    this.keys = new THREE.InstancedMesh(keyGeometry(), this.keyMat, 160)
+    // Billboard shooting stars (💫) — crisp at phone size on the neon highway
+    this.keyMat = new THREE.MeshBasicMaterial({
+      map: shootingStarTexture(),
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      fog: false,
+      color: '#ffe08a',
+    })
+    this.keys = new THREE.InstancedMesh(new THREE.PlaneGeometry(1.2, 1.2), this.keyMat, 160)
     this.keys.frustumCulled = false
-    this.keys.layers.enable(REFL)
+    this.keys.renderOrder = 2
     this.keys.count = 0
     this.world.add(this.keys)
-    this.keyHalos = new THREE.InstancedMesh(new THREE.PlaneGeometry(1.25, 1.25), glowMaterial(this.glow, '#ffb02a', 0.55), 160)
+    this.keyHalos = new THREE.InstancedMesh(new THREE.PlaneGeometry(1.45, 1.45), glowMaterial(this.glow, '#ffb02a', 0.5), 160)
     this.keyHalos.frustumCulled = false
     this.keyHalos.count = 0
     this.world.add(this.keyHalos)
@@ -740,13 +748,13 @@ export class FrScene {
     const S = v.s
     let n = 0
     const t = v.time
-    const spin = t * 2.6
+    const fiveBoost = v.five > 0 ? 1.18 : 1
     for (const k of v.keys) {
       if (k.s < S - 3 && k.state !== 1) continue
       if (k.s > S + VIEW_AHEAD) break
       if (k.state === 2) continue
       let x = laneX(k.lane)
-      let y = k.y - 0.05 + Math.sin(t * 3 + k.id) * 0.06
+      let y = k.y + 0.05 + Math.sin(t * 3 + k.id) * 0.06
       let z = -k.s
       let sc = 1
       if (k.state === 1) {
@@ -764,14 +772,15 @@ export class FrScene {
           sc = 1 + f * 0.6
           if (f > 0.5) sc *= 1 - (f - 0.5) * 2
         }
-        z = z + 0 // world-space key position stays in the track frame
       }
       if (n >= 160) break
-      this.tmpE.set(0, spin + k.id * 0.37, 0)
+      // Face +Z (toward camera) with a gentle Z wobble so the 💫 trail stays readable
+      this.tmpE.set(0, 0, Math.sin(t * 2.2 + k.id) * 0.12)
       this.tmpQ.setFromEuler(this.tmpE)
-      this.tmpM.compose(this.tmpV.set(x, y, z), this.tmpQ, this.tmpS.set(sc, sc, sc))
+      const s = sc * fiveBoost
+      this.tmpM.compose(this.tmpV.set(x, y, z), this.tmpQ, this.tmpS.set(s, s, 1))
       this.keys.setMatrixAt(n, this.tmpM)
-      this.tmpM.compose(this.tmpV.set(x, y + 0.2, z + 0.05), this.tmpQ.identity(), this.tmpS.set(sc, sc, sc))
+      this.tmpM.compose(this.tmpV.set(x, y, z + 0.04), this.tmpQ.identity(), this.tmpS.set(s * 0.95, s * 0.95, 1))
       this.keyHalos.setMatrixAt(n, this.tmpM)
       n++
     }
@@ -779,7 +788,8 @@ export class FrScene {
     this.keyHalos.count = n
     this.keys.instanceMatrix.needsUpdate = true
     this.keyHalos.instanceMatrix.needsUpdate = true
-    this.keyMat.emissiveIntensity = v.five > 0 ? 1.6 : 0.75
+    this.keyMat.color.set(v.five > 0 ? '#ffffff' : '#ffe08a')
+    this.keyMat.opacity = v.five > 0 ? 1 : 0.95
   }
 
   private updatePickups(v: ViewState) {

@@ -9,8 +9,8 @@ Seeded 3-lane endless runner (three.js). Route `/arcade/fifth-run`, lazy-loaded 
 
 ## Scoring
 - Distance: 1 pt per metre.
-- Keys: 5 pts × combo multiplier (x2 at 10 straight keys, x3 at 30, x4 at 60, x5 at 100). Missing a key resets the combo.
-- “5” emblem: 5× key points for 6 s. Magnet: pulls keys from all lanes for 8 s. Shield: absorbs one hit.
+- Stars: 5 pts × combo multiplier (x2 at 10 straight stars, x3 at 30, x4 at 60, x5 at 100). Missing a star resets the combo.
+- “5” emblem: 5× star points for 6 s. Magnet: pulls stars from all lanes for 8 s. Shield: absorbs one hit.
 - One hit ends the run. Lane-changing into a car you're alongside is a stumble, not a crash.
 
 ## Determinism
