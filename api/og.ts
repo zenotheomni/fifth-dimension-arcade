@@ -2,9 +2,9 @@ import { ImageResponse } from '@vercel/og'
 
 /**
  * GET /api/og?id=<challengeId> — 1200×630 challenge card (handle, score, game, branding).
- * Edge runtime. Written with plain element objects (no JSX) so it needs no TSX config.
+ * Node.js runtime (the Edge runtime outside Next.js blocks @vercel/og's wasm compile).
+ * Written with plain element objects (no JSX) so it needs no TSX config.
  */
-export const config = { runtime: 'edge' }
 
 type El = { type: string; props: Record<string, unknown> }
 const h = (type: string, style: Record<string, unknown>, ...children: unknown[]): El => ({
@@ -58,7 +58,7 @@ async function loadFont(family: string, text: string): Promise<ArrayBuffer | nul
   }
 }
 
-export default async function handler(req: Request): Promise<Response> {
+async function render(req: Request): Promise<ImageResponse> {
   const { searchParams } = new URL(req.url)
   const id = (searchParams.get('id') ?? '').slice(0, 16)
   const c = id ? await loadChallenge(id) : null
@@ -70,7 +70,12 @@ export default async function handler(req: Request): Promise<Response> {
 
   const bungeeText = `FIFTH FLOOR ARCADE${game.toUpperCase()}${handle.toUpperCase()}${score}CAN YOU BEAT IT?CHALLENGE VS 0123456789`
   const bungee = await loadFont('Bungee', bungeeText)
-  const fonts = bungee ? [{ name: 'Bungee', data: bungee, weight: 400 as const, style: 'normal' as const }] : []
+  const bodyText = `${line} Same court. 60 seconds. PTS`
+  const [inter] = await Promise.all([loadFont('Inter:wght@600', bodyText)])
+  const fonts: { name: string; data: ArrayBuffer; weight: 600 | 400; style: 'normal' }[] = []
+  if (bungee) fonts.push({ name: 'Bungee', data: bungee, weight: 400, style: 'normal' })
+  if (inter) fonts.push({ name: 'Body', data: inter, weight: 600, style: 'normal' })
+  const body = inter ? 'Body' : 'sans-serif'
   const display = bungee ? 'Bungee' : 'sans-serif'
 
   const sunStripes = [0, 1, 2, 3, 4].map((i) =>
@@ -129,14 +134,14 @@ export default async function handler(req: Request): Promise<Response> {
           { fontSize: 168, lineHeight: 1, color: '#ffd34d', textShadow: '0 0 30px rgba(255, 200, 60, 0.7), 6px 6px 0 #3a1260' },
           score,
         ),
-        h('div', { fontSize: 34, marginLeft: 18, marginBottom: 26, color: '#f2f0ea' }, 'PTS'),
+        h('div', { fontSize: 34, marginLeft: 18, marginBottom: 26, color: '#f2f0ea', fontFamily: body, fontWeight: 600 }, 'PTS'),
       ),
       h(
         'div',
         { marginTop: 'auto', fontSize: 40, color: '#ffffff', letterSpacing: 2, textShadow: '0 0 14px rgba(0,229,255,0.8)' },
         c ? 'CAN YOU BEAT IT?' : 'TAP TO PLAY',
       ),
-      h('div', { marginTop: 8, fontSize: 24, fontFamily: 'sans-serif', color: 'rgba(242,240,234,0.8)' }, `${line} Same court, same wind. 60 seconds.`),
+      h('div', { marginTop: 8, fontSize: 26, fontFamily: body, fontWeight: 600, color: 'rgba(242,240,234,0.82)' }, `${line} Same court. 60 seconds.`),
     ),
   )
 
@@ -144,6 +149,23 @@ export default async function handler(req: Request): Promise<Response> {
     width: 1200,
     height: 630,
     fonts,
-    headers: { 'Cache-Control': 'public, max-age=60, s-maxage=300, stale-while-revalidate=86400' },
   })
+}
+
+/** Buffer the PNG so a render failure becomes an uncached 500 instead of a cached empty 200. */
+export async function GET(req: Request): Promise<Response> {
+  try {
+    const buf = await (await render(req)).arrayBuffer()
+    if (!buf.byteLength) throw new Error('empty_image')
+    return new Response(buf, {
+      status: 200,
+      headers: {
+        'Content-Type': 'image/png',
+        'Cache-Control': 'public, max-age=60, s-maxage=300, stale-while-revalidate=86400',
+      },
+    })
+  } catch (err) {
+    console.error('[arcade-og] render failed', err)
+    return new Response('og_error', { status: 500, headers: { 'Cache-Control': 'no-store' } })
+  }
 }
