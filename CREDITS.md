@@ -24,3 +24,17 @@
 ## SFX
 
 - Procedural Web Audio in `src/arcade/courtVision/sfx.ts` (original)
+
+## Fifth Run (`src/arcade/fifthRun/`)
+
+No third-party art, models, textures or audio — everything in the game is generated in code:
+
+- Runner, ’59-style Cadillac (fins, bullet taillights, whitewalls), barriers, gantries, gates, lamps, palms,
+  keys and power-ups — procedural low-poly geometry (`render/runnerFigure.ts`, `render/props.ts`), original.
+- Sky, wet neon road + planar reflection, instanced towers with procedural windows — custom GLSL
+  (`render/shaders.ts`), original.
+- Planet, glow, comet streak, chevron textures — drawn to canvas at runtime (`render/textures.ts`), original.
+- SFX — procedural Web Audio (`sfx.ts`), original.
+- In-world “5” emblem on gates and the 5× pickup — `public/art/emblem-160.webp`, Jenks / 5D Imperial.
+- Libraries: [three.js](https://threejs.org/) — MIT (incl. `examples/jsm/utils/BufferGeometryUtils.js`);
+  [postprocessing](https://github.com/pmndrs/postprocessing) — Zlib (bloom + ACES tone mapping).

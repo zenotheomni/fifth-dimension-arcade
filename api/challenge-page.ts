@@ -30,10 +30,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   let handle: string | null = null
   let score: number | null = null
+  let gameId = 'court-vision'
   if (/^[a-zA-Z0-9_-]{6,16}$/.test(id)) {
     try {
       const { data } = await getSupabase().rpc('arcade_challenge_view', { p_id: id })
-      const c = data as { creator_handle?: string; target_score?: number } | null
+      const c = data as { creator_handle?: string; target_score?: number; game_id?: string } | null
+      if (c?.game_id) gameId = c.game_id
       if (c?.creator_handle) {
         handle = c.creator_handle
         score = c.target_score ?? null
@@ -43,10 +45,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
+  const fifthRun = gameId === 'fifth-run'
+  const gameTitle = fifthRun ? 'Fifth Run' : 'Court Vision'
   const title = handle
-    ? `${handle} scored ${score} in Court Vision. Can you beat it?`
-    : 'Court Vision Challenge · Fifth Floor Arcade'
-  const description = 'Same court, same conditions. 60 seconds. Tap to play — no download.'
+    ? `${handle} scored ${score} in ${gameTitle}. Can you beat it?`
+    : `${gameTitle} Challenge · Fifth Floor Arcade`
+  const description = fifthRun
+    ? 'Same highway, same keys, same traffic. One hit ends it. Tap to play — no download.'
+    : 'Same court, same conditions. 60 seconds. Tap to play — no download.'
   const image = `${origin}/api/og?id=${encodeURIComponent(id)}${score != null ? `&s=${score}` : ''}`
   const url = id ? challengePublicUrl(id) : `${origin}/arcade`
 

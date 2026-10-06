@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { challengeShareText, copyText, shareOrCopy } from '../core/challenges'
+import { challengeShareText, copyText, gameTitle, sameSeedCopy, shareOrCopy } from '../core/challenges'
 import { track } from '../analytics'
 import AlertsOptIn from './AlertsOptIn'
 import './social.css'
@@ -39,15 +39,13 @@ export default function SharePanel({
     <div className="soc-share">
       <p className="soc-share__eyebrow">{rivalHandle ? `Rematch sent to ${rivalHandle}` : 'Challenge ready'}</p>
       <div className="soc-share__card">
-        <span className="soc-share__game">Court Vision · Challenge</span>
+        <span className="soc-share__game">{gameTitle(game)} · Challenge</span>
         <span className="soc-share__handle">{handle}</span>
         <span className="soc-share__score">{score}</span>
         <span className="soc-share__q">Can you beat it?</span>
       </div>
       <p className="soc-share__copy">
-        {rivalHandle
-          ? `${rivalHandle} gets an alert. Same court, same sway, same wind.`
-          : 'Your friend plays the exact same court — same sway, same wind.'}
+        {sameSeedCopy(game, rivalHandle)}
       </p>
       <div className="soc-share__btns">
         <button type="button" className="ffa-btn ffa-btn--primary" onClick={() => void onShare()}>

@@ -1,5 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom'
 import type { H2H } from '../core/arcadeApi'
+import { gameTitle } from '../core/challenges'
 import AlertsOptIn from './AlertsOptIn'
 import './social.css'
 
@@ -16,6 +17,7 @@ export default function VsResult({
   nextTarget,
   showAlerts = true,
   boardLine,
+  game = 'court-vision',
 }: {
   me: VsSide
   them: VsSide
@@ -27,6 +29,7 @@ export default function VsResult({
   nextTarget?: number | null
   showAlerts?: boolean
   boardLine?: string | null
+  game?: string
 }) {
   const navigate = useNavigate()
   const headline = result === 'win' ? 'You win!' : result === 'loss' ? `${them.handle} wins` : 'Dead heat'
@@ -41,7 +44,7 @@ export default function VsResult({
   return (
     <div className={`soc-vs soc-vs--${result ?? 'tie'}`}>
       <div className="soc-vs__grid" aria-hidden />
-      <p className="soc-vs__eyebrow">Court Vision · Head to head</p>
+      <p className="soc-vs__eyebrow">{gameTitle(game)} · Head to head</p>
       <h2 className="soc-vs__headline">{headline}</h2>
       <div className="soc-vs__sides">
         <div className={`soc-vs__side${result === 'win' ? ' is-winner' : ''}`}>
@@ -69,7 +72,7 @@ export default function VsResult({
           <button
             type="button"
             className="ffa-btn ffa-btn--primary"
-            onClick={() => navigate(`/court-vision?rival=${encodeURIComponent(rivalPlayerId)}&parent=${encodeURIComponent(challengeId)}`)}
+            onClick={() => navigate(`/${game}?rival=${encodeURIComponent(rivalPlayerId)}&parent=${encodeURIComponent(challengeId)}`)}
           >
             Run it back
           </button>
