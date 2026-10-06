@@ -120,11 +120,11 @@ export function sfxBump() {
   noise(a, t, 0.08, 'lowpass', 900, 300, 1, 0.1)
 }
 
-export function sfxPower(kind: 'magnet' | 'five' | 'shield') {
+export function sfxPower(kind: 'magnet' | 'five' | 'shield' | 'hand') {
   const a = ac()
   if (!a || muted) return
   const t = a.currentTime
-  const base = kind === 'five' ? 523.25 : kind === 'magnet' ? 392 : 440
+  const base = kind === 'five' ? 523.25 : kind === 'magnet' ? 392 : kind === 'hand' ? 554.37 : 440
   ;[0, 4, 7, 12].forEach((s, i) => tone(a, t + i * 0.055, base * Math.pow(2, s / 12), base * Math.pow(2, s / 12), 0.22, 'sawtooth', 0.045))
   tone(a, t, base / 2, base, 0.35, 'sine', 0.08)
 }

@@ -1,6 +1,6 @@
 /**
- * Fifth Run — fixed-step runner sim (120 Hz). Pure data + arithmetic, shared by the game,
- * the in-game autopilot and the headless harness.
+ * Fifth Run — fixed-step runner sim (120 Hz), v2.
+ * Lives (3), oncoming cars, 💫 stars boosting distance score, 🖐️ hand invuln.
  */
 import {
   BODY,
@@ -9,16 +9,18 @@ import {
   FR_DT,
   GRAVITY,
   JUMP_VY,
-  KEY_PTS,
   LANE_SPEED,
   OB,
   POWER_TICKS,
   SLIDE_TICKS,
+  STAR_BASE,
+  STAR_FLAT,
+  START_LIVES,
   laneX,
   multFor,
   speedAt,
 } from './constants'
-import type { ObKind, Obstacle, PowerKind, Track } from './track'
+import { obstacleS, type ObKind, type Obstacle, type PowerKind, type Track } from './track'
 
 export type Action = 'left' | 'right' | 'jump' | 'slide'
 
@@ -27,7 +29,7 @@ export type RunEvent =
   | { type: 'miss'; id: number; lostCombo: number }
   | { type: 'mult'; mult: number }
   | { type: 'power'; kind: PowerKind; id: number }
-  | { type: 'shield'; ob: number; kind: ObKind }
+  | { type: 'hit'; ob: number; kind: ObKind; lives: number }
   | { type: 'jump' }
   | { type: 'slide' }
   | { type: 'land' }
@@ -49,22 +51,20 @@ export type RunState = {
   dead: boolean
   deathKind: ObKind | null
   deathOb: number
-  shield: boolean
+  lives: number
+  /** 🖐️ hand invuln ticks remaining */
+  hand: number
+  /** brief post-hit i-frames */
   invuln: number
-  magnet: number
-  five: number
   keys: number
   combo: number
   maxCombo: number
   mult: number
   keyPts: number
   stumble: number
-  /** buffered jump/slide (waits for landing within BUFFER_TICKS) */
   queued: Action | null
   queuedAt: number
-  /** lane change (applies next tick, never buffered) */
   latQ: Action | null
-  /** scan cursors into the track arrays (perf) */
   obCur: number
   keyCur: number
   pkCur: number
@@ -85,10 +85,9 @@ export function newRun(): RunState {
     dead: false,
     deathKind: null,
     deathOb: -1,
-    shield: false,
+    lives: START_LIVES,
+    hand: 0,
     invuln: 0,
-    magnet: 0,
-    five: 0,
     keys: 0,
     combo: 0,
     maxCombo: 0,
@@ -104,10 +103,11 @@ export function newRun(): RunState {
   }
 }
 
-export const scoreOf = (st: RunState) => Math.floor(st.s) + st.keyPts
+/** Distance + flat per-star boost + combo star points. */
+export const scoreOf = (st: RunState) => Math.floor(st.s) + st.keys * STAR_FLAT + st.keyPts
 
 export type StepOpts = {
-  /** collect keys / pickups and allow the shield (false in survival search) */
+  /** collect stars / pickups and apply lives (false in survival search → any hit = dead) */
   full: boolean
   events?: RunEvent[] | null
 }
@@ -116,12 +116,15 @@ function carBeside(track: Track, lane: number, s: number, from: number): boolean
   const obs = track.obstacles
   for (let i = Math.max(0, Math.min(from, obs.length) - 2); i < obs.length; i++) {
     const o = obs[i]
-    if (o.s > s + 1) break
+    if (o.s > s + ONCOMING_LEAD) break
     if (o.kind !== 'car' || o.lane !== lane || o.smashed) continue
-    if (o.s - BODY.halfD - 0.15 < s && o.s + o.len + BODY.halfD > s) return true
+    const os = obstacleS(o, s)
+    if (os - BODY.halfD - 0.15 < s && os + o.len + BODY.halfD > s) return true
   }
   return false
 }
+
+const ONCOMING_LEAD = 30
 
 /** Try to apply an action now. Returns false if it should stay buffered. */
 function applyAction(st: RunState, a: Action, track: Track, ev: RunEvent[] | null | undefined): boolean {
@@ -151,7 +154,6 @@ function applyAction(st: RunState, a: Action, track: Track, ev: RunEvent[] | nul
     ev?.push({ type: 'jump' })
     return true
   }
-  // slide
   if (st.air) {
     if (st.vy > -FAST_FALL_VY) st.vy = -FAST_FALL_VY
     st.slideOnLand = true
@@ -171,13 +173,38 @@ export function queueAction(st: RunState, a: Action) {
   st.queuedAt = st.tick
 }
 
+function applyHit(st: RunState, o: Obstacle, opts: StepOpts, ev: RunEvent[] | null | undefined) {
+  // Survival search: any hit ends the path
+  if (!opts.full) {
+    st.dead = true
+    st.deathKind = o.kind
+    st.deathOb = o.id
+    ev?.push({ type: 'dead', kind: o.kind, ob: o.id })
+    return
+  }
+  st.lives--
+  o.smashed = true
+  if (o.kind === 'gap') {
+    st.air = true
+    st.vy = JUMP_VY
+  }
+  if (st.lives <= 0) {
+    st.dead = true
+    st.deathKind = o.kind
+    st.deathOb = o.id
+    ev?.push({ type: 'dead', kind: o.kind, ob: o.id })
+    return
+  }
+  st.invuln = POWER_TICKS.hitInvuln
+  ev?.push({ type: 'hit', ob: o.id, kind: o.kind, lives: st.lives })
+}
+
 /** Advance one fixed tick. */
 export function step(st: RunState, track: Track, opts: StepOpts) {
   if (st.dead) return
   const ev = opts.events
   st.tick++
 
-  // input: lane change first, then buffered jump/slide
   if (st.latQ) {
     applyAction(st, st.latQ, track, ev)
     st.latQ = null
@@ -187,13 +214,11 @@ export function step(st: RunState, track: Track, opts: StepOpts) {
     else if (st.tick - st.queuedAt > BUFFER_TICKS) st.queued = null
   }
 
-  // lateral
   const tx = laneX(st.lane)
   const dx = tx - st.x
   const maxStep = LANE_SPEED * FR_DT
   st.x = Math.abs(dx) <= maxStep ? tx : st.x + (dx > 0 ? maxStep : -maxStep)
 
-  // vertical
   if (st.air) {
     st.vy -= GRAVITY * FR_DT
     st.y += st.vy * FR_DT
@@ -210,30 +235,32 @@ export function step(st: RunState, track: Track, opts: StepOpts) {
     }
   } else if (st.slide > 0) st.slide--
 
-  // forward
   st.s += st.v * FR_DT
   st.v = speedAt(st.s)
 
   if (st.invuln > 0) st.invuln--
+  if (st.hand > 0) st.hand--
   if (st.stumble > 0) st.stumble--
-  if (st.magnet > 0) st.magnet--
-  if (st.five > 0) st.five--
 
-  // ── obstacles ──
+  // ── obstacles (use live oncoming positions) ──
   const obs = track.obstacles
-  while (st.obCur < obs.length && obs[st.obCur].s + obs[st.obCur].len < st.s - 2) st.obCur++
+  while (st.obCur < obs.length && obs[st.obCur].s + obs[st.obCur].len < st.s - 25) st.obCur++
   if (st.obCur > obs.length) st.obCur = 0
   const sB = st.s - BODY.halfD
   const sF = st.s + BODY.halfD
   const top = st.y + (st.slide > 0 && !st.air ? BODY.slideH : BODY.h)
+  const protected_ = st.invuln > 0 || st.hand > 0
   for (let i = Math.max(0, st.obCur - 2); i < obs.length; i++) {
     const o = obs[i]
-    if (o.s > sF) break
-    if (o.s + o.len < sB || o.smashed) continue
+    if (o.s > st.s + ONCOMING_LEAD + 5) break
+    if (o.smashed) continue
+    const os = obstacleS(o, st.s)
+    if (os > sF) continue
+    if (os + o.len < sB) continue
     const lx = Math.abs(st.x - laneX(o.lane))
     let hit = false
     if (o.kind === 'gap') {
-      hit = !st.air && st.y <= 0 && lx < OB.gap.halfW && st.s > o.s + 0.2 && st.s < o.s + o.len - 0.2
+      hit = !st.air && st.y <= 0 && lx < OB.gap.halfW && st.s > os + 0.2 && st.s < os + o.len - 0.2
     } else if (o.kind === 'barrier') {
       hit = lx < BODY.halfW + OB.barrier.halfW && st.y < OB.barrier.h - 0.05
     } else if (o.kind === 'overhead') {
@@ -241,28 +268,19 @@ export function step(st: RunState, track: Track, opts: StepOpts) {
     } else {
       hit = lx < BODY.halfW + OB.car.halfW && st.y < OB.car.h
     }
-    if (!hit || st.invuln > 0) continue
-    if (opts.full && st.shield) {
-      st.shield = false
-      st.invuln = POWER_TICKS.invuln
-      o.smashed = true
-      if (o.kind === 'gap') {
-        st.air = true
-        st.vy = JUMP_VY
-      }
-      ev?.push({ type: 'shield', ob: o.id, kind: o.kind })
+    if (!hit) continue
+    if (protected_) {
+      // Hand / post-hit: smash through without losing a life
+      if (st.hand > 0) o.smashed = true
       continue
     }
-    st.dead = true
-    st.deathKind = o.kind
-    st.deathOb = o.id
-    ev?.push({ type: 'dead', kind: o.kind, ob: o.id })
-    return
+    applyHit(st, o, opts, ev)
+    if (st.dead) return
   }
 
   if (!opts.full) return
 
-  // ── keys ──
+  // ── shooting stars ──
   const keys = track.keys
   while (st.keyCur < keys.length && keys[st.keyCur].s < st.s - 3) st.keyCur++
   if (st.keyCur > keys.length) st.keyCur = 0
@@ -273,25 +291,21 @@ export function step(st: RunState, track: Track, opts: StepOpts) {
     if (dz > 10.5) break
     if (k.state !== 0) continue
     let take = false
-    let mag = false
-    if (st.magnet > 0 && dz > -0.7 && dz < 10) {
-      take = true
-      mag = Math.abs(dz) > 0.6 || Math.abs(st.x - laneX(k.lane)) > 0.85
-    } else if (dz > -0.6 && dz < 0.6 && Math.abs(st.x - laneX(k.lane)) < 0.85 && k.y > st.y - 0.3 && k.y < bodyTop + 0.2) {
+    if (dz > -0.6 && dz < 0.6 && Math.abs(st.x - laneX(k.lane)) < 0.85 && k.y > st.y - 0.3 && k.y < bodyTop + 0.2) {
       take = true
     }
     if (take) {
       k.state = 1
-      k.magnet = mag
+      k.magnet = false
       k.takenTick = st.tick
       const prevMult = st.mult
       st.keys++
       st.combo++
       if (st.combo > st.maxCombo) st.maxCombo = st.combo
       st.mult = multFor(st.combo)
-      const pts = KEY_PTS * st.mult * (st.five > 0 ? 5 : 1)
+      const pts = STAR_BASE * st.mult
       st.keyPts += pts
-      ev?.push({ type: 'key', id: k.id, pts, combo: st.combo, mult: st.mult, magnet: mag, first: st.keys === 1 })
+      ev?.push({ type: 'key', id: k.id, pts, combo: st.combo, mult: st.mult, magnet: false, first: st.keys === 1 })
       if (st.mult > prevMult) ev?.push({ type: 'mult', mult: st.mult })
     } else if (dz < -0.8) {
       k.state = 2
@@ -302,7 +316,7 @@ export function step(st: RunState, track: Track, opts: StepOpts) {
     }
   }
 
-  // ── pickups ──
+  // ── pickups (🖐️ hand) ──
   const pks = track.pickups
   while (st.pkCur < pks.length && pks[st.pkCur].s < st.s - 3) st.pkCur++
   if (st.pkCur > pks.length) st.pkCur = 0
@@ -314,9 +328,7 @@ export function step(st: RunState, track: Track, opts: StepOpts) {
     if (Math.abs(dz) < 0.8 && Math.abs(st.x - laneX(p.lane)) < 1.0 && st.y < 1.6) {
       p.taken = true
       p.takenTick = st.tick
-      if (p.kind === 'magnet') st.magnet = POWER_TICKS.magnet
-      else if (p.kind === 'five') st.five = POWER_TICKS.five
-      else st.shield = true
+      st.hand = POWER_TICKS.hand
       ev?.push({ type: 'power', kind: p.kind, id: p.id })
     }
   }

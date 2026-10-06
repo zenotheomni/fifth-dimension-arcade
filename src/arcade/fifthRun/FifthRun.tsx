@@ -40,12 +40,11 @@ const initialHud: FrHudState = {
   keys: 0,
   combo: 0,
   mult: 1,
+  lives: 3,
   callout: null,
   pb: 0,
   newPb: false,
-  magnet: 0,
-  five: 0,
-  shield: false,
+  hand: 0,
   speed: 0,
   target: null,
 }
@@ -291,20 +290,18 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
           ) : null}
         </div>
 
+        <div className="fr-lives" aria-label={`${hud.lives} lives`}>
+          {[0, 1, 2].map((i) => (
+            <span key={i} className={`fr-life${i < hud.lives ? ' is-on' : ''}`} aria-hidden>
+              ♥
+            </span>
+          ))}
+        </div>
+
         <div className="fr-powers">
-          {hud.shield ? (
-            <span className="fr-power fr-power--shield">
-              <i aria-hidden>⬡</i>Shield
-            </span>
-          ) : null}
-          {hud.magnet > 0 ? (
-            <span className="fr-power fr-power--magnet" style={{ ['--p' as string]: hud.magnet }}>
-              <i aria-hidden>U</i>Magnet
-            </span>
-          ) : null}
-          {hud.five > 0 ? (
-            <span className="fr-power fr-power--five" style={{ ['--p' as string]: hud.five }}>
-              <i aria-hidden>5</i>5× stars
+          {hud.hand > 0 ? (
+            <span className="fr-power fr-power--hand" style={{ ['--p' as string]: hud.hand }}>
+              <i aria-hidden>🖐️</i>Invisible
             </span>
           ) : null}
         </div>
@@ -318,7 +315,7 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
         {hud.phase === 'intro' ? (
           <div className="fr-intro">
             <p className="fr-intro__title">Fifth Run</p>
-            <p className="fr-intro__tag">Star runner. Keep moving.</p>
+            <p className="fr-intro__tag">How far can you run?</p>
             <div className="fr-intro__controls">
               <span>
                 <b>←→</b>Lanes
@@ -356,6 +353,9 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
             </span>
             <span>
               <b>{ended.maxCombo}</b>best streak
+            </span>
+            <span>
+              <b>{ended.livesLeft}</b>lives left
             </span>
           </div>
           <p className="fr-end__pb">

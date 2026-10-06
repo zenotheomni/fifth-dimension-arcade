@@ -7,8 +7,8 @@ export const PALETTE = {
   purple: new THREE.Color('#8a4dff'),
   red: new THREE.Color('#dc283c'),
   gold: new THREE.Color('#ffc83c'),
-  fog: new THREE.Color('#3a1550'),
-  horizon: new THREE.Color('#c23b7c'),
+  fog: new THREE.Color('#1a1528'),
+  horizon: new THREE.Color('#a04060'),
 }
 
 const NOISE = /* glsl */ `
@@ -38,10 +38,10 @@ export function skyMaterial() {
       void main(){
         vec3 d = normalize(vDir);
         float h = d.y;
-        vec3 zen = vec3(0.003,0.002,0.016);
-        vec3 up  = vec3(0.012,0.005,0.050);
-        vec3 mid = vec3(0.040,0.010,0.105);
-        vec3 hor = vec3(0.230,0.040,0.170);
+        vec3 zen = vec3(0.004,0.006,0.022);
+        vec3 up  = vec3(0.015,0.020,0.055);
+        vec3 mid = vec3(0.045,0.025,0.090);
+        vec3 hor = vec3(0.180,0.055,0.110);
         vec3 col;
         if (h > 0.0) {
           col = mix(hor, mid, smoothstep(0.0, 0.07, h));
@@ -52,9 +52,9 @@ export function skyMaterial() {
         }
         // warm city glow at the vanishing point
         float vp = max(dot(d, normalize(vec3(0.0, 0.03, -1.0))), 0.0);
-        col += vec3(1.0,0.5,0.9) * pow(vp, 90.0) * 0.9 + vec3(0.7,0.18,0.6) * pow(vp, 10.0) * 0.14;
+        col += vec3(1.0,0.55,0.35) * pow(vp, 70.0) * 0.55 + vec3(0.25,0.7,0.75) * pow(vp, 12.0) * 0.1;
         // horizon haze band
-        col += vec3(0.9,0.25,0.45) * exp(-abs(h)*34.0) * 0.14;
+        col += vec3(0.85,0.35,0.25) * exp(-abs(h)*34.0) * 0.1;
         gl_FragColor = vec4(col, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -102,7 +102,7 @@ export function roadMaterial(reflTex: THREE.Texture | null) {
         float g2 = vnoise(vec2(x*9.0, s*9.0));
         float g3 = h21(floor(vec2(x*70.0, s*70.0)));
         float grainFade = 1.0 - smoothstep(10.0, 60.0, dist);
-        vec3 col = vec3(0.026,0.020,0.046) * (0.82 + 0.25*g1 + (0.18*g2 + 0.14*g3) * grainFade);
+        vec3 col = vec3(0.035,0.032,0.040) * (0.82 + 0.25*g1 + (0.18*g2 + 0.14*g3) * grainFade);
         // patched slabs
         float slab = vnoise(vec2(floor(x/3.0), floor(s/14.0)) * 3.1);
         col *= 0.92 + slab * 0.14;

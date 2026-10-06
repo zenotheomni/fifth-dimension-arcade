@@ -23,4 +23,5 @@ export const FIFTH_RUN_COPY = {
   NEW_PB: COPY.FIFTH_STATE_UNLOCKED,
   CRASH: 'Glitch. Rearrange. Run it back.',
   BEAT_FRIEND: 'You outran their reality.',
+  HAND: 'Invisible · 15s',
 } as const

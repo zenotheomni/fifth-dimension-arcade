@@ -301,46 +301,44 @@ export function buildGap(glow: THREE.Texture) {
   return { group, hole, near, far, nearGlow, mat }
 }
 
-export function buildPickup(kind: 'magnet' | 'five' | 'shield', glow: THREE.Texture, emblem: THREE.Texture | null) {
+export function buildPickup(kind: 'hand', glow: THREE.Texture, _emblem: THREE.Texture | null) {
+  void kind
   const group = new THREE.Group()
   const spin = new THREE.Group()
   spin.position.y = 1.0
   group.add(spin)
-  let color = '#ff3d5a'
-  if (kind === 'magnet') {
-    const red = new THREE.MeshStandardMaterial({ color: '#e0203a', emissive: new THREE.Color('#ff2040'), emissiveIntensity: 0.9, metalness: 0.4, roughness: 0.3 })
-    const silver = new THREE.MeshStandardMaterial({ color: '#e8eef8', metalness: 1, roughness: 0.15, emissive: new THREE.Color('#9cf'), emissiveIntensity: 0.4 })
-    const u = new THREE.Mesh(new THREE.TorusGeometry(0.24, 0.085, 10, 22, Math.PI), red)
-    u.rotation.z = Math.PI
-    spin.add(u)
-    for (const x of [-0.24, 0.24]) {
-      const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.086, 0.086, 0.16, 12), silver)
-      tip.position.set(x, 0.08, 0)
-      spin.add(tip)
-    }
-  } else if (kind === 'five') {
-    color = '#ffc83c'
-    const rim = new THREE.MeshStandardMaterial({ color: '#ffcf4a', metalness: 1, roughness: 0.2, emissive: new THREE.Color('#ff9a00'), emissiveIntensity: 0.8 })
-    const face = new THREE.MeshStandardMaterial({ color: '#ffffff', map: emblem ?? undefined, emissive: new THREE.Color('#ffd27a'), emissiveMap: emblem ?? undefined, emissiveIntensity: emblem ? 1.1 : 0.6, transparent: true })
-    const coin = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.07, 32), rim)
-    coin.rotation.x = Math.PI / 2
-    spin.add(coin)
-    for (const z of [0.04, -0.04]) {
-      const f = new THREE.Mesh(new THREE.CircleGeometry(0.34, 32), face)
-      f.position.z = z
-      if (z < 0) f.rotation.y = Math.PI
-      spin.add(f)
-    }
-  } else {
-    color = '#00e0d0'
-    const cage = new THREE.Mesh(
-      new THREE.IcosahedronGeometry(0.42, 1),
-      new THREE.MeshStandardMaterial({ color: '#4ff', emissive: new THREE.Color('#00e0d0'), emissiveIntensity: 2.2, wireframe: true }),
-    )
-    spin.add(cage)
-    const core = new THREE.Mesh(new THREE.SphereGeometry(0.22, 16, 12), new THREE.MeshStandardMaterial({ color: '#bff', emissive: new THREE.Color('#5ff'), emissiveIntensity: 1.6, transparent: true, opacity: 0.8 }))
-    spin.add(core)
-  }
+  const color = '#c9a0ff'
+  // Open hand / five-fingers silhouette (🖐️ vibe) — palm disc + five finger capsules
+  const palmMat = new THREE.MeshStandardMaterial({
+    color: '#f2d9c8',
+    emissive: new THREE.Color('#b48cff'),
+    emissiveIntensity: 0.55,
+    roughness: 0.55,
+    metalness: 0.15,
+  })
+  const palm = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 12), palmMat)
+  palm.scale.set(1.05, 1.15, 0.55)
+  spin.add(palm)
+  const fingerMat = new THREE.MeshStandardMaterial({
+    color: '#f6e0d2',
+    emissive: new THREE.Color('#9a6dff'),
+    emissiveIntensity: 0.4,
+    roughness: 0.5,
+  })
+  const spreads = [-0.34, -0.17, 0, 0.17, 0.34]
+  spreads.forEach((x, i) => {
+    const len = i === 2 ? 0.42 : i === 0 || i === 4 ? 0.32 : 0.38
+    const f = new THREE.Mesh(new THREE.CapsuleGeometry(0.055, len, 4, 8), fingerMat)
+    f.position.set(x, 0.28 + len * 0.35, 0.02)
+    f.rotation.z = -x * 0.55
+    spin.add(f)
+  })
+  // thumb
+  const thumb = new THREE.Mesh(new THREE.CapsuleGeometry(0.06, 0.28, 4, 8), fingerMat)
+  thumb.position.set(-0.32, 0.05, 0.06)
+  thumb.rotation.z = 1.1
+  spin.add(thumb)
+
   const halo = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 1.8), glowMaterial(glow, color, 0.65))
   halo.position.y = 1.0
   group.add(halo)
@@ -367,6 +365,7 @@ export function buildPickup(kind: 'magnet' | 'five' | 'shield', glow: THREE.Text
   group.add(beam)
   return { group, spin, halo, ring }
 }
+
 
 /** Palm silhouette: curved trunk + drooping fronds (vertex-coloured, merged). */
 export function palmGeometry() {

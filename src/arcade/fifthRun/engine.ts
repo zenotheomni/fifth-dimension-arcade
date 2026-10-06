@@ -18,7 +18,6 @@ import {
   sfxLane,
   sfxMult,
   sfxPower,
-  sfxShieldBreak,
   sfxSlide,
   sfxStart,
   unlockSfx,
@@ -331,10 +330,10 @@ class Engine {
       deadT: this.deadT,
       deathKind: b.deathKind,
       idle: this.phase === 'intro' || this.phase === 'loading',
-      shield: b.shield,
-      magnet: b.magnet / FR_HZ,
-      five: b.five / FR_HZ,
-      invuln: b.invuln > 0,
+      lives: b.lives,
+      hand: b.hand / FR_HZ,
+      invuln: b.invuln > 0 || b.hand > 0,
+      invisible: b.hand > 0,
       stumble: b.stumble,
       obstacles: this.track.obstacles,
       keys: this.track.keys,
@@ -349,9 +348,9 @@ class Engine {
     const st = this.run
     switch (e.type) {
       case 'key': {
-        sfxKey(e.combo, st.five > 0)
+        sfxKey(e.combo, false)
         const k = this.track.keys.find((x) => x.id === e.id)
-        if (k && !e.magnet) this.view?.burst(k.lane, k.s, k.y, 6)
+        if (k) this.view?.burst(k.lane, k.s, k.y, 6)
         if (e.first) this.say(FIFTH_RUN_COPY.FIRST_KEY, 'gold', 1.1)
         break
       }
@@ -363,13 +362,20 @@ class Engine {
         if (e.lostCombo >= 10) this.say(`Combo lost · ${e.lostCombo}`, 'coral', 0.9)
         break
       case 'power':
-        sfxPower(e.kind)
-        this.say(e.kind === 'magnet' ? 'Magnet' : e.kind === 'five' ? '5× stars' : 'Shield up', e.kind === 'shield' ? 'teal' : 'gold', 1.0)
+        sfxPower('hand')
+        this.say(FIFTH_RUN_COPY.HAND, 'teal', 1.2)
         break
-      case 'shield':
-        sfxShieldBreak()
-        this.shake = 0.8
-        this.say('Shield saved you', 'teal', 1.0)
+      case 'hit':
+        sfxBump()
+        this.shake = 1.0
+        this.say(e.lives === 1 ? 'Last life' : `${e.lives} lives left`, 'coral', 1.1)
+        if (navigator.vibrate) {
+          try {
+            navigator.vibrate(40)
+          } catch {
+            /* ignore */
+          }
+        }
         break
       case 'jump':
         sfxJump()
@@ -432,6 +438,7 @@ class Engine {
       distance: Math.floor(st.s),
       keys: st.keys,
       maxCombo: st.maxCombo,
+      livesLeft: st.lives,
       durationS: Math.round((st.tick / FR_HZ) * 10) / 10,
       deathKind: st.deathKind,
       pb: this.pb,
@@ -451,16 +458,15 @@ class Engine {
       keys: st.keys,
       combo: st.combo,
       mult: st.mult,
+      lives: st.lives,
       callout: this.callout,
       pb: this.pb,
       newPb: this.newPb,
-      magnet: st.magnet / POWER_TICKS.magnet,
-      five: st.five / POWER_TICKS.five,
-      shield: st.shield,
+      hand: st.hand / POWER_TICKS.hand,
       speed: Math.round(st.v * 3.6),
       target: this.bridge.challenge && !this.bridge.challenge.setTheBar ? this.bridge.challenge.targetScore : null,
     }
-    const key = `${s.phase}|${s.score}|${s.keys}|${s.combo}|${s.callout?.id}|${Math.round(s.magnet * 20)}|${Math.round(s.five * 20)}|${s.shield}|${s.distance}`
+    const key = `${s.phase}|${s.score}|${s.keys}|${s.combo}|${s.lives}|${s.callout?.id}|${Math.round(s.hand * 20)}|${s.distance}`
     if (!force && key === this.lastHud) return
     this.lastHud = key
     this.bridge.onHud(s)

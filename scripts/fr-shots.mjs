@@ -71,7 +71,7 @@ const state = () =>
     const r = e.run
     const near = e.track.obstacles.some((o) => !o.smashed && o.s + o.len > r.s - 3.5 && o.s < r.s + 7)
     const hurdle = e.track.obstacles.some((o) => o.lane === r.lane && (o.kind === 'barrier' || o.kind === 'gap') && o.s - r.s > 0.6 && o.s - r.s < 3.2)
-    return { phase: e.phase, s: r.s, y: r.y, vy: r.vy, air: r.air, slide: r.slide, magnet: r.magnet, five: r.five, shield: r.shield, dead: r.dead, keys: r.keys, t: r.tick / 120, near, hurdle }
+    return { phase: e.phase, s: r.s, y: r.y, vy: r.vy, air: r.air, slide: r.slide, hand: r.hand, lives: r.lives, dead: r.dead, keys: r.keys, t: r.tick / 120, near, hurdle }
   })
 async function until(pred, maxMs = 20000, stepMs = 1000 / 60) {
   for (let t = 0; t < maxMs; t += stepMs) {
@@ -99,24 +99,24 @@ await page.evaluate(() => {
 })
 
 if (want('video')) {
-  const dir = path.join(OUT, 'fr-run-frames')
+  const dir = path.join(OUT, 'fr-v2-run-frames')
   fs.rmSync(dir, { recursive: true, force: true })
   fs.mkdirSync(dir, { recursive: true })
-  await step(9000) // get up to speed
+  await step(7000) // get up to speed
   let f = 0
-  for (let i = 0; i < 240; i++) {
+  for (let i = 0; i < 180; i++) {
     await page.screenshot({ path: path.join(dir, `f${String(f++).padStart(3, '0')}.png`) })
     await step(1000 / 30)
   }
-  execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-framerate', '30', '-i', path.join(dir, 'f%03d.png'), '-vf', 'scale=780:1688:flags=lanczos,format=yuv420p', '-c:v', 'libx264', '-crf', '20', '-movflags', '+faststart', path.join(OUT, 'fr-run.mp4')])
-  console.log('wrote fr-run.mp4 frames', f)
+  execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-framerate', '30', '-i', path.join(dir, 'f%03d.png'), '-vf', 'scale=780:1688:flags=lanczos,format=yuv420p', '-c:v', 'libx264', '-crf', '20', '-movflags', '+faststart', path.join(OUT, 'fr-v2-run.mp4')])
+  console.log('wrote fr-v2-run.mp4 frames', f)
 }
 
 if (want('run')) {
   await until((s) => s.t > 22, 40000, 100)
   await until((s) => !s.air && s.slide === 0 && !s.near, 6000)
   await settle()
-  await shot('fr-run.png')
+  await shot('fr-v2-run.png')
 }
 
 if (want('jump')) {
@@ -126,7 +126,7 @@ if (want('jump')) {
 }
 
 if (want('powerup')) {
-  const st = await until((s) => s.magnet > 0 || s.five > 0, 90000, 50)
+  const st = await until((s) => s.hand > 0, 90000, 50)
   await step(400)
   await until((s) => !s.air && s.slide === 0 && !s.near, 3000)
   console.log('powerup', st)
@@ -135,8 +135,12 @@ if (want('powerup')) {
 }
 
 if (want('crash') || want('end')) {
-  await page.evaluate(() => globalThis.__FR.setAutopilot(false))
-  const st = await until((s) => s.dead, 30000)
+  await page.evaluate(() => {
+    globalThis.__FR.setAutopilot(false)
+    // burn down to last life so one hit ends the run for the capture
+    globalThis.__FR.run.lives = 1
+  })
+  const st = await until((s) => s.dead, 45000)
   await step(380)
   console.log('crash', st)
   await settle()
@@ -144,7 +148,7 @@ if (want('crash') || want('end')) {
   await until((s) => s.phase === 'ended', 4000)
   await page.waitForSelector('.fr-end', { timeout: 10000 })
   await page.waitForTimeout(1200)
-  if (want('end')) await shot('fr-end.png')
+  if (want('end')) await shot('fr-v2-end.png')
 }
 
 console.log('final', await state(), 'lastScore', lastScore)

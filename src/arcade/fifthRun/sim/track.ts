@@ -1,26 +1,46 @@
 /**
- * Fifth Run — seeded endless track.
+ * Fifth Run — seeded endless track (v2).
  *
  * Rows of lane obstacles are generated strictly in order from a single Mulberry32 stream, so the
- * layout depends only on the seed (never on the player). Every row keeps ≥1 lane passable
- * (open, jumpable or slidable) and rows are spaced by a minimum reaction time at the current speed.
- * The headless harness (scripts/fr-tune.mjs) verifies survivability with an exhaustive search.
+ * layout depends only on the seed (never on the player). Cars carry an oncoming approach speed
+ * (`vs`); barriers / overheads / gaps stay static. Power-ups are 🖐️ hand (15 s invuln) only.
+ * Collectibles are shooting stars (💫). The headless harness verifies survivability.
  */
 import { hashSeed, mulberry32 } from '../../core/seededRandom'
-import { JUMP_APEX, JUMP_T, OB, START_CLEAR_M, levelAt, speedAt } from './constants'
+import { JUMP_APEX, JUMP_T, OB, ONCOMING_WINDOW, START_CLEAR_M, levelAt, speedAt } from './constants'
 
 export type ObKind = 'barrier' | 'overhead' | 'car' | 'gap'
-export type PowerKind = 'magnet' | 'five' | 'shield'
+/** v2: only the open-hand invuln pickup. */
+export type PowerKind = 'hand'
 
 export type Obstacle = {
   id: number
   kind: ObKind
   lane: number
+  /** Spawn / meet-point distance (immutable; used for determinism & sorting). */
   s: number
   len: number
+  /** Oncoming approach speed (m/s). 0 = static lane blocker. */
+  vs: number
   /** visual variant (car colour / facing etc.) */
   variant: number
   smashed: boolean
+}
+
+/**
+ * Live world-s of an obstacle. Oncoming cars close from ahead as the runner approaches the
+ * meet point — derived only from runner.s (input-independent, deterministic).
+ */
+export function obstacleS(o: Obstacle, runnerS: number): number {
+  if (o.vs <= 0 || o.smashed) return o.s
+  const gap = o.s - runnerS
+  // Past the meet point — stay put (smashed or already cleared).
+  if (gap <= 0) return o.s
+  // Lead distance the car starts ahead of the meet point.
+  const lead = ONCOMING_WINDOW * (o.vs / (o.vs + 18))
+  if (gap >= ONCOMING_WINDOW) return o.s + lead
+  // Lerp from (meet + lead) down to meet as the runner closes the gap.
+  return o.s + lead * (gap / ONCOMING_WINDOW)
 }
 
 export type KeyItem = {
@@ -48,32 +68,32 @@ type Tok = 'E' | 'B' | 'O' | 'C' | 'D' | 'G'
 
 type Pattern = { p: string; min: number; w: (L: number) => number }
 
-/** Lane multisets; lanes are randomly permuted per row. */
+/** Lane multisets; lanes are randomly permuted per row. Heavier on cars for oncoming traffic feel. */
 const PATTERNS: Pattern[] = [
-  { p: 'BEE', min: 0, w: (L) => 1.0 - 0.6 * L },
-  { p: 'OEE', min: 0, w: (L) => 0.85 - 0.5 * L },
-  { p: 'CEE', min: 0, w: (L) => 1.0 - 0.55 * L },
-  { p: 'CCE', min: 0, w: () => 1.15 },
-  { p: 'BBE', min: 0.06, w: (L) => 0.35 + 0.3 * L },
-  { p: 'OOE', min: 0.1, w: (L) => 0.3 + 0.3 * L },
-  { p: 'BBB', min: 0.14, w: () => 0.55 },
-  { p: 'OOO', min: 0.14, w: () => 0.5 },
-  { p: 'GEE', min: 0.17, w: () => 0.45 },
-  { p: 'CCB', min: 0.15, w: (L) => 0.3 + 0.8 * L },
-  { p: 'CCO', min: 0.15, w: (L) => 0.3 + 0.7 * L },
-  { p: 'DEE', min: 0.15, w: () => 0.45 },
-  { p: 'DDE', min: 0.24, w: () => 0.55 },
-  { p: 'DCE', min: 0.24, w: () => 0.45 },
-  { p: 'BOE', min: 0.2, w: () => 0.4 },
-  { p: 'GGE', min: 0.3, w: () => 0.4 },
-  { p: 'GGG', min: 0.34, w: () => 0.42 },
-  { p: 'CCG', min: 0.34, w: () => 0.45 },
-  { p: 'BOC', min: 0.3, w: () => 0.55 },
-  { p: 'BOB', min: 0.32, w: () => 0.35 },
-  { p: 'OBO', min: 0.32, w: () => 0.35 },
-  { p: 'DDB', min: 0.4, w: () => 0.45 },
-  { p: 'DDO', min: 0.4, w: () => 0.45 },
-  { p: 'GBO', min: 0.45, w: () => 0.3 },
+  { p: 'BEE', min: 0, w: (L) => 0.85 - 0.5 * L },
+  { p: 'OEE', min: 0, w: (L) => 0.7 - 0.4 * L },
+  { p: 'CEE', min: 0, w: (L) => 1.25 - 0.35 * L },
+  { p: 'CCE', min: 0, w: () => 1.35 },
+  { p: 'BBE', min: 0.06, w: (L) => 0.3 + 0.25 * L },
+  { p: 'OOE', min: 0.1, w: (L) => 0.25 + 0.25 * L },
+  { p: 'BBB', min: 0.14, w: () => 0.45 },
+  { p: 'OOO', min: 0.14, w: () => 0.4 },
+  { p: 'GEE', min: 0.17, w: () => 0.4 },
+  { p: 'CCB', min: 0.12, w: (L) => 0.4 + 0.9 * L },
+  { p: 'CCO', min: 0.12, w: (L) => 0.4 + 0.8 * L },
+  { p: 'DEE', min: 0.12, w: () => 0.55 },
+  { p: 'DDE', min: 0.22, w: () => 0.65 },
+  { p: 'DCE', min: 0.22, w: () => 0.5 },
+  { p: 'BOE', min: 0.2, w: () => 0.35 },
+  { p: 'GGE', min: 0.3, w: () => 0.35 },
+  { p: 'GGG', min: 0.34, w: () => 0.38 },
+  { p: 'CCG', min: 0.3, w: () => 0.5 },
+  { p: 'BOC', min: 0.28, w: () => 0.55 },
+  { p: 'BOB', min: 0.32, w: () => 0.3 },
+  { p: 'OBO', min: 0.32, w: () => 0.3 },
+  { p: 'DDB', min: 0.38, w: () => 0.5 },
+  { p: 'DDO', min: 0.38, w: () => 0.5 },
+  { p: 'GBO', min: 0.45, w: () => 0.28 },
 ]
 
 const PERMS = [
@@ -101,13 +121,13 @@ export class Track {
   private prevEnd = 0
   private pathLane = 1
   private nextId = 1
-  private nextPickupS = 170
+  private nextPickupS = 140
   private pickupBag: PowerKind[] = []
 
   constructor(seed: string) {
     this.seed = seed
     this.rng = mulberry32(hashSeed(`fifth-run|${seed}`))
-    // opening runway: a short key line straight ahead
+    // opening runway: a short star line straight ahead
     for (let s = 14; s <= 58; s += 3) this.addKey(1, s, 0.9)
     this.prevEnd = 60
   }
@@ -120,14 +140,20 @@ export class Track {
     this.keys.push({ id: this.nextId++, lane, s: q(s), y: q(y), state: 0, magnet: false, takenTick: -1 })
   }
 
-  private addOb(kind: ObKind, lane: number, s: number, len: number) {
+  private addOb(kind: ObKind, lane: number, s: number, len: number, vs = 0) {
     const variant = Math.floor(this.r() * 1000)
-    this.obstacles.push({ id: this.nextId++, kind, lane, s: q(s), len: q(len), variant, smashed: false })
+    this.obstacles.push({ id: this.nextId++, kind, lane, s: q(s), len: q(len), vs, variant, smashed: false })
+  }
+
+  private carVs(L: number) {
+    // Oncoming: 7–16 m/s closing (plus runner speed ≈ 23–58 m/s relative)
+    return q(7 + L * 9 + this.r() * 3)
   }
 
   private nextPower(): PowerKind {
     if (!this.pickupBag.length) {
-      const bag: PowerKind[] = ['magnet', 'five', 'shield', 'magnet', 'five', 'shield']
+      // bag of hands only (v2)
+      const bag: PowerKind[] = ['hand', 'hand', 'hand', 'hand']
       for (let i = bag.length - 1; i > 0; i--) {
         const j = Math.floor(this.r() * (i + 1))
         const t = bag[i]
@@ -190,11 +216,12 @@ export class Track {
         this.addOb('overhead', lane, s0, OB.overhead.len)
         rowEnd = Math.max(rowEnd, s0 + OB.overhead.len)
       } else if (t === 'C') {
-        this.addOb('car', lane, s0, OB.car.len)
+        this.addOb('car', lane, s0, OB.car.len, this.carVs(L))
         rowEnd = Math.max(rowEnd, s0 + OB.car.len)
       } else if (t === 'D') {
-        this.addOb('car', lane, s0, OB.car.len)
-        this.addOb('car', lane, s0 + OB.car.len + 0.3, OB.car.len)
+        const vs = this.carVs(L)
+        this.addOb('car', lane, s0, OB.car.len, vs)
+        this.addOb('car', lane, s0 + OB.car.len + 0.3, OB.car.len, vs)
         rowEnd = Math.max(rowEnd, s0 + 2 * OB.car.len + 0.3)
       } else if (t === 'G') {
         this.addOb('gap', lane, s0, gapLen)
@@ -202,7 +229,7 @@ export class Track {
       }
     }
 
-    // ── keys: corridor line in the path lane leading into this row, then through/over it ──
+    // ── stars: corridor line in the path lane leading into this row, then through/over it ──
     const options = [0, 1, 2].filter((l) => passable(toks[l]))
     let path = options[0]
     if (this.r() < 0.3) path = options[Math.floor(this.r() * options.length)]
@@ -217,16 +244,16 @@ export class Track {
       }
     }
     const changed = path !== this.pathLane
-    if (this.r() < 0.82) {
-      const start = this.prevEnd + (changed ? Math.max(4, v * 0.45) : 2.5)
+    if (this.r() < 0.84) {
+      const start = this.prevEnd + (changed ? Math.max(4, v * 0.4) : 2.2)
       const tok = toks[path]
-      const end = tok === 'E' ? rowEnd + 1 : s0 - (tok === 'O' ? 2.2 : v * 0.25 + 1.5)
+      const end = tok === 'E' ? rowEnd + 1 : s0 - (tok === 'O' ? 2.2 : v * 0.22 + 1.4)
       const keyS: number[] = []
-      for (let s = start; s <= end; s += 3) keyS.push(s)
+      for (let s = start; s <= end; s += 2.8) keyS.push(s)
       let pickupAt = -1
       if (s0 >= this.nextPickupS && keyS.length >= 3) {
         pickupAt = Math.floor(keyS.length / 2)
-        this.nextPickupS = s0 + 250 + this.r() * 170
+        this.nextPickupS = s0 + 200 + this.r() * 140
       }
       keyS.forEach((s, i) => {
         if (i === pickupAt) {
@@ -234,11 +261,10 @@ export class Track {
         } else this.addKey(path, s, 0.9)
       })
       if (tok === 'B' || tok === 'G') {
-        // arc over the obstacle, matching a jump whose apex is centred on it
         const mid = tok === 'B' ? s0 + OB.barrier.len / 2 : s0 + gapLen / 2
         const half = (v * JUMP_T) / 2
         for (const f of [-0.6, -0.3, 0, 0.3, 0.6]) {
-          const tau = f // fraction of half-airtime
+          const tau = f
           const feet = JUMP_APEX * (1 - tau * tau)
           this.addKey(path, mid + f * half, feet + 0.85)
         }
@@ -250,9 +276,9 @@ export class Track {
     this.prevEnd = rowEnd
 
     // ── spacing to next row: reaction time shrinks with difficulty ──
-    const base = 1.4 - 0.95 * L
-    const T = Math.max(0.55, base * (0.85 + 0.4 * this.r()))
-    this.cursor = q(rowEnd + Math.max(9, v * T))
+    const base = 1.45 - 0.9 * L
+    const T = Math.max(0.58, base * (0.85 + 0.4 * this.r()))
+    this.cursor = q(rowEnd + Math.max(10, v * T))
     this.rows++
   }
 }
