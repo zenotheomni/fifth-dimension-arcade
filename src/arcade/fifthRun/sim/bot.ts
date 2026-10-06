@@ -9,7 +9,7 @@
 import { mulberry32 } from '../../core/seededRandom'
 import { FR_HZ, JUMP_T, laneX, speedAt } from './constants'
 import { cloneRun, queueAction, step, type Action, type RunState } from './runner'
-import type { Track } from './track'
+import { obstacleS, type Track } from './track'
 
 const ACTIONS: (Action | null)[] = [null, 'left', 'right', 'jump', 'slide']
 
@@ -166,10 +166,11 @@ export class RuleBot {
       let moved = false
       for (let i = Math.max(0, st.obCur - 2); i < track.obstacles.length; i++) {
         const o = track.obstacles[i]
-        if (o.s > sAt + 1.2) break
+        if (o.s > sAt + 30) break
         if (o.kind !== 'car' || o.lane !== lane || o.smashed) continue
-        if (o.s - 0.45 < sAt && o.s + o.len + 0.3 > sAt) {
-          tick = st.tick + Math.ceil(((o.s + o.len + 0.36 - st.s) / v) * FR_HZ)
+        const os = obstacleS(o, sAt)
+        if (os - 0.45 < sAt && os + o.len + 0.3 > sAt) {
+          tick = st.tick + Math.ceil(((os + o.len + 0.36 - st.s) / Math.max(v, 1)) * FR_HZ)
           moved = true
         }
       }

@@ -8,7 +8,7 @@
 import * as THREE from 'three'
 import { BloomEffect, EffectComposer, EffectPass, RenderPass, ToneMappingEffect, ToneMappingMode } from 'postprocessing'
 import { laneX } from '../sim/constants'
-import type { KeyItem, Obstacle, Pickup, PowerKind } from '../sim/track'
+import { obstacleS, type KeyItem, type Obstacle, type Pickup, type PowerKind } from '../sim/track'
 import {
   buildBarrier,
   buildCar,
@@ -42,10 +42,11 @@ export type ViewState = {
   deadT: number
   deathKind: string | null
   idle: boolean
-  shield: boolean
-  magnet: number
-  five: number
+  lives: number
+  hand: number
   invuln: boolean
+  /** 🖐️ active — runner fades / ghosted */
+  invisible: boolean
   stumble: number
   obstacles: Obstacle[]
   keys: KeyItem[]
@@ -110,7 +111,7 @@ export class FrScene {
     car: CarParts[]
     gap: ReturnType<typeof buildGap>[]
   } = { barrier: [], overhead: [], car: [], gap: [] }
-  private pickupPools: Record<PowerKind, ReturnType<typeof buildPickup>[]> = { magnet: [], five: [], shield: [] }
+  private pickupPools: Record<PowerKind, ReturnType<typeof buildPickup>[]> = { hand: [] }
   private smashT = new Map<number, number>()
   private blob: THREE.Mesh
   private shieldMesh: THREE.Mesh
@@ -138,12 +139,12 @@ export class FrScene {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: tier === 'high', powerPreference: 'high-performance', alpha: false })
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping
-    this.renderer.toneMappingExposure = 1.05
+    this.renderer.toneMappingExposure = 0.95
     this.camera = new THREE.PerspectiveCamera(64, 1, 0.1, 1600)
     this.camera.layers.enable(REFL)
     this.mirrorCam.layers.set(REFL)
     this.scene.add(this.camera)
-    this.scene.background = new THREE.Color('#12061f')
+    this.scene.background = new THREE.Color('#0a0c14')
     this.glow = glowTexture()
 
     // ── sky / env ──
@@ -161,12 +162,14 @@ export class FrScene {
     this.buildSkyline()
 
     // ── lights ──
-    const hemi = new THREE.HemisphereLight('#8a6cff', '#1a0820', 0.75)
-    const key = new THREE.DirectionalLight('#c0a8ff', 1.4)
-    key.position.set(-6, 10, -10)
-    const back = new THREE.DirectionalLight('#ff6aa0', 0.9)
+    const hemi = new THREE.HemisphereLight('#6a7aaa', '#1a1018', 0.55)
+    const key = new THREE.DirectionalLight('#ffe0c0', 1.15)
+    key.position.set(-4, 12, -8)
+    const back = new THREE.DirectionalLight('#ff6aa0', 0.55)
     back.position.set(4, 5, 10)
-    for (const l of [hemi, key, back]) {
+    const fill = new THREE.DirectionalLight('#25cfc4', 0.35)
+    fill.position.set(2, 3, 6)
+    for (const l of [hemi, key, back, fill]) {
       l.layers.enable(REFL)
       this.scene.add(l)
     }
@@ -202,7 +205,7 @@ export class FrScene {
       uniforms: { uTime: { value: 0 }, uAlpha: { value: 1 } },
       vertexShader: 'varying vec3 vN; varying vec3 vV; void main(){ vec4 mv = modelViewMatrix*vec4(position,1.0); vN = normalize(normalMatrix*normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix*mv; }',
       fragmentShader:
-        'uniform float uTime; uniform float uAlpha; varying vec3 vN; varying vec3 vV; void main(){ float f = pow(1.0 - abs(dot(vN, vV)), 2.2); float hex = 0.5 + 0.5*sin(vN.y*40.0 + uTime*3.0); gl_FragColor = vec4(vec3(0.1,1.0,0.9) * (f*1.6 + hex*0.06) * uAlpha, 1.0); }',
+        'uniform float uTime; uniform float uAlpha; varying vec3 vN; varying vec3 vV; void main(){ float f = pow(1.0 - abs(dot(vN, vV)), 2.2); float hex = 0.5 + 0.5*sin(vN.y*40.0 + uTime*3.0); gl_FragColor = vec4(vec3(0.72,0.45,1.0) * (f*1.4 + hex*0.08) * uAlpha, 1.0); }',
     })
     this.shieldMesh = new THREE.Mesh(new THREE.SphereGeometry(1.05, 28, 18), this.shieldMat)
     this.shieldMesh.scale.set(0.85, 1.15, 0.85)
@@ -491,7 +494,7 @@ export class FrScene {
       this.world.add(g.group)
       this.pools.gap.push(g)
     }
-    for (const k of ['magnet', 'five', 'shield'] as PowerKind[]) {
+    for (const k of ['hand'] as PowerKind[]) {
       for (let i = 0; i < 2; i++) {
         const p = buildPickup(k, this.glow, emblem)
         p.group.visible = false
@@ -626,27 +629,26 @@ export class FrScene {
     this.runner.group.userData.prevX = v.x
     this.runner.update(pose)
     if (v.dead && v.deathKind === 'gap') this.runner.group.position.y = -Math.min(6, v.deadT * v.deadT * 9)
-    const flick = v.invuln ? (Math.floor(t * 18) % 2 ? 0.35 : 1) : 1
-    this.runner.group.visible = flick > 0.5 || !v.invuln
+    if (v.invisible) {
+      this.runner.group.visible = Math.floor(t * 8) % 3 !== 0
+    } else {
+      const flick = v.invuln ? (Math.floor(t * 18) % 2 ? 0.35 : 1) : 1
+      this.runner.group.visible = flick > 0.5 || !v.invuln
+    }
     this.blob.position.set(v.x, 0.012, 0.05)
     const bs = Math.max(0.35, 1 - v.y * 0.35)
     this.blob.scale.set(bs, bs, bs)
     this.blob.visible = !(v.dead && v.deathKind === 'gap')
 
-    // power-up fx
-    this.shieldMesh.visible = v.shield
+    // power-up fx — 🖐️ hand = soft violet ghost shell while invisible
+    this.shieldMesh.visible = v.invisible && !v.dead
     this.shieldMesh.position.set(v.x, v.y + 0.95 - (v.sliding ? 0.45 : 0), 0)
     this.shieldMat.uniforms.uTime.value = t
-    this.shieldMat.uniforms.uAlpha.value = 0.75 + 0.25 * Math.sin(t * 6)
-    this.fiveRing.visible = v.five > 0 && !v.dead
-    this.fiveRing.position.x = v.x
-    ;(this.fiveRing.material as THREE.MeshBasicMaterial).opacity = 0.55 + 0.35 * Math.sin(t * 10) * (v.five < 1.5 ? Math.sin(t * 20) : 1)
+    this.shieldMat.uniforms.uAlpha.value = 0.35 + 0.2 * Math.sin(t * 5)
+    this.fiveRing.visible = false
+    this.magnetRing.visible = false
     const rim = this.runner.hoodieMat.userData.rim as { uRimColor: { value: THREE.Color } } | undefined
-    if (rim) rim.uRimColor.value.set(v.five > 0 ? '#ffc83c' : '#ff3fc8')
-    this.magnetRing.visible = v.magnet > 0 && !v.dead
-    this.magnetRing.position.set(v.x, v.y + 0.9, 0)
-    this.magnetRing.rotation.z = t * 4
-    this.magnetRing.scale.setScalar(1 + 0.08 * Math.sin(t * 12))
+    if (rim) rim.uRimColor.value.set(v.invisible ? '#b48cff' : '#ff3fc8')
 
     // decor recycling
     this.writeTowers(false, S)
@@ -671,7 +673,7 @@ export class FrScene {
     this.roadMat.uniforms.uScroll.value = S
     this.roadMat.uniforms.uTime.value = t
     this.roadMat.uniforms.uCam.value.copy(this.camera.position)
-    this.roadMat.uniforms.uBoost.value = v.five > 0 ? 0.5 : 0
+    this.roadMat.uniforms.uBoost.value = v.invisible ? 0.35 : 0
     this.towerMat.uniforms.uTime.value = t
   }
 
@@ -681,9 +683,10 @@ export class FrScene {
     const now = v.time
     for (const o of v.obstacles) {
       // passed props would otherwise fill the foreground between camera and runner
+      const liveS = obstacleS(o, S)
       const behind = o.kind === 'gap' || v.dead ? 12 : o.kind === 'car' ? 2.2 : 2.6
-      if (o.s + o.len < S - behind) continue
-      if (o.s > S + VIEW_AHEAD) break
+      if (liveS + o.len < S - behind) continue
+      if (o.s > S + VIEW_AHEAD + 40) break
       let scale = 1
       let lift = 0
       if (o.smashed) {
@@ -701,39 +704,40 @@ export class FrScene {
         const b = this.pools.barrier[idx.barrier++]
         if (!b) continue
         b.group.visible = true
-        b.group.position.set(x, lift, -(o.s + o.len / 2))
+        b.group.position.set(x, lift, -(liveS + o.len / 2))
         b.group.scale.setScalar(scale)
-        b.lamp.emissiveIntensity = Math.floor(now * 3 + o.id) % 2 ? 4 : 0.6
+        b.lamp.emissiveIntensity = Math.floor(now * 3 + o.id) % 2 ? 3.2 : 0.5
       } else if (o.kind === 'overhead') {
         const g = this.pools.overhead[idx.overhead++]
         if (!g) continue
         g.group.visible = true
-        g.group.position.set(x, lift, -(o.s + o.len / 2))
+        g.group.position.set(x, lift, -(liveS + o.len / 2))
         g.group.scale.setScalar(scale)
       } else if (o.kind === 'car') {
         const c = this.pools.car[idx.car++]
         if (!c) continue
         c.group.visible = true
-        c.group.position.set(x, lift, -(o.s + o.len / 2))
+        c.group.position.set(x, lift, -(liveS + o.len / 2))
         c.group.scale.setScalar(scale)
-        const facing = o.variant % 5 === 0
-        c.group.rotation.y = facing ? Math.PI : 0
+        // Oncoming: headlights toward the runner (rear of mesh faces +Z by default → rotate π)
+        const oncoming = o.vs > 0
+        c.group.rotation.y = oncoming ? Math.PI : 0
         c.paint.color.set(CAR_COLORS[o.variant % CAR_COLORS.length])
-        c.head.emissiveIntensity = facing ? 6 : 0.4
-        c.tail.emissiveIntensity = facing ? 1.5 : 4.5
+        c.head.emissiveIntensity = oncoming ? 7.5 : 0.35
+        c.tail.emissiveIntensity = oncoming ? 1.2 : 4.5
       } else {
         const g = this.pools.gap[idx.gap++]
         if (!g) continue
         g.group.visible = true
         g.group.position.set(x, 0, 0)
         g.hole.scale.set(1.98, o.len, 1)
-        g.hole.position.z = -(o.s + o.len / 2)
+        g.hole.position.z = -(liveS + o.len / 2)
         g.near.scale.x = 1.98
-        g.near.position.set(0, 0.02, -o.s)
+        g.near.position.set(0, 0.02, -liveS)
         g.far.scale.x = 1.98
-        g.far.position.set(0, 0.02, -(o.s + o.len))
+        g.far.position.set(0, 0.02, -(liveS + o.len))
         g.nearGlow.scale.x = 1.6
-        g.nearGlow.position.z = -o.s + 0.3
+        g.nearGlow.position.z = -liveS + 0.3
       }
     }
     for (const k of ['barrier', 'overhead', 'car', 'gap'] as const) {
@@ -748,7 +752,7 @@ export class FrScene {
     const S = v.s
     let n = 0
     const t = v.time
-    const fiveBoost = v.five > 0 ? 1.18 : 1
+    const fiveBoost = v.invisible ? 1.12 : 1
     for (const k of v.keys) {
       if (k.s < S - 3 && k.state !== 1) continue
       if (k.s > S + VIEW_AHEAD) break
@@ -788,12 +792,12 @@ export class FrScene {
     this.keyHalos.count = n
     this.keys.instanceMatrix.needsUpdate = true
     this.keyHalos.instanceMatrix.needsUpdate = true
-    this.keyMat.color.set(v.five > 0 ? '#ffffff' : '#ffe08a')
-    this.keyMat.opacity = v.five > 0 ? 1 : 0.95
+    this.keyMat.color.set(v.invisible ? '#ffffff' : '#ffe08a')
+    this.keyMat.opacity = v.invisible ? 1 : 0.95
   }
 
   private updatePickups(v: ViewState) {
-    const idx: Record<PowerKind, number> = { magnet: 0, five: 0, shield: 0 }
+    const idx: Record<PowerKind, number> = { hand: 0 }
     const t = v.time
     for (const p of v.pickups) {
       if (p.s < v.s - 3) continue
@@ -818,7 +822,7 @@ export class FrScene {
       item.spin.position.y = 1.0 + Math.sin(t * 3 + p.id) * 0.1
       item.ring.scale.setScalar(1 + 0.15 * Math.sin(t * 5))
     }
-    for (const k of ['magnet', 'five', 'shield'] as PowerKind[]) for (let i = idx[k]; i < this.pickupPools[k].length; i++) this.pickupPools[k][i].group.visible = false
+    for (const k of ['hand'] as PowerKind[]) for (let i = idx[k]; i < this.pickupPools[k].length; i++) this.pickupPools[k][i].group.visible = false
   }
 
   private updateSparks(dt: number) {
@@ -880,7 +884,7 @@ export class FrScene {
     const speedF = THREE.MathUtils.clamp((v.speed - 12) / 18, 0, 1)
     const aspect = this.camera.aspect
     const baseFov = aspect > 0.8 ? 52 : 64
-    const tf = baseFov + speedF * 9 + (v.five > 0 ? 3 : 0)
+    const tf = baseFov + speedF * 9 + (v.invisible ? 2.5 : 0)
     this.fov += (tf - this.fov) * (1 - Math.exp(-dt * 3))
     const sh = v.shake
     const sx = sh ? (Math.sin(v.time * 61) + Math.sin(v.time * 37)) * 0.06 * sh : 0
@@ -896,7 +900,7 @@ export class FrScene {
     this.camera.updateMatrixWorld(true)
 
     // speed lines
-    const op = THREE.MathUtils.clamp((v.speed - 15) / 12, 0, 1) * 0.42 + (v.five > 0 ? 0.25 : 0)
+    const op = THREE.MathUtils.clamp((v.speed - 15) / 12, 0, 1) * 0.42 + (v.invisible ? 0.2 : 0)
     this.speedMat.opacity = v.idle || v.dead ? 0 : op
     this.speedLines.visible = this.speedMat.opacity > 0.01
     if (this.speedLines.visible) {

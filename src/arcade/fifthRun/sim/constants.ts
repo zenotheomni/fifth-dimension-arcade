@@ -11,22 +11,22 @@ export const FR_DT = 1 / FR_HZ
 export const LANE_W = 2.0
 export const laneX = (lane: number) => (lane - 1) * LANE_W
 
-/** Forward speed (m/s) as a function of distance — rational ramp, deterministic. */
-export const SPEED = { v0: 12, vmax: 32, k: 1250 }
+/** Forward speed (m/s) as a function of distance — faster ramp for v2. */
+export const SPEED = { v0: 16, vmax: 42, k: 1100 }
 export const speedAt = (s: number) => SPEED.v0 + (SPEED.vmax - SPEED.v0) * (s / (s + SPEED.k))
 /** Difficulty 0..1 (pattern mix + spacing). */
-export const DIFF_K = 780
+export const DIFF_K = 720
 export const levelAt = (s: number) => (s <= 0 ? 0 : s / (s + DIFF_K))
 
 /** Jump: fixed airtime / apex (feet height). */
-export const JUMP_T = 0.64
+export const JUMP_T = 0.62
 export const JUMP_APEX = 1.5
 export const GRAVITY = (8 * JUMP_APEX) / (JUMP_T * JUMP_T)
 export const JUMP_VY = (4 * JUMP_APEX) / JUMP_T
-export const FAST_FALL_VY = 15
-export const SLIDE_TICKS = Math.round(0.62 * FR_HZ)
-/** Lateral speed: one lane in ~0.14 s. */
-export const LANE_SPEED = LANE_W / 0.14
+export const FAST_FALL_VY = 16
+export const SLIDE_TICKS = Math.round(0.58 * FR_HZ)
+/** Lateral speed: one lane in ~0.12 s. */
+export const LANE_SPEED = LANE_W / 0.12
 /** Buffered input window. */
 export const BUFFER_TICKS = Math.round(0.22 * FR_HZ)
 
@@ -39,13 +39,25 @@ export const OB = {
   gap: { halfW: 1.0 },
 } as const
 
+/** How far ahead (m) an oncoming car starts closing in visually/physically. */
+export const ONCOMING_WINDOW = 95
+
+export const START_LIVES = 3
+
 export const POWER_TICKS = {
-  magnet: 8 * FR_HZ,
-  five: 6 * FR_HZ,
-  invuln: Math.round(1.0 * FR_HZ),
+  /** 🖐️ open-hand invulnerability */
+  hand: 15 * FR_HZ,
+  /** brief i-frames after losing a life */
+  hitInvuln: Math.round(1.5 * FR_HZ),
 }
 
-export const KEY_PTS = 5
+/** Base points per star before combo. */
+export const STAR_BASE = 10
+/**
+ * Flat distance-equivalent points per star (stars boost the score heavily alongside metres).
+ * score = floor(distance) + stars × STAR_FLAT + starPts(STAR_BASE × combo)
+ */
+export const STAR_FLAT = 25
 /** combo thresholds → multiplier index+1 (x1..x5) */
 export const COMBO_STEPS = [0, 10, 30, 60, 100]
 export const multFor = (combo: number) => {

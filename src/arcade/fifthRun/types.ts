@@ -18,13 +18,12 @@ export type FrHudState = {
   keys: number
   combo: number
   mult: number
+  lives: number
   callout: { text: string; id: number; tone: 'gold' | 'teal' | 'coral' } | null
   pb: number
   newPb: boolean
-  /** 0..1 remaining */
-  magnet: number
-  five: number
-  shield: boolean
+  /** 0..1 remaining — 🖐️ hand invuln */
+  hand: number
   speed: number
   target: number | null
 }
@@ -34,6 +33,7 @@ export type FrEndPayload = {
   distance: number
   keys: number
   maxCombo: number
+  livesLeft: number
   durationS: number
   deathKind: string | null
   pb: number

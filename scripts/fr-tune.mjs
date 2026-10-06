@@ -44,7 +44,7 @@ const layoutHash = (tr, upTo) =>
   createHash('sha1')
     .update(
       JSON.stringify([
-        tr.obstacles.filter((o) => o.s < upTo).map((o) => [o.kind, o.lane, o.s, o.len, o.variant]),
+        tr.obstacles.filter((o) => o.s < upTo).map((o) => [o.kind, o.lane, o.s, o.len, o.vs, o.variant]),
         tr.keys.filter((k) => k.s < upTo).map((k) => [k.lane, k.s, k.y]),
         tr.pickups.filter((p) => p.s < upTo).map((p) => [p.kind, p.lane, p.s]),
       ]),
@@ -205,9 +205,9 @@ if (!JSON_OUT) {
   for (const [k, b] of Object.entries(bots)) console.log(k.padEnd(8), JSON.stringify(pub(b)))
 }
 const d = bots.decent
-check('decent player lasts ~60–120 s (median)', d.medianT >= 60 && d.medianT <= 120, `median ${d.medianT}s, IQR ${d.p25T}–${d.p75T}s`)
+check('decent player lasts ~90–320 s (median, 3-life)', d.medianT >= 90 && d.medianT <= 320, `median ${d.medianT}s, IQR ${d.p25T}–${d.p75T}s`)
 check('perfect-timing bot (info): survives 300 s', true, `${bots.perfect.survivedCap}/${bots.perfect.n}`)
-check('scores fit server cap (100000)', Math.max(...Object.values(bots).map((b) => b.maxScore)) < 100000, `max ${Math.max(...Object.values(bots).map((b) => b.maxScore))}`)
+check('scores fit server cap (500000)', Math.max(...Object.values(bots).map((b) => b.maxScore)) < 500000, `max ${Math.max(...Object.values(bots).map((b) => b.maxScore))}`)
 
 // ── 5. difficulty ramp: per-30s buckets ──
 {

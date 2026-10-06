@@ -379,23 +379,36 @@
   color: #12091c;
 }
 
-.fr-power--shield {
-  color: var(--teal);
+.fr-power--hand {
+  color: #f0d4ff;
 }
-.fr-power--shield i {
-  background: var(--teal);
+.fr-power--hand i {
+  background: transparent;
+  font-size: 0.95rem;
+  filter: drop-shadow(0 0 6px rgba(180, 120, 255, 0.85));
 }
-.fr-power--magnet {
-  color: var(--coral);
+
+.fr-lives {
+  position: absolute;
+  top: calc(max(0.7rem, env(safe-area-inset-top)) + 4.55rem);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 0.35rem;
+  z-index: 6;
+  pointer-events: none;
 }
-.fr-power--magnet i {
-  background: var(--coral);
+.fr-life {
+  font-size: 0.95rem;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.22);
+  text-shadow: none;
+  transition: color 0.2s ease, transform 0.2s ease;
 }
-.fr-power--five {
-  color: var(--gold);
-}
-.fr-power--five i {
-  background: var(--gold);
+.fr-life.is-on {
+  color: #ff4d6a;
+  filter: drop-shadow(0 0 6px rgba(255, 60, 100, 0.75));
+  transform: scale(1.05);
 }
 
 /* ── callouts ── */
