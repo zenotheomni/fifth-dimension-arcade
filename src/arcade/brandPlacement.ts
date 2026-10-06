@@ -11,7 +11,7 @@ export const BRAND_RULES = {
     'rim plate / front support (Court Vision)',
     'center-court mark ~15–20% opacity',
     'micro stamp on ball seam',
-    'world neon / boutique windows (Fifth Run)',
+    'world neon / boutique windows (Fifth Gear)',
   ] as const,
   /** Backboard: faint geometry only — no big logo */
   BACKBOARD_GEOMETRY_ONLY: true,

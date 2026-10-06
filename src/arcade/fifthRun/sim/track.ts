@@ -1,5 +1,5 @@
 /**
- * Fifth Run — seeded endless track (v2).
+ * Fifth Gear — seeded endless track (v2).
  *
  * Rows of lane obstacles are generated strictly in order from a single Mulberry32 stream, so the
  * layout depends only on the seed (never on the player). Cars carry an oncoming approach speed

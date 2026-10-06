@@ -1,4 +1,4 @@
-/** Fifth Run — procedural props: shooting stars, ’59-style Cadillac, barriers, gantries, gaps, power-ups, palms, gates, lamps. */
+/** Fifth Gear — procedural props: shooting stars, ’59-style Cadillac, barriers, gantries, gaps, power-ups, palms, gates, lamps. */
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { addRim, glowMaterial } from './shaders'

@@ -7,7 +7,7 @@ Decision: Ship mobile WEB now. Native app later.
 1. M1 — Lobby shell + routes + analytics
 2. M2 — Court Vision Endless
 3. M3 — Challenge links
-4. M4 — Fifth Run Endless + Challenge
+4. M4 — Fifth Gear Endless + Challenge
 5. M5 — NFC `/arcade/key`
 6. M6 — Accounts + PWA
 7. M7 — Native app shell (later)
@@ -59,7 +59,7 @@ Dark floor, soft glow on cabinets, ambient hum. Brand mark on carpet / ticket-st
 
 Cabinets (swipe):
 1. Court Vision — lit, NEW
-2. Fifth Run — lit
+2. Fifth Gear — lit
 3. Break & Rack — COMING UP
 4. Lane Drift — COMING UP
 
@@ -110,7 +110,7 @@ SFX: soft swish + bass; mint flash on swish / 5D bounce; screen shake only on sw
 
 ---
 
-## Fifth Run
+## Fifth Gear
 3-lane endless runner (Subway Surfers cousin). Swipe L/R lanes, up = jump, down = slide. Optional pulse (short invuln/magnet) from streaks — not paywall.
 
 ### Modes (v1)

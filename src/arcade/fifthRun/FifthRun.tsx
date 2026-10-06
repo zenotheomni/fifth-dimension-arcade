@@ -314,20 +314,20 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
 
         {hud.phase === 'intro' ? (
           <div className="fr-intro">
-            <p className="fr-intro__title">Fifth Run</p>
-            <p className="fr-intro__tag">How far can you run?</p>
+            <p className="fr-intro__title">Fifth Gear</p>
+            <p className="fr-intro__tag">How far can you drive?</p>
             <div className="fr-intro__controls">
               <span>
                 <b>←→</b>Lanes
               </span>
               <span>
-                <b>↑</b>Jump
+                <b>↑</b>Boost
               </span>
               <span>
-                <b>↓</b>Slide
+                <b>↓</b>Drift
               </span>
             </div>
-            <p className="fr-intro__go">Swipe to run</p>
+            <p className="fr-intro__go">Swipe to drive</p>
             {hud.pb > 0 ? <p className="fr-intro__pb">Best {hud.pb.toLocaleString('en-US')}</p> : null}
           </div>
         ) : null}
@@ -341,12 +341,15 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
 
       {ended && !(challenge && onRunResult) ? (
         <div className="fr-end">
-          <p className="fr-end__eyebrow">{seeded ? (seeded.rivalHandle ? `Rematch vs ${seeded.rivalHandle}` : 'Set the bar') : 'Fifth Run'}</p>
+          <p className="fr-end__eyebrow">{seeded ? (seeded.rivalHandle ? `Rematch vs ${seeded.rivalHandle}` : 'Set the bar') : 'Fifth Gear'}</p>
           <h2>{headline}</h2>
           <div className="fr-end__score">{ended.score.toLocaleString('en-US')}</div>
           <div className="fr-end__stats">
             <span>
               <b>{ended.distance}</b>m
+            </span>
+            <span>
+              <b>{Math.round(ended.durationS)}s</b>lasted
             </span>
             <span>
               <b>{ended.keys}</b>stars
@@ -435,7 +438,7 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
       ) : null}
       {ended && challenge && onRunResult ? (
         <div className="fr-end">
-          <p className="fr-end__eyebrow">Fifth Run</p>
+          <p className="fr-end__eyebrow">Fifth Gear</p>
           <h2>Final: {ended.score.toLocaleString('en-US')}</h2>
           <p className="fr-end__pb">{runState === 'error' ? 'Couldn’t post — check your connection.' : 'Tallying the head-to-head…'}</p>
         </div>

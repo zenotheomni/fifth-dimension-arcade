@@ -1,4 +1,4 @@
-/** Fifth Run — procedural canvas textures (no external assets). */
+/** Fifth Gear — procedural canvas textures (no external assets). */
 import * as THREE from 'three'
 
 function canvas(w: number, h: number) {

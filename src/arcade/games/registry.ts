@@ -38,8 +38,8 @@ export const GAMES: ArcadeGame[] = [
   },
   {
     id: 'fifth-run',
-    title: 'Fifth Run',
-    tagline: 'Star runner. Keep moving.',
+    title: 'Fifth Gear',
+    tagline: 'Drive the galaxy. Catch the stars.',
     status: 'new',
     boxArt: art('box-fifth-run.webp'),
     route: '/fifth-run',

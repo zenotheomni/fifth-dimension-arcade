@@ -1,5 +1,5 @@
 /**
- * Fifth Run — fixed-step runner sim (120 Hz), v2.
+ * Fifth Gear — fixed-step runner sim (120 Hz), v2.
  * Lives (3), oncoming cars, 💫 stars boosting distance score, 🖐️ hand invuln.
  */
 import {
@@ -16,6 +16,8 @@ import {
   STAR_BASE,
   STAR_FLAT,
   START_LIVES,
+  TIME_PTS,
+  FR_HZ,
   laneX,
   multFor,
   speedAt,
@@ -103,8 +105,9 @@ export function newRun(): RunState {
   }
 }
 
-/** Distance + flat per-star boost + combo star points. */
-export const scoreOf = (st: RunState) => Math.floor(st.s) + st.keys * STAR_FLAT + st.keyPts
+/** Distance + time lasted + flat per-star boost + combo star points. */
+export const scoreOf = (st: RunState) =>
+  Math.floor(st.s) + Math.floor((st.tick / FR_HZ) * TIME_PTS) + st.keys * STAR_FLAT + st.keyPts
 
 export type StepOpts = {
   /** collect stars / pickups and apply lives (false in survival search → any hit = dead) */
