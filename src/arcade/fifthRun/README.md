@@ -5,6 +5,8 @@ Display name **Fifth Gear**; internal game id stays `fifth-run` (scores / challe
 
 Theme: **how far you can drive**. Galaxy run: Miami night → cosmic highway → deep space.
 
+Cars: procedural ’59-style Cadillacs with clearcoat PBR paint, chrome, glass, lit lamps, soft ground shadows. Player car slightly smaller; raised chase cam for lane readability.
+
 ## Controls
 - Swipe ← / → (or A/D, arrows): change lane
 - Swipe ↑ (W, ↑, Space): boost hop · swipe ↓ (S, ↓): drift / duck

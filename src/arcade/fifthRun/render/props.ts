@@ -2,6 +2,10 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { addRim, glowMaterial } from './shaders'
+import { blobTexture } from './textures'
+
+let _carShadowBlob: THREE.Texture | null = null
+const carShadowBlob = () => (_carShadowBlob ??= blobTexture())
 
 const box = (w: number, h: number, d: number, x = 0, y = 0, z = 0) => {
   const g = new THREE.BoxGeometry(w, h, d)
@@ -74,13 +78,13 @@ function shapeFrom(pts: [number, number][]) {
   return s
 }
 
-function extrudeSide(pts: [number, number][], width: number, bevel = 0.04) {
+function extrudeSide(pts: [number, number][], width: number, bevel = 0.05) {
   const g = new THREE.ExtrudeGeometry(shapeFrom(pts), {
     depth: width,
     bevelEnabled: bevel > 0,
     bevelSize: bevel,
-    bevelThickness: bevel,
-    bevelSegments: 2,
+    bevelThickness: bevel * 0.85,
+    bevelSegments: 4,
     steps: 1,
   })
   // shape x → world z, extrude axis → world x (centred)
@@ -89,117 +93,326 @@ function extrudeSide(pts: [number, number][], width: number, bevel = 0.04) {
   return g
 }
 
-export type CarParts = { group: THREE.Group; paint: THREE.MeshStandardMaterial; tail: THREE.MeshStandardMaterial; head: THREE.MeshStandardMaterial }
+export type CarParts = {
+  group: THREE.Group
+  paint: THREE.MeshStandardMaterial
+  tail: THREE.MeshStandardMaterial
+  head: THREE.MeshStandardMaterial
+  shadow?: THREE.Mesh
+}
 
-/** ’59 Eldorado-inspired land yacht: long low body, towering fins, twin bullet tail lights. Rear faces +Z. */
-export function buildCar(shared: { chrome: THREE.Material; glass: THREE.Material; tire: THREE.Material; white: THREE.Material; glow: THREE.Texture }): CarParts {
+/**
+ * ’59 Eldorado-inspired land yacht — GTA/Fortnite-tier procedural PBR.
+ * Long low body, clearcoat paint, chrome, glass, lit lamps, soft ground shadow.
+ * Rear faces +Z. Hitbox footprint unchanged (~5.4 m × ~1.9 m).
+ */
+export function buildCar(shared: {
+  chrome: THREE.Material
+  glass: THREE.Material
+  tire: THREE.Material
+  white: THREE.Material
+  glow: THREE.Texture
+}): CarParts {
   const group = new THREE.Group()
-  const paint = new THREE.MeshStandardMaterial({ color: '#c8102e', metalness: 0.35, roughness: 0.3, envMapIntensity: 0.55 })
-  const tail = new THREE.MeshStandardMaterial({ color: '#ff2030', emissive: new THREE.Color('#ff1a2a'), emissiveIntensity: 4.5, roughness: 0.3 })
-  const head = new THREE.MeshStandardMaterial({ color: '#fff6e0', emissive: new THREE.Color('#fff2d0'), emissiveIntensity: 0, roughness: 0.2 })
-  const W = 1.9
-  // lower body (z: −2.7 front … +2.7 rear)
+
+  // Clearcoat automotive paint (physical) — traffic recolors via .color
+  const paint = new THREE.MeshPhysicalMaterial({
+    color: '#c8102e',
+    metalness: 0.58,
+    roughness: 0.22,
+    clearcoat: 1,
+    clearcoatRoughness: 0.08,
+    envMapIntensity: 1.7,
+    reflectivity: 0.8,
+  })
+  const chromeMat =
+    (shared.chrome as THREE.MeshStandardMaterial).isMeshStandardMaterial
+      ? (shared.chrome as THREE.MeshStandardMaterial)
+      : new THREE.MeshStandardMaterial({ color: '#eef2f8', metalness: 1, roughness: 0.12, envMapIntensity: 1.4 })
+  const glassMat =
+    (shared.glass as THREE.MeshStandardMaterial).isMeshStandardMaterial
+      ? (shared.glass as THREE.MeshStandardMaterial)
+      : new THREE.MeshPhysicalMaterial({
+          color: '#0a1520',
+          metalness: 0.2,
+          roughness: 0.05,
+          transmission: 0.35,
+          transparent: true,
+          opacity: 0.82,
+          envMapIntensity: 2.2,
+        })
+
+  const tail = new THREE.MeshStandardMaterial({
+    color: '#ff2840',
+    emissive: new THREE.Color('#ff1a2a'),
+    emissiveIntensity: 4.8,
+    roughness: 0.22,
+    metalness: 0.35,
+  })
+  const head = new THREE.MeshStandardMaterial({
+    color: '#fff8e8',
+    emissive: new THREE.Color('#fff2d0'),
+    emissiveIntensity: 0,
+    roughness: 0.15,
+    metalness: 0.25,
+  })
+  const lensRed = new THREE.MeshPhysicalMaterial({
+    color: '#ff2030',
+    emissive: new THREE.Color('#ff1020'),
+    emissiveIntensity: 2.2,
+    roughness: 0.08,
+    metalness: 0.1,
+    transparent: true,
+    opacity: 0.92,
+    transmission: 0.25,
+  })
+  const lensClear = new THREE.MeshPhysicalMaterial({
+    color: '#e8f0ff',
+    emissive: new THREE.Color('#fff6d0'),
+    emissiveIntensity: 0.4,
+    roughness: 0.05,
+    metalness: 0.05,
+    transparent: true,
+    opacity: 0.55,
+    transmission: 0.55,
+  })
+  const blackTrim = new THREE.MeshStandardMaterial({ color: '#121018', roughness: 0.55, metalness: 0.4 })
+  const underMat = new THREE.MeshStandardMaterial({ color: '#0a0a0c', roughness: 0.95, metalness: 0.05 })
+
+  const W = 1.86
+
+  // ── lower body: smoother Cadillac silhouette ──
   const body = extrudeSide(
     [
-      [-2.72, 0.3],
-      [-2.72, 0.7],
-      [-2.4, 0.78],
-      [-1.0, 0.84],
-      [1.9, 0.88],
-      [2.72, 0.86],
-      [2.72, 0.32],
-      [2.2, 0.26],
-      [-2.3, 0.26],
+      [-2.78, 0.28],
+      [-2.78, 0.58],
+      [-2.55, 0.72],
+      [-2.2, 0.78],
+      [-1.1, 0.82],
+      [0.2, 0.84],
+      [1.6, 0.86],
+      [2.35, 0.84],
+      [2.72, 0.78],
+      [2.78, 0.55],
+      [2.78, 0.28],
+      [2.4, 0.22],
+      [-2.35, 0.22],
     ],
     W,
+    0.08,
   )
   group.add(new THREE.Mesh(body, paint))
-  // greenhouse (glass + thin pillars) — narrower
-  const cabin = extrudeSide(
+
+  // Slight beltline / character crease (reads as panel break)
+  const belt = extrudeSide(
     [
-      [-0.8, 0.86],
-      [-0.25, 1.36],
-      [0.85, 1.38],
-      [1.35, 0.9],
+      [-2.4, 0.68],
+      [-1.0, 0.74],
+      [1.5, 0.76],
+      [2.5, 0.72],
+      [2.5, 0.66],
+      [1.5, 0.7],
+      [-1.0, 0.68],
+      [-2.4, 0.62],
     ],
-    W - 0.28,
-    0.03,
-  )
-  group.add(new THREE.Mesh(cabin, shared.glass))
-  const roof = extrudeSide(
-    [
-      [-0.3, 1.33],
-      [-0.22, 1.4],
-      [0.85, 1.42],
-      [0.92, 1.35],
-    ],
-    W - 0.24,
+    W + 0.02,
     0.02,
   )
+  group.add(new THREE.Mesh(belt, paint))
+
+  // ── greenhouse: glassy cabin + painted roof ──
+  const cabin = extrudeSide(
+    [
+      [-0.95, 0.84],
+      [-0.45, 1.28],
+      [-0.15, 1.42],
+      [0.95, 1.44],
+      [1.35, 1.22],
+      [1.55, 0.9],
+    ],
+    W - 0.32,
+    0.04,
+  )
+  group.add(new THREE.Mesh(cabin, glassMat))
+
+  const roof = extrudeSide(
+    [
+      [-0.35, 1.38],
+      [-0.22, 1.48],
+      [0.9, 1.5],
+      [1.05, 1.4],
+    ],
+    W - 0.38,
+    0.025,
+  )
   group.add(new THREE.Mesh(roof, paint))
-  // fins
-  for (const side of [-1, 1]) {
+
+  // A/B/C pillars (chrome-dark)
+  for (const side of [-1, 1] as const) {
+    const aPillar = new THREE.Mesh(box(0.05, 0.55, 0.55), blackTrim)
+    aPillar.position.set(side * (W / 2 - 0.22), 1.12, -0.55)
+    aPillar.rotation.x = -0.35
+    group.add(aPillar)
+    const cPillar = new THREE.Mesh(box(0.06, 0.48, 0.4), blackTrim)
+    cPillar.position.set(side * (W / 2 - 0.2), 1.14, 1.15)
+    cPillar.rotation.x = 0.25
+    group.add(cPillar)
+  }
+
+  // ── fins (tapered, not slabs) ──
+  for (const side of [-1, 1] as const) {
     const fin = extrudeSide(
       [
-        [0.9, 0.86],
-        [2.74, 1.22],
-        [2.76, 1.12],
-        [2.74, 0.86],
+        [0.85, 0.86],
+        [1.8, 1.05],
+        [2.55, 1.28],
+        [2.78, 1.22],
+        [2.78, 0.95],
+        [2.55, 0.88],
+        [1.8, 0.86],
       ],
-      0.14,
-      0.02,
+      0.11,
+      0.025,
     )
-    fin.translate(side * (W / 2 - 0.08), 0, 0)
+    fin.translate(side * (W / 2 - 0.06), 0, 0)
     group.add(new THREE.Mesh(fin, paint))
-    // twin bullet tail lights
-    for (const y of [1.02, 0.93]) {
-      const b = new THREE.Mesh(new THREE.CapsuleGeometry(0.045, 0.1, 3, 8), tail)
-      b.rotation.x = Math.PI / 2
-      b.position.set(side * (W / 2 - 0.08), y, 2.78)
-      group.add(b)
+
+    // Chrome fin tip
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.055, 10, 8), chromeMat)
+    tip.position.set(side * (W / 2 - 0.06), 1.24, 2.72)
+    group.add(tip)
+
+    // Twin bullet taillights in chrome cups
+    for (const [yi, zi] of [
+      [1.08, 2.76],
+      [0.94, 2.74],
+    ] as const) {
+      const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.062, 0.08, 12), chromeMat)
+      cup.rotation.x = Math.PI / 2
+      cup.position.set(side * (W / 2 - 0.08), yi, zi - 0.02)
+      group.add(cup)
+      const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.042, 10, 8), tail)
+      bulb.position.set(side * (W / 2 - 0.08), yi, zi + 0.02)
+      group.add(bulb)
+      const lens = new THREE.Mesh(new THREE.CircleGeometry(0.048, 14), lensRed)
+      lens.position.set(side * (W / 2 - 0.08), yi, zi + 0.05)
+      group.add(lens)
     }
-    const halo = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.9), glowMaterial(shared.glow, '#ff2a3a', 0.85))
-    halo.position.set(side * (W / 2 - 0.08), 0.98, 2.86)
+    const halo = new THREE.Mesh(new THREE.PlaneGeometry(0.85, 0.75), glowMaterial(shared.glow, '#ff2a3a', 0.7))
+    halo.position.set(side * (W / 2 - 0.08), 1.0, 2.88)
     halo.userData.tailGlow = true
     group.add(halo)
-    // headlights (front, quad)
-    for (const x of [0.55, 0.78]) {
-      const h = new THREE.Mesh(new THREE.CircleGeometry(0.075, 12), head)
-      h.position.set(side * x, 0.66, -2.78)
-      h.rotation.y = Math.PI
-      group.add(h)
+
+    // Quad headlights — chrome bezel + glass lens + emissive core
+    for (const x of [0.48, 0.72]) {
+      const bezel = new THREE.Mesh(new THREE.TorusGeometry(0.078, 0.014, 8, 16), chromeMat)
+      bezel.position.set(side * x, 0.64, -2.76)
+      bezel.rotation.y = Math.PI
+      group.add(bezel)
+      const core = new THREE.Mesh(new THREE.CircleGeometry(0.055, 14), head)
+      core.position.set(side * x, 0.64, -2.78)
+      core.rotation.y = Math.PI
+      group.add(core)
+      const lens = new THREE.Mesh(new THREE.CircleGeometry(0.07, 14), lensClear)
+      lens.position.set(side * x, 0.64, -2.795)
+      lens.rotation.y = Math.PI
+      group.add(lens)
     }
-    // side chrome strip
-    const strip = new THREE.Mesh(box(0.02, 0.03, 4.6), shared.chrome)
-    strip.position.set(side * (W / 2 + 0.05), 0.66, 0.1)
+
+    // Side chrome spear
+    const strip = new THREE.Mesh(box(0.025, 0.04, 4.9), chromeMat)
+    strip.position.set(side * (W / 2 + 0.03), 0.62, 0.05)
     group.add(strip)
+
+    // Fender flare over wheels
+    for (const z of [-1.72, 1.52]) {
+      const flare = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.055, 8, 18, Math.PI), paint)
+      flare.rotation.z = side > 0 ? -Math.PI / 2 : Math.PI / 2
+      flare.rotation.y = Math.PI / 2
+      flare.position.set(side * (W / 2 - 0.02), 0.42, z)
+      group.add(flare)
+    }
+
+    // Side mirror
+    const mirrorArm = new THREE.Mesh(box(0.14, 0.03, 0.03), chromeMat)
+    mirrorArm.position.set(side * (W / 2 + 0.08), 1.05, -0.85)
+    group.add(mirrorArm)
+    const mirror = new THREE.Mesh(box(0.08, 0.1, 0.12), blackTrim)
+    mirror.position.set(side * (W / 2 + 0.16), 1.05, -0.85)
+    group.add(mirror)
   }
-  // chrome bumpers
-  const rb = new THREE.Mesh(box(W + 0.08, 0.16, 0.14), shared.chrome)
-  rb.position.set(0, 0.42, 2.78)
-  group.add(rb)
-  const fb = new THREE.Mesh(box(W + 0.08, 0.18, 0.14), shared.chrome)
-  fb.position.set(0, 0.44, -2.78)
-  group.add(fb)
-  const grille = new THREE.Mesh(box(1.3, 0.16, 0.04), shared.chrome)
-  grille.position.set(0, 0.6, -2.76)
-  group.add(grille)
-  // wheels with whitewalls
-  const wheelG = new THREE.CylinderGeometry(0.36, 0.36, 0.24, 18)
+
+  // ── bumpers + grille ──
+  const rearBump = new THREE.Mesh(box(W + 0.12, 0.18, 0.16), chromeMat)
+  rearBump.position.set(0, 0.4, 2.8)
+  group.add(rearBump)
+  const frontBump = new THREE.Mesh(box(W + 0.14, 0.2, 0.18), chromeMat)
+  frontBump.position.set(0, 0.42, -2.8)
+  group.add(frontBump)
+  // Bumper end caps (rounded feel)
+  for (const side of [-1, 1] as const) {
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), chromeMat)
+    cap.scale.set(0.7, 1, 0.9)
+    cap.position.set(side * (W / 2 + 0.02), 0.42, -2.8)
+    group.add(cap)
+    const rcap = cap.clone()
+    rcap.position.set(side * (W / 2 + 0.02), 0.4, 2.8)
+    group.add(rcap)
+  }
+  // Egg-crate grille
+  const grillePlate = new THREE.Mesh(box(1.35, 0.28, 0.04), blackTrim)
+  grillePlate.position.set(0, 0.58, -2.74)
+  group.add(grillePlate)
+  for (let i = -5; i <= 5; i++) {
+    const bar = new THREE.Mesh(box(0.04, 0.24, 0.03), chromeMat)
+    bar.position.set(i * 0.11, 0.58, -2.76)
+    group.add(bar)
+  }
+  // Hood scoop / ornament base
+  const hoodCenter = new THREE.Mesh(box(0.35, 0.04, 1.8), chromeMat)
+  hoodCenter.position.set(0, 0.86, -1.4)
+  group.add(hoodCenter)
+
+  // Underbody (reads mass / ground contact)
+  const under = new THREE.Mesh(box(W - 0.15, 0.08, 4.6), underMat)
+  under.position.set(0, 0.18, 0.05)
+  group.add(under)
+
+  // ── wheels: tire + whitewall + chrome hub ──
+  const wheelG = new THREE.CylinderGeometry(0.38, 0.38, 0.26, 22)
   wheelG.rotateZ(Math.PI / 2)
-  const wwG = new THREE.TorusGeometry(0.25, 0.05, 6, 18)
+  const wwG = new THREE.TorusGeometry(0.27, 0.045, 8, 22)
   wwG.rotateY(Math.PI / 2)
-  for (const z of [-1.75, 1.55]) {
-    for (const side of [-1, 1]) {
+  const hubG = new THREE.CylinderGeometry(0.14, 0.14, 0.06, 16)
+  hubG.rotateZ(Math.PI / 2)
+  for (const z of [-1.72, 1.52]) {
+    for (const side of [-1, 1] as const) {
       const w = new THREE.Mesh(wheelG, shared.tire)
-      w.position.set(side * 0.84, 0.36, z)
+      w.position.set(side * 0.86, 0.38, z)
       group.add(w)
       const ww = new THREE.Mesh(wwG, shared.white)
-      ww.position.set(side * 0.97, 0.36, z)
+      ww.position.set(side * 0.99, 0.38, z)
       group.add(ww)
+      const hub = new THREE.Mesh(hubG, chromeMat)
+      hub.position.set(side * 1.02, 0.38, z)
+      group.add(hub)
     }
   }
-  return { group, paint, tail, head }
+
+  // Soft contact shadow (cheap mobile stand-in for real shadow maps)
+  const shadowMat = new THREE.MeshBasicMaterial({
+    map: carShadowBlob(),
+    transparent: true,
+    opacity: 0.62,
+    depthWrite: false,
+  })
+  const shadow = new THREE.Mesh(new THREE.PlaneGeometry(2.55, 5.8), shadowMat)
+  shadow.rotation.x = -Math.PI / 2
+  shadow.position.y = 0.012
+  shadow.renderOrder = -1
+  group.add(shadow)
+
+  return { group, paint, tail, head, shadow }
 }
 
 export function buildBarrier(chev: THREE.Texture, metal: THREE.Material) {

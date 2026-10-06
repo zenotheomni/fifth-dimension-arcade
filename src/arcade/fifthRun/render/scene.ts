@@ -125,7 +125,7 @@ export class FrScene {
   private sparkData: { p: THREE.Vector3; v: THREE.Vector3; life: number; max: number }[] = []
   private sparkGeo!: THREE.BufferGeometry
   private camX = 0
-  private camY = 2.85
+  private camY = 4.15
   private fov = 62
   private tmpM = new THREE.Matrix4()
   private tmpQ = new THREE.Quaternion()
@@ -162,8 +162,8 @@ export class FrScene {
     this.buildSkyline()
 
     // ── lights ──
-    const hemi = new THREE.HemisphereLight('#6a7aaa', '#1a1018', 0.55)
-    const key = new THREE.DirectionalLight('#ffe0c0', 1.15)
+    const hemi = new THREE.HemisphereLight('#7a8aba', '#1a1018', 0.65)
+    const key = new THREE.DirectionalLight('#ffe8d0', 1.35)
     key.position.set(-4, 12, -8)
     const back = new THREE.DirectionalLight('#ff6aa0', 0.55)
     back.position.set(4, 5, 10)
@@ -194,7 +194,7 @@ export class FrScene {
     // ── runner + fx ──
     for (const m of this.runner.meshes) m.layers.enable(REFL)
     this.scene.add(this.runner.group)
-    this.blob = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 4.2), new THREE.MeshBasicMaterial({ map: blobTexture(), transparent: true, depthWrite: false, opacity: 0.55 }))
+    this.blob = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 4.0), new THREE.MeshBasicMaterial({ map: blobTexture(), transparent: true, depthWrite: false, opacity: 0.6 }))
     this.blob.rotation.x = -Math.PI / 2
     this.blob.position.y = 0.012
     this.scene.add(this.blob)
@@ -237,11 +237,12 @@ export class FrScene {
       m.lookAt(0, 0, 0)
       env.add(m)
     }
-    panel('#00e0d0', -30, 4, -20, 10, 3)
-    panel('#ff3d8a', 30, 6, -16, 12, 3)
-    panel('#ffc83c', 0, 14, -30, 18, 4, 2)
-    panel('#8a4dff', 0, 25, 10, 30, 10, 1.4)
-    panel('#ff6a3c', -10, 3, 30, 14, 4, 1.5)
+    panel('#00e0d0', -30, 4, -20, 12, 4, 4)
+    panel('#ff3d8a', 30, 6, -16, 14, 4, 4)
+    panel('#ffc83c', 0, 14, -30, 20, 5, 3)
+    panel('#8a4dff', 0, 25, 10, 32, 12, 2.2)
+    panel('#ff6a3c', -10, 3, 30, 16, 5, 2.5)
+    panel('#ffffff', 0, 18, 25, 22, 8, 1.8)
     const pm = new THREE.PMREMGenerator(this.renderer)
     const rt = pm.fromScene(env, 0.02)
     this.scene.environment = rt.texture
@@ -460,10 +461,25 @@ export class FrScene {
     const chev = chevronTexture()
     const metal = new THREE.MeshStandardMaterial({ color: '#3a3448', metalness: 0.8, roughness: 0.3 })
     const shared = {
-      chrome: new THREE.MeshStandardMaterial({ color: '#f4f6ff', metalness: 1, roughness: 0.08 }),
-      glass: new THREE.MeshStandardMaterial({ color: '#0c0a18', metalness: 0.9, roughness: 0.05, envMapIntensity: 1.6 }),
-      tire: new THREE.MeshStandardMaterial({ color: '#0a0a0c', roughness: 0.9 }),
-      white: new THREE.MeshStandardMaterial({ color: '#f2f0ea', roughness: 0.6 }),
+      chrome: new THREE.MeshPhysicalMaterial({
+        color: '#eef2fa',
+        metalness: 1,
+        roughness: 0.1,
+        envMapIntensity: 1.5,
+        clearcoat: 0.55,
+        clearcoatRoughness: 0.18,
+      }),
+      glass: new THREE.MeshPhysicalMaterial({
+        color: '#0a1522',
+        metalness: 0.15,
+        roughness: 0.05,
+        transmission: 0.35,
+        transparent: true,
+        opacity: 0.8,
+        envMapIntensity: 2.2,
+      }),
+      tire: new THREE.MeshStandardMaterial({ color: '#0a0a0c', roughness: 0.92, metalness: 0.05 }),
+      white: new THREE.MeshStandardMaterial({ color: '#f2f0ea', roughness: 0.5, metalness: 0.1 }),
       glow: this.glow,
     }
     for (let i = 0; i < 12; i++) {
@@ -916,20 +932,21 @@ export class FrScene {
   private updateCamera(v: ViewState, dt: number) {
     const k = 1 - Math.exp(-dt * 8)
     this.camX += (v.x * 0.55 - this.camX) * k
-    const ty = 2.75 + Math.max(0, v.y) * 0.28 - (v.sliding ? 0.18 : 0)
+    // Raised chase cam — more top-down so lanes read clearly for swipes
+    const ty = 4.2 + Math.max(0, v.y) * 0.35 - (v.sliding ? 0.22 : 0)
     this.camY += (ty - this.camY) * (1 - Math.exp(-dt * 5.5))
     const speedF = THREE.MathUtils.clamp((v.speed - 14) / 28, 0, 1)
     const aspect = this.camera.aspect
-    const baseFov = aspect > 0.8 ? 50 : 60
-    const tf = baseFov + speedF * 11 + (v.invisible ? 2.5 : 0)
+    const baseFov = aspect > 0.8 ? 54 : 64
+    const tf = baseFov + speedF * 10 + (v.invisible ? 2.5 : 0)
     this.fov += (tf - this.fov) * (1 - Math.exp(-dt * 3))
     const sh = v.shake
     const sx = sh ? (Math.sin(v.time * 61) + Math.sin(v.time * 37)) * 0.06 * sh : 0
     const sy = sh ? Math.sin(v.time * 53) * 0.05 * sh : 0
-    let dz = 8.4 - speedF * 0.9
+    let dz = 10.2 - speedF * 0.7
     if (v.dead) dz -= Math.min(1.2, v.deadT * 1.5)
     this.camera.position.set(this.camX + sx, this.camY + sy, dz)
-    this.lookT.set(v.x * 0.45, 0.95, -18)
+    this.lookT.set(v.x * 0.35, 0.15, -14)
     this.camera.lookAt(this.lookT)
     this.camera.rotation.z += (this.runner.group.rotation.z || 0) * 0.12
     this.camera.fov = this.fov
