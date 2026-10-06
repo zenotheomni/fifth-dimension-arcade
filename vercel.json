@@ -2,17 +2,28 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
-    { "source": "/api/scores", "destination": "/api/scores" },
-    { "source": "/api/challenges", "destination": "/api/challenges" },
-    { "source": "/api/challenges/:id", "destination": "/api/challenges/[id]" },
+    { "source": "/api/arcade/:action", "destination": "/api/arcade?action=:action" },
     { "source": "/api/leaderboard", "destination": "/api/leaderboard" },
     { "source": "/api/games", "destination": "/api/games" },
-    { "source": "/api/personal-best", "destination": "/api/personal-best" },
-    { "source": "/api/register", "destination": "/api/register" },
+    { "source": "/api/og", "destination": "/api/og" },
     { "source": "/arcade", "destination": "/arcade/index.html" },
     { "source": "/arcade/court-vision", "destination": "/arcade/index.html" },
     { "source": "/arcade/fifth-run", "destination": "/arcade/index.html" },
-    { "source": "/arcade/challenge/:id", "destination": "/arcade/index.html" },
+    { "source": "/arcade/challenge/:id", "destination": "/api/challenge-page?id=:id" },
+    { "source": "/arcade/claim", "destination": "/arcade/index.html" },
     { "source": "/arcade/key", "destination": "/arcade/index.html" }
+  ],
+  "headers": [
+    {
+      "source": "/arcade/sw.js",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache" },
+        { "key": "Service-Worker-Allowed", "value": "/arcade/" }
+      ]
+    },
+    {
+      "source": "/arcade/manifest.webmanifest",
+      "headers": [{ "key": "Content-Type", "value": "application/manifest+json" }]
+    }
   ]
 }

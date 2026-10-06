@@ -660,3 +660,32 @@
   letter-spacing: 0.14em;
   margin-right: 0.75rem;
 }
+
+/* ===== SELECT + SOCIAL (top-5 board, challenge, rivals) ===== */
+/* Specific selector: arcade.css .ffa-btn { width: 100% } can load after this file. */
+.ffa-select .ffa-select__play {
+  width: calc(100% - 2.2rem);
+  margin: 0.55rem 1.1rem 0;
+}
+/* Compact cabinets so the Top-5 board sits above the dock on a 390×844 phone. */
+.ffa-select--social .ffa-cards {
+  padding: 0.45rem 1.1rem 0.55rem;
+}
+.ffa-select--social .ffa-card {
+  flex-basis: min(44vw, 190px);
+}
+.ffa-select--social .ffa-card__meta {
+  padding: 0.5rem 0.6rem 0.6rem;
+}
+.ffa-select--social .ffa-card__title {
+  font-size: 0.82rem;
+}
+.ffa-select--social .ffa-card__tag,
+.ffa-select--social .ffa-card__contest {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ffa-select--social .ffa-select__hint {
+  display: none;
+}

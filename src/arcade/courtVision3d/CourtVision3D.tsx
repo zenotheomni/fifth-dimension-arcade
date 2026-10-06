@@ -5,18 +5,17 @@ import { useArcadeAudio } from '../audio/AudioProvider'
 import { END_DOORS } from '../brandPlacement'
 import { COPY, COURT_VISION_COPY } from '../copyLocks'
 import {
-  challengeShareText,
-  createChallengeJson,
-  shareOrCopy,
-} from '../core/challenges'
-import {
-  getOrCreatePlayerId,
-  getSavedHandle,
-  sanitizeHandle,
-} from '../core/identity'
-import { registerPlayer } from '../core/players'
-import { postScoreJson } from '../core/scores'
-import { fetchLeaderboard, fetchPersonalBest } from '../leaderboard/api'
+  challengeFromScore,
+  newRunId,
+  submitRun,
+  type ChallengeInfo,
+  type RunResult,
+} from '../core/arcadeApi'
+import { getCachedPlayer, onPlayerChange, type ArcadePlayer } from '../core/session'
+import { toApiMode } from '../core/scores'
+import HandlePrompt from '../social/HandlePrompt'
+import SharePanel from '../social/SharePanel'
+import { requestAlertsRefresh } from '../social/alertStore'
 import { createCourtVision3D, type CourtVision3DHandle } from './engine'
 import type {
   CvChallengeConfig,
@@ -39,42 +38,61 @@ const initialHud: CvHudState = {
   mode: 'timed',
 }
 
+export type SeededRun = { ticketId: string; seed: string; rivalHandle?: string | null }
+
 export type CourtVision3DProps = {
+  /** Friend's challenge run (beat target_score on the same seed). */
   challenge?: CvChallengeConfig | null
+  /** Seeded "set the bar" / rematch run — creates a new challenge on finish. */
+  seeded?: SeededRun | null
   /** When true, hide mode switcher (challenge runs are fixed). */
   lockMode?: boolean
-  onChallengeResolved?: (result: {
-    won: boolean
-    score: number
-  }) => void
+  onChallengeResolved?: (result: { won: boolean; score: number }) => void
+  /** Called with the server result of a challenge run (parent shows the VS screen). */
+  onRunResult?: (run: RunResult | null, final: CvEndPayload) => void
+  /** Leave seeded mode and play a normal run. */
+  onPlayNormal?: () => void
 }
 
 export default function CourtVision3D({
   challenge = null,
+  seeded = null,
   lockMode = false,
   onChallengeResolved,
+  onRunResult,
+  onPlayNormal,
 }: CourtVision3DProps) {
   const hostRef = useRef<HTMLDivElement>(null)
   const gameRef = useRef<CourtVision3DHandle | null>(null)
   const audio = useArcadeAudio()
   const mutedRef = useRef(audio.muted)
-  const initialMode: CvMode = challenge ? 'challenge' : 'timed'
+  const engineChallenge = useMemo<CvChallengeConfig | null>(() => {
+    if (challenge) return challenge
+    if (seeded) {
+      return { id: '', targetScore: 0, seed: seeded.seed, creatorHandle: seeded.rivalHandle ?? '', setTheBar: true }
+    }
+    return null
+  }, [challenge, seeded])
+  const initialMode: CvMode = engineChallenge ? 'challenge' : 'timed'
   const [mode, setMode] = useState<CvMode>(initialMode)
   const [hud, setHud] = useState<CvHudState>({
     ...initialHud,
     mode: initialMode,
   })
   const [ended, setEnded] = useState<CvEndPayload | null>(null)
+  const [run, setRun] = useState<RunResult | null>(null)
+  const [runState, setRunState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [shareChallenge, setShareChallenge] = useState<ChallengeInfo | null>(null)
   const [busyShare, setBusyShare] = useState(false)
   const [shareNote, setShareNote] = useState<string | null>(null)
   const [remount, setRemount] = useState(0)
-  const [handle, setHandle] = useState(() => getSavedHandle() ?? '')
-  const [handleDraft, setHandleDraft] = useState(() => getSavedHandle() ?? '')
-  const [handleError, setHandleError] = useState<string | null>(null)
-  const [handleBusy, setHandleBusy] = useState(false)
-  const [needsHandle, setNeedsHandle] = useState(() => !getSavedHandle())
-  const [weeklyRank, setWeeklyRank] = useState<number | null>(null)
-  const [serverPb, setServerPb] = useState<number | null>(null)
+  const [player, setPlayer] = useState<ArcadePlayer | null>(() => getCachedPlayer())
+  const [renaming, setRenaming] = useState(false)
+  const runIdRef = useRef<string>(newRunId())
+  const onRunResultRef = useRef(onRunResult)
+  onRunResultRef.current = onRunResult
+
+  useEffect(() => onPlayerChange(setPlayer), [])
 
   const destroyGame = useCallback(() => {
     if (gameRef.current) {
@@ -94,16 +112,19 @@ export default function CourtVision3D({
   }, [audio.muted])
 
   useEffect(() => {
-    if (challenge) setMode('challenge')
-  }, [challenge])
+    if (engineChallenge) setMode('challenge')
+  }, [engineChallenge])
 
   useEffect(() => {
     const el = hostRef.current
     if (!el) return
     destroyGame()
     setEnded(null)
-    setWeeklyRank(null)
+    setRun(null)
+    setRunState('idle')
+    setShareChallenge(null)
     setShareNote(null)
+    runIdRef.current = newRunId()
     setHud({
       ...initialHud,
       mode,
@@ -115,7 +136,7 @@ export default function CourtVision3D({
       {
         muted: mutedRef.current,
         onHud: setHud,
-        challenge,
+        challenge: engineChallenge,
         onEnded: (final) => {
           setEnded(final)
           track('arcade_court_vision_end', {
@@ -123,63 +144,31 @@ export default function CourtVision3D({
             mode: final.mode,
             newPb: final.newPb,
             challenge: Boolean(challenge),
+            seeded: Boolean(seeded),
           })
           if (challenge && final.beatChallenge != null) {
-            onChallengeResolved?.({
-              won: final.beatChallenge,
-              score: final.score,
-            })
+            onChallengeResolved?.({ won: final.beatChallenge, score: final.score })
           }
+          setRunState('saving')
           void (async () => {
-            const saved = getSavedHandle()
-            const result = await postScoreJson({
+            const r = await submitRun({
               game: 'court-vision',
-              mode: final.mode,
+              mode: toApiMode(final.mode),
               score: final.score,
-              handle: saved ?? undefined,
-              challengeId: challenge?.id,
-              meta: {
-                playerId: getOrCreatePlayerId(),
-                pb: final.pb,
-                seed: challenge?.seed ?? null,
-              },
+              runId: runIdRef.current,
+              challengeId: challenge?.id || null,
+              ticketId: seeded?.ticketId ?? null,
+              meta: { pb: final.pb, seed: engineChallenge?.seed ?? null },
             })
-            if (result.ok && result.score) {
-              setServerPb(result.score.personal_best)
+            if (r.ok) {
+              setRun(r.run)
+              setRunState('saved')
+              if (r.run.created_challenge) setShareChallenge(r.run.created_challenge)
+              if (r.run.alerts_created) requestAlertsRefresh()
+            } else {
+              setRunState('error')
             }
-            try {
-              const lb = await fetchLeaderboard({
-                game: 'court-vision',
-                window: 'weekly',
-                mode: final.mode === 'timed' ? 'timed60' : undefined,
-                limit: 100,
-              })
-              const deviceHandle = (saved ?? result.score?.handle ?? '').toLowerCase()
-              const mine = lb.entries.find(
-                (e) => e.handle.toLowerCase() === deviceHandle,
-              )
-              if (mine) setWeeklyRank(mine.rank)
-              else if (!deviceHandle) {
-                // rank unknown until handle is set
-                setWeeklyRank(null)
-              }
-            } catch {
-              /* ignore */
-            }
-            try {
-              const pb = await fetchPersonalBest({
-                game: 'court-vision',
-                mode:
-                  final.mode === 'timed'
-                    ? 'timed60'
-                    : final.mode === 'challenge'
-                      ? 'challenge'
-                      : 'endless',
-              })
-              if (pb.found) setServerPb(pb.score)
-            } catch {
-              /* ignore */
-            }
+            if (challenge) onRunResultRef.current?.(r.ok ? r.run : null, final)
           })()
         },
       },
@@ -187,106 +176,57 @@ export default function CourtVision3D({
     )
     gameRef.current = game
     return () => destroyGame()
-  }, [
-    mode,
-    remount,
-    destroyGame,
-    challenge,
-    onChallengeResolved,
-  ])
+  }, [mode, remount, destroyGame, engineChallenge, challenge, seeded, onChallengeResolved])
 
-  const displayPb = serverPb ?? ended?.pb ?? hud.pb
+  const displayPb = Math.max(run?.personal_best ?? 0, ended?.pb ?? hud.pb)
 
   const headline = useMemo(() => {
     if (!ended) return COPY.RUN_IT_BACK
+    if (seeded) return seeded.rivalHandle ? `Your move is in` : 'Bar is set'
     if (ended.beatChallenge === true) return COURT_VISION_COPY.WON_CHALLENGE
     if (ended.beatChallenge === false) return COURT_VISION_COPY.LOST_CHALLENGE
     if (ended.newPb) return COURT_VISION_COPY.NEW_PB
     return COPY.RUN_IT_BACK
-  }, [ended])
+  }, [ended, seeded])
 
   const runItBack = () => {
+    if (seeded && onPlayNormal) {
+      onPlayNormal()
+      return
+    }
     setEnded(null)
     setRemount((n) => n + 1)
     track('arcade_court_vision_run_it_back')
   }
 
-  const saveHandleFromEnd = async () => {
-    if (handleBusy) return
-    setHandleBusy(true)
-    setHandleError(null)
-    const cleaned = sanitizeHandle(handleDraft)
-    if (cleaned.length < 3 || cleaned.length > 16) {
-      setHandleError('3–16 letters, numbers, or _')
-      setHandleBusy(false)
-      return
-    }
-    const result = await registerPlayer(cleaned)
-    setHandleBusy(false)
-    if (!result.ok) {
-      setHandleError(
-        result.error === 'handle_taken'
-          ? 'That handle is taken'
-          : result.error === 'invalid_handle'
-            ? '3–16 letters, numbers, or _'
-            : 'Could not save handle',
-      )
-      return
-    }
-    setHandle(result.handle ?? cleaned)
-    setNeedsHandle(false)
-    track('arcade_handle_saved')
-    // Refresh weekly rank now that we have a handle
-    if (ended) {
-      try {
-        const lb = await fetchLeaderboard({
-          game: 'court-vision',
-          window: 'weekly',
-          limit: 100,
-        })
-        const mine = lb.entries.find(
-          (e) => e.handle.toLowerCase() === (result.handle ?? cleaned).toLowerCase(),
-        )
-        if (mine) setWeeklyRank(mine.rank)
-      } catch {
-        /* ignore */
-      }
-    }
-  }
-
   const challengeFriend = async () => {
-    if (!ended || busyShare) return
-    if (needsHandle || !getSavedHandle()) {
-      setHandleError('Pick a handle before challenging')
-      return
-    }
+    if (!ended || busyShare || !run) return
     setBusyShare(true)
     setShareNote(null)
     try {
-      const created = await createChallengeJson({
-        game: 'court-vision',
-        score: ended.score,
-        mode: 'challenge',
-        seed: challenge?.seed || `cv-${ended.score}-${Date.now().toString(36)}`,
-      })
-      if (!created.ok || !created.id || !created.url) {
-        setShareNote('Challenge failed — try again')
+      const created = await challengeFromScore(run.id)
+      if (!created.ok || !created.challenge.url) {
+        setShareNote(created.ok ? 'Challenge failed — try again' : created.error === 'rate_limited' ? 'Easy — too many challenges this hour' : 'Challenge failed — try again')
         return
       }
-      const text = challengeShareText(ended.score, created.url)
-      const how = await shareOrCopy(text, created.url)
-      setShareNote(
-        how === 'shared'
-          ? 'Shared!'
-          : how === 'copied'
-            ? 'Link copied'
-            : created.url,
-      )
-      track('arcade_challenge_share', { score: ended.score, id: created.id })
+      setShareChallenge(created.challenge)
+      track('arcade_challenge_create', { score: ended.score, id: created.challenge.id })
     } finally {
       setBusyShare(false)
     }
   }
+
+  const boardLine = run?.board
+    ? [
+        run.board.alltime ? `All-time #${run.board.alltime.rank}` : null,
+        run.board.weekly ? `Weekly #${run.board.weekly.rank}` : null,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : ''
+  const handle = run?.handle ?? player?.handle ?? ''
+  const isGuest = run ? run.is_guest && (player?.is_guest ?? true) : (player?.is_guest ?? true)
+  const canChallenge = Boolean(ended && !challenge && !seeded && ended.mode !== 'endless')
 
   const showClock = hud.mode === 'timed' || hud.mode === 'challenge'
 
@@ -295,7 +235,7 @@ export default function CourtVision3D({
       <Link to="/" className="cvp-back">
         ← Floor
       </Link>
-      {!lockMode && !challenge ? (
+      {!lockMode && !engineChallenge ? (
         <div className="cvp-mode">
           <button
             type="button"
@@ -324,6 +264,10 @@ export default function CourtVision3D({
           {challenge ? (
             <span className="cvp-mode__challenge">
               Beat {challenge.creatorHandle} · {challenge.targetScore}
+            </span>
+          ) : seeded ? (
+            <span className="cvp-mode__challenge">
+              {seeded.rivalHandle ? `Rematch · ${seeded.rivalHandle}` : 'Set the bar'}
             </span>
           ) : null}
           <button type="button" onClick={audio.toggleMute} aria-label="Mute">
@@ -389,80 +333,76 @@ export default function CourtVision3D({
         ) : null}
       </div>
 
-      {ended ? (
+      {ended && !(challenge && onRunResult) ? (
         <div className="cvp-end">
-          <p className="cvp-end__eyebrow">Court Vision</p>
+          <p className="cvp-end__eyebrow">{seeded ? (seeded.rivalHandle ? `Rematch vs ${seeded.rivalHandle}` : 'Set the bar') : 'Court Vision'}</p>
           <h2>{headline}</h2>
           <div className="cvp-end__score">{ended.score}</div>
           <p className="cvp-end__pb">
             Personal best <strong>{displayPb}</strong>
-            {weeklyRank != null ? (
+            {boardLine ? (
               <>
                 {' '}
-                · Weekly <strong>#{weeklyRank}</strong>
+                · <strong>{boardLine}</strong>
               </>
             ) : null}
           </p>
+          {runState === 'saving' ? <p className="cvp-end__share">Posting to the board…</p> : null}
+          {runState === 'error' ? <p className="cvp-end__share">Couldn’t post this run — check your connection.</p> : null}
           {challenge ? (
             <p className="cvp-end__target">
               Target <strong>{challenge.targetScore}</strong> · {challenge.creatorHandle}
             </p>
           ) : null}
 
-          {needsHandle ? (
-            <form
-              className="cvp-handle"
-              onSubmit={(e) => {
-                e.preventDefault()
-                void saveHandleFromEnd()
-              }}
-            >
-              <label className="cvp-handle__label" htmlFor="cvp-handle-input">
-                Pick your handle
-              </label>
-              <input
-                id="cvp-handle-input"
-                className="cvp-handle__input"
-                maxLength={16}
-                autoComplete="off"
-                placeholder="e.g. jenks"
-                value={handleDraft}
-                onChange={(e) => setHandleDraft(e.target.value)}
-              />
-              {handleError ? (
-                <p className="cvp-handle__error">{handleError}</p>
-              ) : (
-                <p className="cvp-handle__hint">3–16 chars · letters, numbers, _</p>
-              )}
-              <button
-                type="submit"
-                className="ffa-btn ffa-btn--primary"
-                disabled={handleBusy}
-              >
-                {handleBusy ? 'Saving…' : 'Lock it in'}
+          {shareChallenge?.url ? (
+            <SharePanel
+              handle={handle}
+              score={shareChallenge.target_score}
+              url={shareChallenge.url}
+              rivalHandle={shareChallenge.opponent_handle}
+              autoShareLabel={shareChallenge.opponent_handle ? 'Share link too' : 'Send challenge'}
+            />
+          ) : null}
+
+          {run && (isGuest || renaming) ? (
+            <HandlePrompt
+              compact
+              title={isGuest ? `Playing as ${handle}` : 'Change handle'}
+              subtitle={isGuest ? 'Lock in a name for the board (optional)' : undefined}
+              cta="Lock it in"
+              onDone={() => setRenaming(false)}
+            />
+          ) : handle ? (
+            <p className="cvp-end__handle">
+              Playing as <strong>{handle}</strong>{' '}
+              <button type="button" className="soc-handle__skip" onClick={() => setRenaming(true)}>
+                Edit
               </button>
-            </form>
-          ) : (
-            <p className="cvp-end__handle">Playing as <strong>{handle}</strong></p>
-          )}
+            </p>
+          ) : null}
 
           <div className="cvp-end__actions">
-            <button type="button" className="ffa-btn ffa-btn--primary" onClick={runItBack}>
-              {COPY.RUN_IT_BACK}
-            </button>
-            {!challenge ? (
+            {canChallenge && !shareChallenge ? (
               <button
                 type="button"
-                className="ffa-btn ffa-btn--secondary"
+                className="ffa-btn ffa-btn--primary"
                 onClick={() => void challengeFriend()}
-                disabled={busyShare || needsHandle}
+                disabled={busyShare || !run}
               >
-                {END_DOORS.courtVision[0].label}
+                {busyShare ? 'Building challenge…' : END_DOORS.courtVision[0].label}
               </button>
             ) : null}
+            <button
+              type="button"
+              className={`ffa-btn ${canChallenge && !shareChallenge ? 'ffa-btn--secondary' : shareChallenge ? 'ffa-btn--ghost' : 'ffa-btn--primary'}`}
+              onClick={runItBack}
+            >
+              {seeded ? 'Play a normal run' : COPY.RUN_IT_BACK}
+            </button>
             {shareNote ? <p className="cvp-end__share">{shareNote}</p> : null}
             <a
-              className="ffa-btn ffa-btn--ghost"
+              className="ffa-btn ffa-btn--ghost ffa-btn--sm"
               href="https://5dimperial.com/collections/apparel"
               target="_blank"
               rel="noreferrer"
@@ -470,14 +410,17 @@ export default function CourtVision3D({
             >
               {END_DOORS.courtVision[1].label}
             </a>
-            <Link to="/" className="ffa-btn ffa-btn--ghost">
+            <Link to="/" className="ffa-btn ffa-btn--ghost ffa-btn--sm">
               Back to select
             </Link>
           </div>
-
-          {challenge ? (
-            <p className="cvp-end__app">Get the app — coming soon</p>
-          ) : null}
+        </div>
+      ) : null}
+      {ended && challenge && onRunResult ? (
+        <div className="cvp-end">
+          <p className="cvp-end__eyebrow">Court Vision</p>
+          <h2>Final: {ended.score}</h2>
+          <p className="cvp-end__pb">{runState === 'error' ? 'Couldn’t post — check your connection.' : 'Tallying the head-to-head…'}</p>
         </div>
       ) : null}
     </div>

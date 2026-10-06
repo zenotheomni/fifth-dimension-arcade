@@ -11,17 +11,20 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.8",
+    "@vercel/og": "^0.8.6",
     "postprocessing": "^6.39.5",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.13.1",
-    "three": "^0.186.1"
+    "three": "^0.186.1",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@types/node": "^24.13.6",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@types/three": "^0.186.0",
+    "@types/web-push": "^3.6.4",
     "@vercel/node": "^5.3.6",
     "@vitejs/plugin-react": "^5.1.1",
     "playwright": "^1.63.0",
