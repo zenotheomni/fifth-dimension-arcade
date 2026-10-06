@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import type Phaser from 'phaser'
 import { track } from '../analytics'
 import { useArcadeAudio } from '../audio/AudioProvider'
 import { END_DOORS } from '../brandPlacement'
@@ -18,14 +17,14 @@ import {
 import { registerPlayer } from '../core/players'
 import { postScoreJson } from '../core/scores'
 import { fetchLeaderboard, fetchPersonalBest } from '../leaderboard/api'
-import { createCourtVisionGame } from './createGame'
+import { createCourtVision3D, type CourtVision3DHandle } from './engine'
 import type {
   CvChallengeConfig,
   CvEndPayload,
   CvHudState,
   CvMode,
-} from './types'
-import './courtVisionPhaser.css'
+} from '../courtVisionPhaser/types'
+import './courtVision3d.css'
 
 const initialHud: CvHudState = {
   score: 0,
@@ -40,7 +39,7 @@ const initialHud: CvHudState = {
   mode: 'timed',
 }
 
-export type CourtVisionPhaserProps = {
+export type CourtVision3DProps = {
   challenge?: CvChallengeConfig | null
   /** When true, hide mode switcher (challenge runs are fixed). */
   lockMode?: boolean
@@ -50,14 +49,15 @@ export type CourtVisionPhaserProps = {
   }) => void
 }
 
-export default function CourtVisionPhaser({
+export default function CourtVision3D({
   challenge = null,
   lockMode = false,
   onChallengeResolved,
-}: CourtVisionPhaserProps) {
+}: CourtVision3DProps) {
   const hostRef = useRef<HTMLDivElement>(null)
-  const gameRef = useRef<Phaser.Game | null>(null)
+  const gameRef = useRef<CourtVision3DHandle | null>(null)
   const audio = useArcadeAudio()
+  const mutedRef = useRef(audio.muted)
   const initialMode: CvMode = challenge ? 'challenge' : 'timed'
   const [mode, setMode] = useState<CvMode>(initialMode)
   const [hud, setHud] = useState<CvHudState>({
@@ -78,7 +78,7 @@ export default function CourtVisionPhaser({
 
   const destroyGame = useCallback(() => {
     if (gameRef.current) {
-      gameRef.current.destroy(true)
+      gameRef.current.destroy()
       gameRef.current = null
     }
   }, [])
@@ -87,6 +87,11 @@ export default function CourtVisionPhaser({
     audio.duck(true)
     return () => audio.duck(false)
   }, [audio])
+
+  useEffect(() => {
+    mutedRef.current = audio.muted
+    gameRef.current?.setMuted(audio.muted)
+  }, [audio.muted])
 
   useEffect(() => {
     if (challenge) setMode('challenge')
@@ -105,10 +110,10 @@ export default function CourtVisionPhaser({
       timeLeft: mode === 'endless' ? null : 60,
     })
 
-    const game = createCourtVisionGame(
+    const game = createCourtVision3D(
       el,
       {
-        muted: audio.muted,
+        muted: mutedRef.current,
         onHud: setHud,
         challenge,
         onEnded: (final) => {
@@ -186,7 +191,6 @@ export default function CourtVisionPhaser({
     mode,
     remount,
     destroyGame,
-    audio.muted,
     challenge,
     onChallengeResolved,
   ])
@@ -287,7 +291,7 @@ export default function CourtVisionPhaser({
   const showClock = hud.mode === 'timed' || hud.mode === 'challenge'
 
   return (
-    <div className="cvp-root">
+    <div className="cvp-root cv3-root">
       <Link to="/" className="cvp-back">
         ← Floor
       </Link>
@@ -329,6 +333,13 @@ export default function CourtVisionPhaser({
       )}
 
       <div ref={hostRef} className="cvp-canvas" />
+      <div className="cv3-vignette" aria-hidden />
+      {hud.phase === 'ready' && !ended ? (
+        <div className="cv3-loading" aria-live="polite">
+          <span className="cv3-loading__bar" />
+          Warming up the court…
+        </div>
+      ) : null}
 
       <div className="cvp-hud" aria-live="polite">
         <div className="cvp-hud__top">
@@ -345,7 +356,7 @@ export default function CourtVisionPhaser({
             </span>
             <span className="cvp-panel__value">
               {showClock
-                ? `0:${String(hud.timeLeft ?? 0).padStart(2, '0')}`
+                ? `${Math.floor((hud.timeLeft ?? 0) / 60)}:${String((hud.timeLeft ?? 0) % 60).padStart(2, '0')}`
                 : '∞'}
             </span>
           </div>
@@ -370,10 +381,7 @@ export default function CourtVisionPhaser({
             type="button"
             className="cvp-back cvp-end-run"
             onClick={() => {
-              const scene = gameRef.current?.scene.getScene('CourtVision') as
-                | { requestEnd?: () => void }
-                | undefined
-              scene?.requestEnd?.()
+              gameRef.current?.requestEnd()
             }}
           >
             End run

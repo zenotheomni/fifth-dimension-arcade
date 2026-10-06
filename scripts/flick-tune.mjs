@@ -1,197 +1,121 @@
-import { chromium, devices } from 'playwright'
+/**
+ * Court Vision 3D — headless flick harness.
+ * Bundles the deterministic sim (no rendering) and runs the tuning suites.
+ *   node scripts/flick-tune.mjs [--json]
+ */
+import { build } from 'esbuild'
+import { mkdtempSync } from 'fs'
+import { tmpdir } from 'os'
+import path from 'path'
+import { pathToFileURL } from 'url'
 
-const browser = await chromium.launch({
-  headless: true,
-  args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
+const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..')
+const out = path.join(mkdtempSync(path.join(tmpdir(), 'cv3d-')), 'sim.mjs')
+await build({
+  entryPoints: [path.join(root, 'scripts/harness-entry.ts')],
+  bundle: true,
+  format: 'esm',
+  platform: 'node',
+  outfile: out,
+  logLevel: 'silent',
 })
-const context = await browser.newContext({
-  ...devices['iPhone 14'],
-  viewport: { width: 390, height: 844 },
-  deviceScaleFactor: 2,
-  hasTouch: true,
-  isMobile: true,
-})
-const page = await context.newPage()
-page.on('pageerror', (e) => console.log('PAGEERROR', e.message))
+const sim = await import(pathToFileURL(out).href)
+const { simulateShot, DIM, courtVisionSeedConfig, hoopPoseAt, mulberry32 } = sim
 
-await page.goto('http://127.0.0.1:4173/arcade/court-vision', {
-  waitUntil: 'networkidle',
-  timeout: 60000,
-})
-await page.waitForFunction(() => globalThis.__CV_SCENE, null, { timeout: 20000 })
-await page.waitForTimeout(500)
+const BALL = { x: 0, y: DIM.ballR, z: DIM.ballRestZ }
+const baseCtx = { ball: BALL, hoop: { x: 0, y: 0 }, windBias: 0 }
 
-const endless = page.getByRole('button', { name: /^Endless$/i })
-if (await endless.count()) {
-  await endless.click().catch(() => {})
-  await page.waitForTimeout(900)
-  await page.waitForFunction(() => globalThis.__CV_SCENE, null, { timeout: 15000 })
-}
-await page.evaluate(() => {
-  const s = globalThis.__CV_SCENE
-  s.mode = 'endless'
-  s.timeLeft = 9999
-  s.ended = false
-  s.phase = 'playing'
-})
-
-async function waitReady() {
-  await page.waitForFunction(
-    () => {
-      const s = globalThis.__CV_SCENE
-      if (!s) return false
-      if (s.ended) {
-        s.ended = false
-        s.phase = 'playing'
-        s.timeLeft = 9999
-      }
-      return !s.respawning && !s.flight && s.phase === 'playing'
-    },
-    null,
-    { timeout: 15000 },
-  )
+/** Mirror the in-game debug flick: speed px/ms + dx px over 100ms. */
+function flick(speed, dx = 0) {
+  const dist = speed * 100
+  const angle = Math.abs(dx) > 1 ? Math.atan2(dx, dist) : 0
+  return { speed, angle }
 }
 
-async function fire(opts) {
-  await waitReady()
-  const before = await page.evaluate(() => globalThis.__CV_SCENE.score)
-  const shot = await page.evaluate((o) => {
-    const s = globalThis.__CV_SCENE
-    s.ended = false
-    s.phase = 'playing'
-    s.respawning = false
-    // Sample penetration during flight
-    s.__penSamples = []
-    const r = s.debugFlick(o)
-    return r
-      ? {
-          power: +r.power.toFixed(3),
-          outcome: r.outcome,
-          allowOver: r.allowOver,
-          speed: +r.speed.toFixed(3),
-        }
-      : null
-  }, opts)
-  if (!shot) return { shot: null, made: false, meta: null }
-
-  await page.waitForFunction(
-    () => !globalThis.__CV_SCENE?.flight,
-    null,
-    { timeout: 6000 },
-  ).catch(() => {})
-  await page.waitForTimeout(700)
-  const after = await page.evaluate(() => ({
-    score: globalThis.__CV_SCENE.score,
-    meta: globalThis.__CV_SCENE.lastShotMeta,
-  }))
-  return {
-    shot,
-    made: after.score > before,
-    meta: after.meta,
-  }
-}
-
-function summarize(name, results) {
-  const n = results.length
-  const makes = results.filter((r) => r.made).length
-  const pen = results.filter((r) => r.meta?.penetratedBoard).length
-  const over = results.filter((r) => r.meta?.overBoard).length
-  const near = results.filter(
-    (r) =>
-      r.meta?.finishNearRim ||
-      r.meta?.contactedBoard ||
-      r.meta?.contactedRim,
-  ).length
-  const boardHit = results.filter((r) => r.meta?.contactedBoard).length
+function run(name, shots, ctxFn = () => baseCtx, hoopFn) {
+  const res = shots.map((s, i) => {
+    const ctx = ctxFn(i)
+    return simulateShot(flick(s.speed, s.dx), ctx, hoopFn ? (t) => hoopFn(i, t) : undefined)
+  })
+  const n = res.length
+  const c = (f) => res.filter(f).length
   return {
     name,
     n,
-    makes,
-    makeRate: +(makes / n).toFixed(3),
-    penetrateRate: +(pen / n).toFixed(3),
-    overRate: +(over / n).toFixed(3),
-    nearRimRate: +(near / n).toFixed(3),
-    boardContactRate: +(boardHit / n).toFixed(3),
+    makeRate: +(c((r) => r.outcome.made) / n).toFixed(3),
+    swish: c((r) => r.outcome.kind === 'swish'),
+    rimIn: c((r) => r.outcome.kind === 'rim_in'),
+    bank: c((r) => r.outcome.kind === 'bank'),
+    penetrate: c((r) => r.outcome.penetration > 0),
+    over: c((r) => r.outcome.overBoard),
+    boardHit: c((r) => r.outcome.boardHits > 0),
+    rimHit: c((r) => r.outcome.rimHits > 0),
+    misses: Object.entries(
+      res
+        .filter((r) => !r.outcome.made)
+        .reduce((a, r) => ((a[r.outcome.missKind] = (a[r.outcome.missKind] || 0) + 1), a), {}),
+    )
+      .map(([k, v]) => `${k}:${v}`)
+      .join(' '),
   }
 }
 
+const rnd = mulberry32(1337)
 const suites = []
+suites.push(run('straight_medium', Array.from({ length: 16 }, (_, i) => ({ speed: 0.95 + (i % 5) * 0.05, dx: 0 }))))
+suites.push(run('angled_wide', Array.from({ length: 10 }, (_, i) => ({ speed: 1.05, dx: i % 2 ? -70 : 70 }))))
+suites.push(run('weak_front', Array.from({ length: 10 }, (_, i) => ({ speed: 0.55 + (i % 5) * 0.06, dx: 0 }))))
+suites.push(run('strong_bank', Array.from({ length: 12 }, (_, i) => ({ speed: 1.3 + (i % 3) * 0.06, dx: (i % 2) * 8 - 4 }))))
+suites.push(run('extreme_over', Array.from({ length: 10 }, (_, i) => ({ speed: 2.1 + (i % 5) * 0.08, dx: (i % 3) * 6 - 6 }))))
+suites.push(
+  run(
+    'decent_spread',
+    Array.from({ length: 400 }, () => ({ speed: 0.78 + rnd() * 0.5, dx: (rnd() - 0.5) * 48 })),
+  ),
+)
+// Full random sweep incl. extremes: penetration must stay 0
+suites.push(
+  run(
+    'chaos_sweep',
+    Array.from({ length: 600 }, () => ({ speed: 0.35 + rnd() * 2.3, dx: (rnd() - 0.5) * 220 })),
+  ),
+)
+// Seeded challenges: sway + wind
+const seeds = ['alpha', 'jenks', 'fifth-floor', 'cv-42-x', 'zeno5', 'miami']
+const cfgs = seeds.map((s) => courtVisionSeedConfig(s))
+suites.push(
+  run(
+    'seeded_decent',
+    Array.from({ length: 300 }, () => ({ speed: 0.85 + rnd() * 0.3, dx: (rnd() - 0.5) * 30 })),
+    (i) => {
+      const cfg = cfgs[i % cfgs.length]
+      const t0 = (i * 0.37) % 6
+      return { ball: { ...BALL, x: cfg.ballHomeOffsetX * 0.45 * 0.004 }, hoop: hoopPoseAt(cfg, t0), windBias: cfg.windBias }
+    },
+    (i, t) => hoopPoseAt(cfgs[i % cfgs.length], ((i * 0.37) % 6) + t),
+  ),
+)
 
-// straight medium
-{
-  const results = []
-  for (let i = 0; i < 16; i++) {
-    const speed = 0.95 + (i % 5) * 0.05
-    results.push(await fire({ speed, dx: 0 }))
-  }
-  suites.push(summarize('straight_medium', results))
+if (process.argv.includes('--json')) {
+  console.log(JSON.stringify(suites, null, 2))
+} else {
+  console.table(suites)
 }
-
-// angled wide
-{
-  const results = []
-  for (let i = 0; i < 10; i++) {
-    results.push(await fire({ speed: 1.05, dx: i % 2 === 0 ? 70 : -70 }))
-  }
-  suites.push(summarize('angled_wide', results))
+const get = (n) => suites.find((s) => s.name === n)
+const checks = [
+  ['penetration 0 (all suites)', suites.every((s) => s.penetrate === 0)],
+  ['straight_medium ~100%', get('straight_medium').makeRate >= 0.95],
+  ['decent_spread 60–75%', get('decent_spread').makeRate >= 0.6 && get('decent_spread').makeRate <= 0.75],
+  ['weak_front misses', get('weak_front').makeRate <= 0.2],
+  ['angled_wide misses', get('angled_wide').makeRate === 0],
+  ['strong_bank uses glass', get('strong_bank').boardHit >= 10],
+  ['strong_bank never over', get('strong_bank').over === 0],
+  ['extreme mostly over', get('extreme_over').over >= 8],
+  ['over only on extreme', ['straight_medium', 'decent_spread', 'weak_front', 'strong_bank', 'angled_wide', 'seeded_decent'].every((n) => get(n).over === 0)],
+]
+let fail = 0
+for (const [label, ok] of checks) {
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}`)
+  if (!ok) fail++
 }
-
-// weak / front rim
-{
-  const results = []
-  for (let i = 0; i < 10; i++) {
-    results.push(await fire({ speed: 0.55, dx: 0 }))
-  }
-  suites.push(summarize('weak_front', results))
-}
-
-// strong / bank
-{
-  const results = []
-  for (let i = 0; i < 12; i++) {
-    results.push(await fire({ speed: 1.35 + (i % 3) * 0.05, dx: (i % 2) * 8 - 4 }))
-  }
-  suites.push(summarize('strong_bank', results))
-}
-
-// extreme over
-{
-  const results = []
-  for (let i = 0; i < 10; i++) {
-    results.push(await fire({ speed: 2.2, dx: 0 }))
-  }
-  suites.push(summarize('extreme_over', results))
-}
-
-// decent spread
-{
-  const results = []
-  for (let i = 0; i < 24; i++) {
-    const speed = 0.78 + Math.random() * 0.5
-    const dx = (Math.random() - 0.5) * 48
-    results.push(await fire({ speed, dx }))
-  }
-  suites.push(summarize('decent_spread', results))
-}
-
-console.log(JSON.stringify(suites, null, 2))
-const assert = (cond, msg) => {
-  if (!cond) console.error('ASSERT FAIL:', msg)
-  else console.log('ASSERT OK:', msg)
-}
-for (const s of suites) {
-  assert(s.penetrateRate === 0, `${s.name} penetrate=0 (got ${s.penetrateRate})`)
-}
-assert(suites.find((s) => s.name === 'strong_bank').overRate === 0, 'strong over=0')
-assert(suites.find((s) => s.name === 'extreme_over').overRate > 0.5, 'extreme mostly over')
-assert(suites.find((s) => s.name === 'straight_medium').makeRate >= 0.85, 'straight makes')
-const decent = suites.find((s) => s.name === 'decent_spread')
-assert(decent.makeRate >= 0.55 && decent.makeRate <= 0.9, `decent make ${decent.makeRate}`)
-const nearAll =
-  suites
-    .filter((s) => s.name !== 'extreme_over')
-    .reduce((a, s) => a + s.nearRimRate * s.n, 0) /
-  suites.filter((s) => s.name !== 'extreme_over').reduce((a, s) => a + s.n, 0)
-assert(nearAll >= 0.9, `near-rim ~95% (got ${nearAll.toFixed(3)})`)
-
-await browser.close()
+process.exitCode = fail ? 1 : 0

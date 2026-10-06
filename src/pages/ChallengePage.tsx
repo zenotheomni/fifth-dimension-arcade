@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { track } from '../arcade/analytics'
 import { getChallengeJson } from '../arcade/core/challenges'
-import CourtVisionPhaser from '../arcade/courtVisionPhaser/CourtVisionPhaser'
 import type { CvChallengeConfig } from '../arcade/courtVisionPhaser/types'
 import '../arcade/courtVisionPhaser/courtVisionPhaser.css'
+
+const CourtVision3D = lazy(() => import('../arcade/courtVision3d/CourtVision3D'))
 
 type Phase = 'loading' | 'ready' | 'playing' | 'error'
 
@@ -75,11 +76,13 @@ export default function ChallengePage() {
   if (phase === 'playing' && challenge) {
     return (
       <div className="arcade-root arcade-root--game">
-        <CourtVisionPhaser
-          challenge={challenge}
-          lockMode
-          onChallengeResolved={onResolved}
-        />
+        <Suspense fallback={<div className="cv3-suspense">Loading Court Vision…</div>}>
+          <CourtVision3D
+            challenge={challenge}
+            lockMode
+            onChallengeResolved={onResolved}
+          />
+        </Suspense>
       </div>
     )
   }
