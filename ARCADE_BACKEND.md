@@ -13,8 +13,9 @@ All arcade objects are prefixed `arcade_`. Existing landing-page tables (`waitli
 5. `arcade_identity_tokens` — device token auth, case-insensitive handles, reserved handles + one-time claim codes
 6. `arcade_rivals_alerts_tables` — boards, challenge entries, rivalries, seed tickets, alerts, push subscriptions/log, server keys
 7. `arcade_rivals_alerts_rpcs` — session/claim/board/run/challenge/rivals/inbox/push RPCs
+8. `arcade_revoke_legacy_rpcs` — revoke client EXECUTE on token-less legacy RPCs (`arcade_register_player`, `arcade_submit_score`, `arcade_create_challenge`, `arcade_get_challenge`, `arcade_personal_best`)
 
-SQL copies live in `supabase/migrations/`.
+SQL copies live in `supabase/migrations/`. Data rows that carry secrets' hashes (the GoForNow reservation, the push server-key hash) were inserted directly and are intentionally not in the repo.
 
 ## Tables
 
