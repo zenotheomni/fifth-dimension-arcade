@@ -637,3 +637,155 @@
   color: var(--soc-cyan) !important;
 }
 .soc-page__big { font-family: Bungee, sans-serif; font-size: 1.6rem !important; color: var(--soc-pink) !important; text-shadow: 0 0 12px rgba(255, 79, 163, 0.7); }
+
+/* ── Giveaway banner (menu) ── */
+.soc-contest {
+  position: relative;
+  display: flex;
+  gap: 0.6rem;
+  margin: -0.3rem 1.1rem 0.15rem;
+  padding: 0.5rem 0.6rem 0.5rem;
+  border-radius: 10px;
+  border: 2px solid var(--soc-gold);
+  background:
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.03) 0 1px, transparent 1px 3px),
+    linear-gradient(100deg, #3a0f3d 0%, #1d0b33 55%, #0b2338 100%);
+  box-shadow: 0 0 0 2px rgba(255, 79, 163, 0.35), 0 0 22px rgba(255, 200, 60, 0.25);
+  color: #f2f0ea;
+  font-family: Inter, system-ui, sans-serif;
+  overflow: hidden;
+}
+.soc-contest::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.12) 50%, transparent 65%);
+  transform: translateX(-100%);
+  animation: soc-contest-shine 4.5s ease-in-out infinite;
+}
+@keyframes soc-contest-shine { 60%, 100% { transform: translateX(100%); } }
+.soc-contest--ended, .soc-contest--winners_announced { border-color: var(--soc-cyan); }
+.soc-contest__img {
+  flex: 0 0 auto;
+  width: 52px;
+  height: 52px;
+  align-self: center;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 2px solid rgba(255, 200, 60, 0.6);
+  background: #12081f;
+}
+.soc-contest__body { flex: 1; min-width: 0; display: grid; gap: 0.22rem; }
+.soc-contest__row { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; }
+.soc-contest__chip {
+  font-family: Bungee, sans-serif;
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--soc-ink);
+  background: var(--soc-gold);
+  padding: 0.12rem 0.4rem;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.soc-contest--live .soc-contest__chip { background: var(--soc-pink); color: #fff; animation: soc-pulse 1.6s ease-in-out infinite; }
+.soc-contest--ended .soc-contest__chip,
+.soc-contest--winners_announced .soc-contest__chip { background: var(--soc-cyan); }
+@keyframes soc-pulse { 50% { box-shadow: 0 0 10px rgba(255, 79, 163, 0.9); } }
+.soc-contest__clock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.05;
+  font-family: Bungee, sans-serif;
+  font-size: 0.8rem;
+  color: var(--soc-gold);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 8px rgba(255, 200, 60, 0.5);
+  white-space: nowrap;
+}
+.soc-contest__clock small {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 0.56rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(242, 240, 234, 0.7);
+}
+.soc-contest__row { align-items: flex-start; }
+.soc-contest__test {
+  position: absolute;
+  left: 6px;
+  top: 6px;
+  z-index: 1;
+  padding: 0.05rem 0.3rem;
+  border-radius: 3px;
+  background: var(--soc-cyan);
+  color: var(--soc-ink);
+  font: 800 0.5rem/1.3 Inter, system-ui, sans-serif;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.soc-contest__prize, .soc-contest__winner, .soc-contest__you, .soc-contest__note {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.soc-contest__prize { font-weight: 700; }
+.soc-contest__prize span {
+  font-size: 0.6rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--soc-cyan);
+  margin-right: 0.2rem;
+}
+.soc-contest__winner { font-family: Bungee, sans-serif; font-size: 0.9rem; color: var(--soc-gold); }
+.soc-contest__winner strong { color: var(--soc-pink); font-weight: 400; }
+.soc-contest__winner span { font-family: Inter, system-ui, sans-serif; font-size: 0.72rem; color: #f2f0ea; }
+.soc-contest__you { color: var(--soc-gold); font-weight: 800; }
+.soc-contest__note { color: rgba(242, 240, 234, 0.75); font-size: 0.72rem; }
+.soc-contest__actions { display: flex; align-items: center; gap: 0.35rem; margin-top: 0.1rem; position: relative; z-index: 1; }
+.soc-contest__play {
+  appearance: none;
+  border: 0;
+  border-radius: 6px;
+  padding: 0.38rem 0.75rem;
+  font-family: Bungee, sans-serif;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--soc-ink);
+  background: linear-gradient(180deg, #ffe07a, var(--soc-gold));
+  box-shadow: 0 3px 0 #b07d10;
+  cursor: pointer;
+}
+.soc-contest__play:disabled { opacity: 0.55; cursor: default; }
+.soc-contest__link {
+  appearance: none;
+  border: 1px solid rgba(242, 240, 234, 0.3);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.25);
+  color: #f2f0ea;
+  padding: 0.32rem 0.55rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+.soc-contest__rules dl { margin: 0; display: grid; gap: 0.2rem; font-size: 0.86rem; }
+.soc-contest__rules dt { margin-top: 0.5rem; font-size: 0.62rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--soc-cyan); }
+.soc-contest__rules dd { margin: 0; line-height: 1.4; }
+.soc-contest__pre { white-space: pre-wrap; }
+@media (prefers-reduced-motion: reduce) {
+  .soc-contest::after, .soc-contest--live .soc-contest__chip { animation: none; }
+}
+.soc-board.is-contest { border-color: var(--soc-gold); }
+.soc-board__foot { margin: 0.3rem 0 0; font-size: 0.6rem; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(242, 240, 234, 0.55); text-align: center; }
+.soc-toast--contest_won { border-color: var(--soc-gold); box-shadow: 0 0 24px rgba(255, 200, 60, 0.45); }
+
+/* Three-tab toggle (All-time / Weekly / Contest): compact so it fits a 390px phone. */
+.soc-board__title { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.soc-toggle--3 button { padding: 0.38rem 0.42rem; letter-spacing: 0.04em; }

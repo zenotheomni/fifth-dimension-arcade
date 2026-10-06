@@ -14,8 +14,10 @@ All arcade objects are prefixed `arcade_`. Existing landing-page tables (`waitli
 6. `arcade_rivals_alerts_tables` — boards, challenge entries, rivalries, seed tickets, alerts, push subscriptions/log, server keys
 7. `arcade_rivals_alerts_rpcs` — session/claim/board/run/challenge/rivals/inbox/push RPCs
 8. `arcade_revoke_legacy_rpcs` — revoke client EXECUTE on token-less legacy RPCs (`arcade_register_player`, `arcade_submit_score`, `arcade_create_challenge`, `arcade_get_challenge`, `arcade_personal_best`)
+9. `arcade_contests_v2_tables` — giveaway columns on `arcade_contests` (prize image, rules, how-to-claim, winner count, auto-announce, test flag, end/announce timestamps), `arcade_contest_winners`, `arcade_admin_log`, `contest_won` alert kind
+10. `arcade_contests_v2_rpcs` — contest status/board/ticker/score-card RPCs, winner announce + finalize, admin-key-gated admin RPCs
 
-SQL copies live in `supabase/migrations/`. Data rows that carry secrets' hashes (the GoForNow reservation, the push server-key hash) were inserted directly and are intentionally not in the repo.
+SQL copies live in `supabase/migrations/`. Data rows that carry secrets' hashes (the GoForNow reservation, the push and admin server-key hashes) were inserted directly and are intentionally not in the repo.
 
 ## Tables
 
@@ -31,10 +33,12 @@ SQL copies live in `supabase/migrations/`. Data rows that carry secrets' hashes 
 | `arcade_challenge_entries` | Per-player challenge state: started → finished, result win/loss/tie |
 | `arcade_rivalries` | One row per player pair + game: wins/ties, last result, last played |
 | `arcade_seed_tickets` | Server-issued sway/wind seeds for set-the-bar + rematch runs |
-| `arcade_alerts` | Inbox: `rival_started`, `rival_finished`, `your_turn` (+ push status) |
+| `arcade_alerts` | Inbox: `rival_started`, `rival_finished`, `your_turn`, `contest_won` (+ push status) |
 | `arcade_push_subscriptions` / `arcade_push_log` | Web Push endpoints + per-send log |
-| `arcade_server_keys` | sha256 of server-only keys (push dequeue) |
-| `arcade_contests` | Timed giveaway / drop windows |
+| `arcade_server_keys` | sha256 of server-only keys (`push`: push dequeue/report + contest finalize; `admin`: admin RPCs) |
+| `arcade_contests` | Giveaways: game, window, prize (+ image), rules, how-to-claim, winner count, `is_active` (= published), `auto_announce`, `is_test` |
+| `arcade_contest_winners` | Announced winners: place, handle snapshot, score, one-time claim code, contacted / admin note |
+| `arcade_admin_log` | Admin actions (create / update / end / announce / winner update) |
 
 ## Security
 
@@ -48,7 +52,16 @@ SQL copies live in `supabase/migrations/`. Data rows that carry secrets' hashes 
 
 ### Public RPCs (EXECUTE granted to anon)
 
-`arcade_session`, `arcade_set_handle`, `arcade_claim_handle`, `arcade_board`, `arcade_issue_ticket`, `arcade_challenge_from_score`, `arcade_challenge_start`, `arcade_submit_run`, `arcade_challenge_view`, `arcade_rivals`, `arcade_inbox`, `arcade_inbox_read`, `arcade_push_subscribe`, `arcade_push_unsubscribe`, `arcade_push_dequeue`*, `arcade_push_report`* (*server-key gated), plus read-only `arcade_leaderboard`, `arcade_list_games`, `arcade_list_active_contests`.
+`arcade_session`, `arcade_set_handle`, `arcade_claim_handle`, `arcade_board`, `arcade_issue_ticket`, `arcade_challenge_from_score`, `arcade_challenge_start`, `arcade_submit_run`, `arcade_challenge_view`, `arcade_rivals`, `arcade_inbox`, `arcade_inbox_read`, `arcade_push_subscribe`, `arcade_push_unsubscribe`, `arcade_push_dequeue`*, `arcade_push_report`* (*server-key gated), plus read-only `arcade_leaderboard`, `arcade_list_games`, `arcade_list_active_contests`, `arcade_contests_public`, `arcade_contest_board`, `arcade_ticker`, `arcade_score_card`; server-key gated `arcade_contest_finalize`*; admin-key gated `arcade_admin_contests`, `arcade_admin_contest_save`, `arcade_admin_contest_end`, `arcade_admin_contest_announce`, `arcade_admin_contest_board`, `arcade_admin_winner_update`.
+
+## Giveaway contests
+
+- Status is derived: `upcoming` → `live` (inside `[starts_at, ends_at)`) → `ended` → `winners_announced`.
+- Contest board = best run per player whose `created_at` falls inside the window (board modes only, e.g. Court Vision 60s).
+- Winner reveal: when a contest with `auto_announce` ends, the next `contests` / `admin-contests` call (or the daily `contest-tick` cron backstop, 13:00 UTC) runs `arcade_contest_finalize`: top *N* get a `contest_won` alert (in-app + Web Push) carrying a one-time claim code `FF-XXXXXXXX`, and the menu banner flips to "Winner: <handle>". Players have no contact info, so the claim code is the proof of win — admin sees the same code.
+- `is_test` contests are hidden from players unless the request has `preview=1` (the app sets it after visiting `/arcade/?preview=contests`; `?preview=off` clears it). Use them for QA instead of real contests.
+- Admin UI: `/arcade/admin` (noindex). Key sent as `X-Arcade-Admin`; the API compares it against `ARCADE_ADMIN_KEY` (sha256, constant time) and the RPCs re-check it against the sha256 in `arcade_server_keys` (`admin`). The key value is never in code or the DB.
+- Story score card: `/api/og?story=<scoreId>` renders a 1080×1920 PNG server-side from the saved run (handle, score, game, best streak, top-5 rank, live-contest rank) — it can't be forged from the client.
 
 ## HTTP API (Vercel)
 
@@ -58,7 +71,12 @@ All in one function: `/api/arcade/:action` (rewritten to `api/arcade.ts?action=`
 |--------|--------|-------|
 | POST | `session` | Create/resume device player → `{player:{player_id, handle, is_guest, token?}}` |
 | POST | `handle` / `claim` | Set handle / claim reserved handle with `{code}` |
-| GET | `board?game=&window=alltime\|weekly&playerId=` | Top 5 + `me` rank |
+| GET | `board?game=&window=alltime\|weekly\|contest&contest=&playerId=` | Top 5 + `me` rank (`window=contest` needs `contest=<id>`) |
+| GET | `contests?playerId=` | Live/upcoming/recent giveaways (finalizes due ones first) |
+| GET | `ticker` | Best-per-player weekly/all-time top 5 per game + the featured contest |
+| GET | `contest-tick` | Cron backstop: announce due contests |
+| GET | `admin-contests`, `admin-board?id=` | Admin (header `X-Arcade-Admin`) |
+| POST | `admin-save` `{contest}`, `admin-end` `{id}`, `admin-announce` `{id}`, `admin-winner` `{contestId, place, contacted, note}` | Admin |
 | POST | `run` | Submit any run (normal, challenge, ticket). Returns board ranks, match result, created challenge |
 | POST | `ticket` | Seeded set-the-bar / rematch (`rivalPlayerId`, `parentChallengeId`) |
 | POST | `challenge-from-score` | Turn a fresh 60s score into a shareable challenge |
@@ -68,7 +86,7 @@ All in one function: `/api/arcade/:action` (rewritten to `api/arcade.ts?action=`
 | POST | `inbox-read`, `push-subscribe`, `push-unsubscribe` | |
 | GET | `push-config` | VAPID public key |
 
-Other routes: `/api/og?id=` (edge, 1200×630 challenge card), `/arcade/challenge/:id` → `api/challenge-page.ts` (index.html + OG/Twitter meta), `/api/leaderboard`, `/api/games` (lobby ticker).
+Other routes: `/api/og?id=` (1200×630 challenge card), `/api/og?story=<scoreId>` (1080×1920 story card), `/arcade/challenge/:id` → `api/challenge-page.ts` (index.html + OG/Twitter meta), `/api/leaderboard`, `/api/games` (lobby ticker).
 
 ## Alerts
 
@@ -84,6 +102,7 @@ See `.env.example`. Production + Preview:
 - `ARCADE_PUBLIC_BASE_URL`, `VITE_ARCADE_PUBLIC_BASE_URL`
 - `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` (secret), `VAPID_SUBJECT`
 - `ARCADE_PUSH_SERVER_KEY` (secret; its sha256 is in `arcade_server_keys`)
+- `ARCADE_ADMIN_KEY` (secret; unlocks `/arcade/admin`; its sha256 is in `arcade_server_keys` as `admin`). Rotate by setting a new value in Vercel and updating the hash row.
 - optional `ARCADE_PUSH_DRY_RUN=1`
 
 ## Challenge public base URL

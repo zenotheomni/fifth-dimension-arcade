@@ -689,3 +689,13 @@
 .ffa-select--social .ffa-select__hint {
   display: none;
 }
+/* Giveaway banner present: trim the cabinets so the board still clears the dock. */
+.ffa-select--social.has-contest .ffa-ticker {
+  margin-bottom: 0.55rem;
+}
+.ffa-select--social.has-contest .ffa-card {
+  flex-basis: min(36vw, 160px);
+}
+.ffa-select--social.has-contest .ffa-card__tag {
+  display: none;
+}

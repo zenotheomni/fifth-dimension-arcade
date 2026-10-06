@@ -11,7 +11,8 @@
     { "source": "/arcade/fifth-run", "destination": "/arcade/index.html" },
     { "source": "/arcade/challenge/:id", "destination": "/api/challenge-page?id=:id" },
     { "source": "/arcade/claim", "destination": "/arcade/index.html" },
-    { "source": "/arcade/key", "destination": "/arcade/index.html" }
+    { "source": "/arcade/key", "destination": "/arcade/index.html" },
+    { "source": "/arcade/admin", "destination": "/arcade/index.html" }
   ],
   "headers": [
     {
@@ -24,6 +25,14 @@
     {
       "source": "/arcade/manifest.webmanifest",
       "headers": [{ "key": "Content-Type", "value": "application/manifest+json" }]
+    },
+    {
+      "source": "/arcade/admin",
+      "headers": [
+        { "key": "X-Robots-Tag", "value": "noindex, nofollow" },
+        { "key": "Cache-Control", "value": "no-store" }
+      ]
     }
-  ]
+  ],
+  "crons": [{ "path": "/api/arcade/contest-tick", "schedule": "0 13 * * *" }]
 }

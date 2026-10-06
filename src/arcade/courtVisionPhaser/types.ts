@@ -28,6 +28,8 @@ export type CvEndPayload = {
   newPb: boolean
   mode: CvMode
   beatChallenge: boolean | null
+  /** Longest make streak in the run (Court Vision 3D). */
+  bestStreak?: number
 }
 
 export type CvBridge = {

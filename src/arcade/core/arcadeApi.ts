@@ -1,6 +1,6 @@
 import { api, ensureSession, getCachedPlayer } from './session'
 
-export type BoardWindow = 'alltime' | 'weekly'
+export type BoardWindow = 'alltime' | 'weekly' | 'contest'
 export type BoardEntry = { rank: number; player_id: string; handle: string; score: number; created_at: string; is_me: boolean }
 export type Board = {
   game_id: string
@@ -10,6 +10,34 @@ export type Board = {
   entries: BoardEntry[]
   me: { rank: number; score: number; handle: string } | null
   total: number
+  contest?: Contest
+}
+
+export type ContestStatus = 'upcoming' | 'live' | 'ended' | 'winners_announced'
+export type Contest = {
+  id: string
+  game_id: string
+  game_title: string | null
+  title: string
+  prize_text: string
+  prize_image_url: string | null
+  rules_text: string
+  how_to_claim: string
+  starts_at: string
+  ends_at: string
+  ended_early: boolean
+  winner_count: number
+  is_test: boolean
+  status: ContestStatus
+  winners_announced_at: string | null
+  winners: { place: number; handle: string; score: number; is_me: boolean }[]
+  server_now: string
+}
+
+export type TickerData = {
+  boards: { game_id: string; game_title: string; label: string; weekly: { rank: number; handle: string; score: number }[]; alltime: { rank: number; handle: string; score: number }[] }[]
+  contest: (Contest & { leaders: { rank: number; handle: string; score: number }[] }) | null
+  server_now: string
 }
 
 export type ChallengeInfo = {
@@ -83,7 +111,7 @@ export type Rival = {
 
 export type Alert = {
   id: number
-  kind: 'rival_started' | 'rival_finished' | 'your_turn'
+  kind: 'rival_started' | 'rival_finished' | 'your_turn' | 'contest_won'
   title: string
   body: string
   url: string
@@ -92,11 +120,40 @@ export type Alert = {
   read: boolean
 }
 
-export function fetchBoard(game: string, window: BoardWindow) {
+/** Test contests are only visible with ?preview=contests once (persisted) — used for QA. */
+export function contestPreview(): boolean {
+  try {
+    const q = new URLSearchParams(window.location.search).get('preview')
+    if (q === 'contests') localStorage.setItem('fd_arcade_contest_preview', '1')
+    if (q === 'off') localStorage.removeItem('fd_arcade_contest_preview')
+    return localStorage.getItem('fd_arcade_contest_preview') === '1'
+  } catch {
+    return false
+  }
+}
+
+export function fetchBoard(game: string, window: BoardWindow, contestId?: string | null) {
   return api<{ board: Board }>('board', {
-    query: { game, window, playerId: getCachedPlayer()?.player_id },
+    query: {
+      game,
+      window,
+      contest: window === 'contest' ? contestId : undefined,
+      playerId: getCachedPlayer()?.player_id,
+      preview: contestPreview() ? '1' : undefined,
+    },
     auth: false,
   })
+}
+
+export function fetchContests() {
+  return api<{ contests: Contest[]; server_now: string }>('contests', {
+    query: { playerId: getCachedPlayer()?.player_id, preview: contestPreview() ? '1' : undefined },
+    auth: false,
+  })
+}
+
+export function fetchTicker() {
+  return api<TickerData>('ticker', { query: { preview: contestPreview() ? '1' : undefined }, auth: false })
 }
 
 export async function submitRun(input: {

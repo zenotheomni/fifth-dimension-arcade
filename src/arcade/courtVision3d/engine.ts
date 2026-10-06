@@ -85,6 +85,7 @@ class Engine {
   phase: CvHudState['phase'] = 'ready'
   score = 0
   streak = 0
+  bestStreak = 0
   timeLeft = 60
   pb = loadPersonalBest()
   ended = false
@@ -396,6 +397,7 @@ class Engine {
       banked5d: banked,
     })
     this.streak = result.streakAfter
+    this.bestStreak = Math.max(this.bestStreak, this.streak)
     this.lastPoints = result.points || null
     this.score += result.points
     sfxSwish(swish)
@@ -474,7 +476,7 @@ class Engine {
       this.callout = COURT_VISION_COPY.NEW_PB
     }
     this.emitHud(this.callout)
-    this.bridge.onEnded({ score: this.score, pb: next, newPb, mode: this.mode, beatChallenge })
+    this.bridge.onEnded({ score: this.score, pb: next, newPb, mode: this.mode, beatChallenge, bestStreak: this.bestStreak })
   }
 
   requestEnd() {

@@ -41,3 +41,13 @@ export function getPushEnv(): {
   if (!publicKey || !privateKey || !serverKey) return null
   return { publicKey, privateKey, subject, serverKey }
 }
+
+/** Server-only key for key-gated RPCs (push dequeue/report, contest finalize). */
+export function getServerKey(): string | null {
+  return process.env.ARCADE_PUSH_SERVER_KEY || null
+}
+
+/** Admin key for /arcade/admin (value lives only in Vercel env; DB holds its sha256). */
+export function getAdminKey(): string | null {
+  return process.env.ARCADE_ADMIN_KEY || null
+}
