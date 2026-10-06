@@ -186,7 +186,7 @@ export default function ChallengePage() {
           {phase === 'loading' || phase === 'starting' ? (
             <>
               <p className="cvp-challenger__badge">Challenge</p>
-              <h1 className="cvp-challenger__title">{phase === 'starting' ? (isFifthRun ? 'Paving the road…' : 'Racking up…') : 'Loading…'}</h1>
+              <h1 className="cvp-challenger__title">{phase === 'starting' ? (isFifthRun ? 'Tuning the engine…' : 'Racking up…') : 'Loading…'}</h1>
               <p className="cvp-challenger__copy">Pulling the challenge card.</p>
             </>
           ) : null}
@@ -247,7 +247,7 @@ export default function ChallengePage() {
                 <span className="cvp-challenger__dot" />
               </p>
               <HandlePrompt
-                title={isFifthRun ? 'Who’s running?' : 'Who’s shooting?'}
+                title={isFifthRun ? 'Who’s driving?' : 'Who’s shooting?'}
                 subtitle={`So ${view.creator_handle} knows who beat them.`}
                 cta="Play"
                 onDone={() => void begin()}
@@ -284,7 +284,7 @@ export default function ChallengePage() {
               {view.h2h && view.h2h.games > 0 ? <p className="soc-vs__series">{view.h2h.text}</p> : null}
               <p className="cvp-challenger__copy">
                 {isFifthRun
-                  ? 'Fifth Run · same highway, same stars, same traffic · one hit ends it.'
+                  ? 'Fifth Gear · same highway, same stars, same traffic · drive farther.'
                   : `Court Vision · same court, same ${view.seed.startsWith('still:') ? 'setup' : 'sway & wind'} · 60 seconds.`}
               </p>
 

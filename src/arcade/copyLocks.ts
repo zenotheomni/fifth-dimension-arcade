@@ -17,11 +17,11 @@ export const COURT_VISION_COPY = {
 } as const
 
 export const FIFTH_RUN_COPY = {
-  START: "You're already moving.",
+  START: "Fifth gear. You're already rolling.",
   FIRST_KEY: 'Star acquired.',
   MULTIPLIER_X2: COPY.FLOW_STATE,
   NEW_PB: COPY.FIFTH_STATE_UNLOCKED,
-  CRASH: 'Glitch. Rearrange. Run it back.',
-  BEAT_FRIEND: 'You outran their reality.',
+  CRASH: 'Crash. Rearrange. Drive it back.',
+  BEAT_FRIEND: 'You outdrove their reality.',
   HAND: 'Invisible · 15s',
 } as const

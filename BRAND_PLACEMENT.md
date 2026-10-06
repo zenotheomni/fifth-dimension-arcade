@@ -18,7 +18,7 @@ Source: `CREATIVE_BRIEF.md`. Keep marks subtle — streetwear-clean, not clutter
 
 **End doors (always):** Challenge a friend · Enter boutique
 
-## Fifth Run (when gameplay lands)
+## Fifth Gear (id: fifth-run)
 
 - Logos on **world objects** (boutique windows, record-store neon, theater marquee) — not HUD watermark
 - Obstacles stay anonymous (no faces)

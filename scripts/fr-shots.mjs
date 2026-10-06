@@ -1,5 +1,5 @@
 /**
- * Fifth Run screenshots + clip (390×844, deterministic manual stepping, mocked API — nothing hits prod).
+ * Fifth Gear screenshots + clip (390×844, deterministic manual stepping, mocked API — nothing hits prod).
  *   npx vite preview --port 4173 &   node scripts/fr-shots.mjs [idle run jump powerup crash end video]
  */
 import { chromium } from 'playwright'
@@ -99,7 +99,7 @@ await page.evaluate(() => {
 })
 
 if (want('video')) {
-  const dir = path.join(OUT, 'fr-v2-run-frames')
+  const dir = path.join(OUT, 'fr-gear-run-frames')
   fs.rmSync(dir, { recursive: true, force: true })
   fs.mkdirSync(dir, { recursive: true })
   await step(7000) // get up to speed
@@ -108,15 +108,15 @@ if (want('video')) {
     await page.screenshot({ path: path.join(dir, `f${String(f++).padStart(3, '0')}.png`) })
     await step(1000 / 30)
   }
-  execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-framerate', '30', '-i', path.join(dir, 'f%03d.png'), '-vf', 'scale=780:1688:flags=lanczos,format=yuv420p', '-c:v', 'libx264', '-crf', '20', '-movflags', '+faststart', path.join(OUT, 'fr-v2-run.mp4')])
-  console.log('wrote fr-v2-run.mp4 frames', f)
+  execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-framerate', '30', '-i', path.join(dir, 'f%03d.png'), '-vf', 'scale=780:1688:flags=lanczos,format=yuv420p', '-c:v', 'libx264', '-crf', '20', '-movflags', '+faststart', path.join(OUT, 'fr-gear-run.mp4')])
+  console.log('wrote fr-gear-run.mp4 frames', f)
 }
 
 if (want('run')) {
   await until((s) => s.t > 22, 40000, 100)
   await until((s) => !s.air && s.slide === 0 && !s.near, 6000)
   await settle()
-  await shot('fr-v2-run.png')
+  await shot('fr-gear-run.png')
 }
 
 if (want('jump')) {
@@ -148,7 +148,7 @@ if (want('crash') || want('end')) {
   await until((s) => s.phase === 'ended', 4000)
   await page.waitForSelector('.fr-end', { timeout: 10000 })
   await page.waitForTimeout(1200)
-  if (want('end')) await shot('fr-v2-end.png')
+  if (want('end')) await shot('fr-gear-end.png')
 }
 
 console.log('final', await state(), 'lastScore', lastScore)

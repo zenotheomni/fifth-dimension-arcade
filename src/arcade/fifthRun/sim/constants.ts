@@ -1,5 +1,5 @@
 /**
- * Fifth Run — deterministic sim constants.
+ * Fifth Gear — deterministic sim constants.
  *
  * Determinism note: the track generator and the runner step only use + − × ÷ and comparisons
  * (no Math.exp / sin / pow), which are exactly rounded IEEE-754 ops in every JS engine. Same seed
@@ -12,7 +12,7 @@ export const LANE_W = 2.0
 export const laneX = (lane: number) => (lane - 1) * LANE_W
 
 /** Forward speed (m/s) as a function of distance — faster ramp for v2. */
-export const SPEED = { v0: 16, vmax: 42, k: 1100 }
+export const SPEED = { v0: 20, vmax: 52, k: 900 }
 export const speedAt = (s: number) => SPEED.v0 + (SPEED.vmax - SPEED.v0) * (s / (s + SPEED.k))
 /** Difficulty 0..1 (pattern mix + spacing). */
 export const DIFF_K = 720
@@ -30,7 +30,8 @@ export const LANE_SPEED = LANE_W / 0.12
 /** Buffered input window. */
 export const BUFFER_TICKS = Math.round(0.22 * FR_HZ)
 
-export const BODY = { h: 1.75, slideH: 0.85, halfD: 0.28, halfW: 0.32 }
+/** Car body AABB (feet/ground = y0). Hop clears barriers; slide ducks overhead. */
+export const BODY = { h: 1.35, slideH: 0.62, halfD: 1.9, halfW: 0.82 }
 
 export const OB = {
   barrier: { h: 0.75, len: 0.4, halfW: 0.8 },
@@ -55,9 +56,11 @@ export const POWER_TICKS = {
 export const STAR_BASE = 10
 /**
  * Flat distance-equivalent points per star (stars boost the score heavily alongside metres).
- * score = floor(distance) + stars × STAR_FLAT + starPts(STAR_BASE × combo)
+ * score = floor(distance) + floor(timeS × TIME_PTS) + stars × STAR_FLAT + starPts(STAR_BASE × combo)
  */
 export const STAR_FLAT = 25
+/** Points per second lasted (time survived). */
+export const TIME_PTS = 5
 /** combo thresholds → multiplier index+1 (x1..x5) */
 export const COMBO_STEPS = [0, 10, 30, 60, 100]
 export const multFor = (combo: number) => {

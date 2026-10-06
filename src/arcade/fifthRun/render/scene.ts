@@ -1,8 +1,8 @@
 /**
- * Fifth Run — three.js scene. Neon highway into a night city: wet road with planar reflections,
- * instanced towers, palms, gates, ’59-style Cadillacs, gold shooting stars, bloom.
+ * Fifth Gear — three.js scene. Drive a ’59 Cadillac through Miami night → galaxy biomes.
+ * Wet road reflections, traffic Cadillacs, 💫 stars, bloom. Galaxy run: city → cosmos → deep space.
  *
- * World convention: the runner stays at z = 0; track objects live in `world` at z = −s and the
+ * World convention: the player car stays at z = 0; track objects live in `world` at z = −s and the
  * group is translated by +runnerS each frame. Sky, planet, stars and skyline are camera-locked.
  */
 import * as THREE from 'three'
@@ -22,7 +22,7 @@ import {
   palmMaterial,
   type CarParts,
 } from './props'
-import { RunnerFigure, type PoseInput } from './runnerFigure'
+import { PlayerCar, type PoseInput } from './playerCar'
 import { mergeStatic } from './merge'
 import { glowMaterial, PALETTE, roadMaterial, skyMaterial, towerMaterial } from './shaders'
 import { blobTexture, chevronTexture, glowTexture, planetTexture, shootingStarTexture, streakTexture } from './textures'
@@ -45,7 +45,7 @@ export type ViewState = {
   lives: number
   hand: number
   invuln: boolean
-  /** 🖐️ active — runner fades / ghosted */
+  /** 🖐️ active — car fades / ghosted */
   invisible: boolean
   stumble: number
   obstacles: Obstacle[]
@@ -79,7 +79,7 @@ export class FrScene {
   dprCap = 2
   width = 1
   height = 1
-  runner = new RunnerFigure()
+  runner = new PlayerCar()
 
   private world = new THREE.Group()
   private skyGroup = new THREE.Group()
@@ -125,8 +125,8 @@ export class FrScene {
   private sparkData: { p: THREE.Vector3; v: THREE.Vector3; life: number; max: number }[] = []
   private sparkGeo!: THREE.BufferGeometry
   private camX = 0
-  private camY = 3.4
-  private fov = 64
+  private camY = 2.85
+  private fov = 62
   private tmpM = new THREE.Matrix4()
   private tmpQ = new THREE.Quaternion()
   private tmpV = new THREE.Vector3()
@@ -194,7 +194,7 @@ export class FrScene {
     // ── runner + fx ──
     for (const m of this.runner.meshes) m.layers.enable(REFL)
     this.scene.add(this.runner.group)
-    this.blob = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 1.6), new THREE.MeshBasicMaterial({ map: blobTexture(), transparent: true, depthWrite: false, opacity: 0.8 }))
+    this.blob = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 4.2), new THREE.MeshBasicMaterial({ map: blobTexture(), transparent: true, depthWrite: false, opacity: 0.55 }))
     this.blob.rotation.x = -Math.PI / 2
     this.blob.position.y = 0.012
     this.scene.add(this.blob)
@@ -207,8 +207,8 @@ export class FrScene {
       fragmentShader:
         'uniform float uTime; uniform float uAlpha; varying vec3 vN; varying vec3 vV; void main(){ float f = pow(1.0 - abs(dot(vN, vV)), 2.2); float hex = 0.5 + 0.5*sin(vN.y*40.0 + uTime*3.0); gl_FragColor = vec4(vec3(0.72,0.45,1.0) * (f*1.4 + hex*0.08) * uAlpha, 1.0); }',
     })
-    this.shieldMesh = new THREE.Mesh(new THREE.SphereGeometry(1.05, 28, 18), this.shieldMat)
-    this.shieldMesh.scale.set(0.85, 1.15, 0.85)
+    this.shieldMesh = new THREE.Mesh(new THREE.SphereGeometry(1.35, 28, 18), this.shieldMat)
+    this.shieldMesh.scale.set(1.15, 0.75, 1.6)
     this.scene.add(this.shieldMesh)
     this.fiveRing = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 2.4), glowMaterial(this.glow, '#ffc83c', 0.9))
     this.fiveRing.rotation.x = -Math.PI / 2
@@ -625,6 +625,7 @@ export class FrScene {
       deadT: v.deadT,
       deathKind: v.deathKind,
       idle: v.idle,
+      invisible: v.invisible,
     }
     this.runner.group.userData.prevX = v.x
     this.runner.update(pose)
@@ -642,13 +643,12 @@ export class FrScene {
 
     // power-up fx — 🖐️ hand = soft violet ghost shell while invisible
     this.shieldMesh.visible = v.invisible && !v.dead
-    this.shieldMesh.position.set(v.x, v.y + 0.95 - (v.sliding ? 0.45 : 0), 0)
+    this.shieldMesh.position.set(v.x, v.y + 0.7 - (v.sliding ? 0.25 : 0), 0)
     this.shieldMat.uniforms.uTime.value = t
     this.shieldMat.uniforms.uAlpha.value = 0.35 + 0.2 * Math.sin(t * 5)
     this.fiveRing.visible = false
     this.magnetRing.visible = false
-    const rim = this.runner.hoodieMat.userData.rim as { uRimColor: { value: THREE.Color } } | undefined
-    if (rim) rim.uRimColor.value.set(v.invisible ? '#b48cff' : '#ff3fc8')
+    this.runner.setGhostRim(v.invisible)
 
     // decor recycling
     this.writeTowers(false, S)
@@ -846,6 +846,43 @@ export class FrScene {
     this.skyGroup.position.set(this.camera.position.x * 0.9, 0, this.camera.position.z)
     this.starMat.uniforms.uTime.value = v.time
     this.skyMat.uniforms.uTime.value = v.time
+    // Galaxy run biomes: Miami (0) → cosmic (1) → deep space (2)
+    const s = v.s
+    let targetBiome = 0
+    let blend = 0
+    if (s < 600) {
+      targetBiome = 0
+      blend = s / 600
+    } else if (s < 1600) {
+      targetBiome = 1
+      blend = (s - 600) / 1000
+    } else {
+      targetBiome = 2
+      blend = Math.min(1, (s - 1600) / 1400)
+    }
+    if (this.skyMat.uniforms.uBiome) {
+      const biomeU = targetBiome === 0 ? blend * 0.35 : targetBiome === 1 ? 0.35 + blend * 0.45 : 0.8 + blend * 0.2
+      this.skyMat.uniforms.uBiome.value += (biomeU - this.skyMat.uniforms.uBiome.value) * Math.min(1, dt * 1.2)
+    }
+    // Fade city towers/palms as we leave Earth
+    const cityFade = targetBiome === 0 ? 1 - blend * 0.4 : targetBiome === 1 ? 0.55 - blend * 0.45 : Math.max(0.02, 0.1 - blend * 0.08)
+    if (this.towers) this.towers.visible = cityFade > 0.05
+    if (this.palms) this.palms.visible = cityFade > 0.15
+    // denser star field opacity in deep space
+    this.starMat.transparent = true
+    const starBoost = targetBiome === 0 ? 1 : targetBiome === 1 ? 1.4 + blend * 0.4 : 1.9 + blend * 0.5
+    // fog / road tint toward cosmic
+    if (this.roadMat.uniforms.uFog) {
+      const fog = this.roadMat.uniforms.uFog.value as THREE.Color
+      if (targetBiome === 0) fog.setRGB(0.1, 0.08, 0.16)
+      else if (targetBiome === 1) fog.setRGB(0.04 + blend * 0.02, 0.02, 0.12 + blend * 0.08)
+      else fog.setRGB(0.02, 0.01, 0.06 + blend * 0.04)
+    }
+    // denser bloom into deep space
+    if (this.bloom) {
+      const add = targetBiome === 0 ? blend * 0.08 : targetBiome === 1 ? 0.12 + blend * 0.15 : 0.28 + blend * 0.2
+      this.bloom.intensity = 1.15 + add * Math.min(1.2, starBoost * 0.5)
+    }
     for (const c of this.comets) {
       if (c.wait > 0) {
         c.wait -= dt
@@ -877,24 +914,24 @@ export class FrScene {
   }
 
   private updateCamera(v: ViewState, dt: number) {
-    const k = 1 - Math.exp(-dt * 7)
-    this.camX += (v.x * 0.62 - this.camX) * k
-    const ty = 3.35 + Math.max(0, v.y) * 0.32 - (v.sliding ? 0.25 : 0)
-    this.camY += (ty - this.camY) * (1 - Math.exp(-dt * 5))
-    const speedF = THREE.MathUtils.clamp((v.speed - 12) / 18, 0, 1)
+    const k = 1 - Math.exp(-dt * 8)
+    this.camX += (v.x * 0.55 - this.camX) * k
+    const ty = 2.75 + Math.max(0, v.y) * 0.28 - (v.sliding ? 0.18 : 0)
+    this.camY += (ty - this.camY) * (1 - Math.exp(-dt * 5.5))
+    const speedF = THREE.MathUtils.clamp((v.speed - 14) / 28, 0, 1)
     const aspect = this.camera.aspect
-    const baseFov = aspect > 0.8 ? 52 : 64
-    const tf = baseFov + speedF * 9 + (v.invisible ? 2.5 : 0)
+    const baseFov = aspect > 0.8 ? 50 : 60
+    const tf = baseFov + speedF * 11 + (v.invisible ? 2.5 : 0)
     this.fov += (tf - this.fov) * (1 - Math.exp(-dt * 3))
     const sh = v.shake
     const sx = sh ? (Math.sin(v.time * 61) + Math.sin(v.time * 37)) * 0.06 * sh : 0
     const sy = sh ? Math.sin(v.time * 53) * 0.05 * sh : 0
-    let dz = 6.7 - speedF * 0.5
+    let dz = 8.4 - speedF * 0.9
     if (v.dead) dz -= Math.min(1.2, v.deadT * 1.5)
     this.camera.position.set(this.camX + sx, this.camY + sy, dz)
-    this.lookT.set(v.x * 0.5, 1.2, -14)
+    this.lookT.set(v.x * 0.45, 0.95, -18)
     this.camera.lookAt(this.lookT)
-    this.camera.rotation.z += (this.runner.group.rotation.z || 0) * 0.15
+    this.camera.rotation.z += (this.runner.group.rotation.z || 0) * 0.12
     this.camera.fov = this.fov
     this.camera.updateProjectionMatrix()
     this.camera.updateMatrixWorld(true)

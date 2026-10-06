@@ -1,4 +1,4 @@
-/** Fifth Run — custom materials: sky dome, wet neon road (planar reflection), instanced towers. */
+/** Fifth Gear — custom materials: sky dome, wet neon road (planar reflection), instanced towers. */
 import * as THREE from 'three'
 
 export const PALETTE = {
@@ -24,7 +24,7 @@ export function skyMaterial() {
     side: THREE.BackSide,
     depthWrite: false,
     fog: false,
-    uniforms: { uTime: { value: 0 } },
+    uniforms: { uTime: { value: 0 }, uBiome: { value: 0 } },
     vertexShader: /* glsl */ `
       varying vec3 vDir;
       void main(){
@@ -35,13 +35,30 @@ export function skyMaterial() {
     fragmentShader: /* glsl */ `
       varying vec3 vDir;
       uniform float uTime;
+      uniform float uBiome;
       void main(){
         vec3 d = normalize(vDir);
         float h = d.y;
-        vec3 zen = vec3(0.004,0.006,0.022);
-        vec3 up  = vec3(0.015,0.020,0.055);
-        vec3 mid = vec3(0.045,0.025,0.090);
-        vec3 hor = vec3(0.180,0.055,0.110);
+        float b = clamp(uBiome, 0.0, 1.0);
+        // Miami night
+        vec3 zen0 = vec3(0.004,0.006,0.022);
+        vec3 up0  = vec3(0.015,0.020,0.055);
+        vec3 mid0 = vec3(0.045,0.025,0.090);
+        vec3 hor0 = vec3(0.180,0.055,0.110);
+        // Cosmic / nebula highway
+        vec3 zen1 = vec3(0.01,0.002,0.04);
+        vec3 up1  = vec3(0.04,0.01,0.12);
+        vec3 mid1 = vec3(0.12,0.03,0.22);
+        vec3 hor1 = vec3(0.05,0.12,0.28);
+        // Deep galaxy
+        vec3 zen2 = vec3(0.002,0.001,0.012);
+        vec3 up2  = vec3(0.02,0.005,0.08);
+        vec3 mid2 = vec3(0.08,0.02,0.18);
+        vec3 hor2 = vec3(0.25,0.04,0.35);
+        vec3 zen = mix(mix(zen0, zen1, min(1.0, b*2.0)), zen2, smoothstep(0.5, 1.0, b));
+        vec3 up  = mix(mix(up0, up1, min(1.0, b*2.0)), up2, smoothstep(0.5, 1.0, b));
+        vec3 mid = mix(mix(mid0, mid1, min(1.0, b*2.0)), mid2, smoothstep(0.5, 1.0, b));
+        vec3 hor = mix(mix(hor0, hor1, min(1.0, b*2.0)), hor2, smoothstep(0.5, 1.0, b));
         vec3 col;
         if (h > 0.0) {
           col = mix(hor, mid, smoothstep(0.0, 0.07, h));
@@ -50,11 +67,15 @@ export function skyMaterial() {
         } else {
           col = mix(hor*0.8, vec3(0.06,0.02,0.10), smoothstep(0.0, 0.25, -h));
         }
-        // warm city glow at the vanishing point
         float vp = max(dot(d, normalize(vec3(0.0, 0.03, -1.0))), 0.0);
-        col += vec3(1.0,0.55,0.35) * pow(vp, 70.0) * 0.55 + vec3(0.25,0.7,0.75) * pow(vp, 12.0) * 0.1;
-        // horizon haze band
-        col += vec3(0.85,0.35,0.25) * exp(-abs(h)*34.0) * 0.1;
+        // city warm glow fades → cosmic teal/magenta beam
+        vec3 cityGlow = vec3(1.0,0.55,0.35) * pow(vp, 70.0) * 0.55 + vec3(0.25,0.7,0.75) * pow(vp, 12.0) * 0.1;
+        vec3 spaceGlow = vec3(0.4,0.2,1.0) * pow(vp, 40.0) * 0.7 + vec3(0.1,0.9,0.85) * pow(vp, 10.0) * 0.25;
+        col += mix(cityGlow, spaceGlow, b);
+        col += mix(vec3(0.85,0.35,0.25), vec3(0.5,0.15,0.85), b) * exp(-abs(h)*34.0) * 0.1;
+        // nebula wisps in space biomes
+        float n = sin(d.x * 8.0 + uTime * 0.05) * cos(d.z * 6.0 - uTime * 0.03);
+        col += vec3(0.35,0.1,0.55) * max(0.0, n) * b * 0.12 * max(0.0, h);
         gl_FragColor = vec4(col, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>

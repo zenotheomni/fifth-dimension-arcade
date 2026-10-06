@@ -1,5 +1,5 @@
 /**
- * Fifth Run — game engine: fixed 120 Hz sim, interpolated render, swipe/keyboard input,
+ * Fifth Gear — game engine: fixed 120 Hz sim, interpolated render, swipe/keyboard input,
  * callouts (copy locks), PB, adaptive quality. Exposes `__FR` for QA captures.
  */
 import { FIFTH_RUN_COPY } from '../copyLocks'
@@ -91,6 +91,7 @@ class Engine {
   fpsTime = 0
   fpsGood = 0
   startedAt = 0
+  biomeCalled = 0
   private touch: { id: number; x: number; y: number; t: number; fired: boolean } | null = null
   private ro: ResizeObserver | null = null
 
@@ -211,6 +212,7 @@ class Engine {
     this.phase = 'playing'
     this.startedAt = this.clock
     sfxStart()
+    this.biomeCalled = 0
     this.say(FIFTH_RUN_COPY.START, 'teal', 1.6)
     if (first) queueAction(this.run, first)
     this.emitHud(true)
@@ -300,6 +302,16 @@ class Engine {
     } else if (this.phase === 'crashed') {
       this.deadT += dt
       if (this.deadT > 1.45) this.finish()
+    }
+
+    if (this.phase === 'playing') {
+      if (this.run.s >= 600 && this.biomeCalled < 1) {
+        this.biomeCalled = 1
+        this.say('Leaving Miami…', 'teal', 1.4)
+      } else if (this.run.s >= 1600 && this.biomeCalled < 2) {
+        this.biomeCalled = 2
+        this.say('Deep space.', 'gold', 1.5)
+      }
     }
 
     this.hudAcc += dt
@@ -527,6 +539,6 @@ class Engine {
 
 export function createFifthRun(host: HTMLElement, bridge: FrBridge): FifthRunHandle {
   const engine = new Engine(host, bridge)
-  void engine.init().catch((err) => console.error('[fifth-run] init failed', err))
+  void engine.init().catch((err) => console.error('[fifth-gear] init failed', err))
   return { destroy: () => engine.destroy(), setMuted: (m) => engine.setMuted(m), pause: () => engine.pause() }
 }
