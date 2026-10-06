@@ -27,14 +27,14 @@
 
 ## Fifth Gear (`src/arcade/fifthRun/`, id `fifth-run`)
 
-No third-party art, models, textures or audio — everything in the game is generated in code:
-
-- Runner, ’59-style Cadillac (fins, bullet taillights, whitewalls), barriers, gantries, gates, lamps, palms,
-  keys and power-ups — procedural low-poly geometry (`render/runnerFigure.ts`, `render/props.ts`), original.
+- **Sports car mesh** — `public/art/cars/sports.glb` is the [three.js Ferrari glTF sample](https://github.com/mrdoob/three.js/tree/dev/examples/models/gltf)
+  (Draco-compressed). Loaded via `GLTFLoader` + `DRACOLoader`; body paint recolored per traffic variant.
+  Decoder wasm/js vendored under `public/draco/` from three.js examples (Apache-2.0 / three.js license).
+- Barriers, gantries, gates, lamps, palms, stars and power-ups — procedural geometry (`render/props.ts`), original.
 - Sky, wet neon road + planar reflection, instanced towers with procedural windows — custom GLSL
   (`render/shaders.ts`), original.
-- Planet, glow, comet streak, chevron textures — drawn to canvas at runtime (`render/textures.ts`), original.
+- Planet, glow, comet streak, chevron, shooting-star textures — canvas at runtime (`render/textures.ts`), original.
 - SFX — procedural Web Audio (`sfx.ts`), original.
-- In-world “5” emblem on gates and the 5× pickup — `public/art/emblem-160.webp`, Jenks / 5D Imperial.
-- Libraries: [three.js](https://threejs.org/) — MIT (incl. `examples/jsm/utils/BufferGeometryUtils.js`);
+- In-world “5” emblem on gates and the hand pickup — `public/art/emblem-160.webp`, Jenks / 5D Imperial.
+- Libraries: [three.js](https://threejs.org/) — MIT (incl. GLTF/DRACO loaders, BufferGeometryUtils);
   [postprocessing](https://github.com/pmndrs/postprocessing) — Zlib (bloom + ACES tone mapping).

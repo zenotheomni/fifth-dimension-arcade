@@ -115,6 +115,9 @@ class Engine {
     const emblem = await loadTexture(`${import.meta.env.BASE_URL}art/emblem-160.webp`)
     if (this.destroyed) return
     this.view = new FrScene(this.canvas, detectTier(), emblem)
+    // Upgrade to realistic sports-car GLTF (falls back to procedural on failure)
+    await this.view.loadGltfCars()
+    if (this.destroyed) return
     this.onResize()
     this.ro = new ResizeObserver(() => this.onResize())
     this.ro.observe(this.host)

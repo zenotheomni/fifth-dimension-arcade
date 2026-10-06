@@ -11,8 +11,8 @@ export const FR_DT = 1 / FR_HZ
 export const LANE_W = 2.0
 export const laneX = (lane: number) => (lane - 1) * LANE_W
 
-/** Forward speed (m/s) as a function of distance — faster ramp for v2. */
-export const SPEED = { v0: 20, vmax: 52, k: 900 }
+/** Forward speed (m/s) — Surfers-like ramp: punchy start, climbs hard. */
+export const SPEED = { v0: 22, vmax: 58, k: 780 }
 export const speedAt = (s: number) => SPEED.v0 + (SPEED.vmax - SPEED.v0) * (s / (s + SPEED.k))
 /** Difficulty 0..1 (pattern mix + spacing). */
 export const DIFF_K = 720
@@ -25,8 +25,8 @@ export const GRAVITY = (8 * JUMP_APEX) / (JUMP_T * JUMP_T)
 export const JUMP_VY = (4 * JUMP_APEX) / JUMP_T
 export const FAST_FALL_VY = 16
 export const SLIDE_TICKS = Math.round(0.58 * FR_HZ)
-/** Lateral speed: one lane in ~0.12 s. */
-export const LANE_SPEED = LANE_W / 0.12
+/** Lateral speed: one lane in ~0.1 s — tight Surfers weave. */
+export const LANE_SPEED = LANE_W / 0.1
 /** Buffered input window. */
 export const BUFFER_TICKS = Math.round(0.22 * FR_HZ)
 
@@ -36,11 +36,11 @@ export const BODY = { h: 1.35, slideH: 0.62, halfD: 1.9, halfW: 0.82 }
 export const OB = {
   barrier: { h: 0.75, len: 0.4, halfW: 0.8 },
   overhead: { bottom: 1.2, len: 0.45, halfW: 0.95 },
-  car: { h: 1.45, len: 5.4, halfW: 0.92 },
+  car: { h: 1.35, len: 4.4, halfW: 0.88 },
   gap: { halfW: 1.0 },
 } as const
 
-/** How far ahead (m) an oncoming car starts closing in visually/physically. */
+/** @deprecated Continuous oncoming no longer uses a park-then-lerp window. */
 export const ONCOMING_WINDOW = 95
 
 export const START_LIVES = 3

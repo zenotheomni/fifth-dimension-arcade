@@ -2,12 +2,13 @@
  * Fifth Gear — seeded endless track (v2).
  *
  * Rows of lane obstacles are generated strictly in order from a single Mulberry32 stream, so the
- * layout depends only on the seed (never on the player). Cars carry an oncoming approach speed
- * (`vs`); barriers / overheads / gaps stay static. Power-ups are 🖐️ hand (15 s invuln) only.
- * Collectibles are shooting stars (💫). The headless harness verifies survivability.
+ * layout depends only on the seed (never on the player). Cars are the main threat: they carry an
+ * independent oncoming speed (`vs`) and spawn in staggered waves that densify + speed up over
+ * distance. Barriers / overheads / gaps are occasional spice, not parked blockers. Power-ups are
+ * 🖐️ hand (15 s invuln) only. Collectibles are shooting stars (💫).
  */
 import { hashSeed, mulberry32 } from '../../core/seededRandom'
-import { JUMP_APEX, JUMP_T, OB, ONCOMING_WINDOW, START_CLEAR_M, levelAt, speedAt } from './constants'
+import { JUMP_APEX, JUMP_T, OB, START_CLEAR_M, levelAt, speedAt } from './constants'
 
 export type ObKind = 'barrier' | 'overhead' | 'car' | 'gap'
 /** v2: only the open-hand invuln pickup. */
@@ -36,11 +37,11 @@ export function obstacleS(o: Obstacle, runnerS: number): number {
   const gap = o.s - runnerS
   // Past the meet point — stay put (smashed or already cleared).
   if (gap <= 0) return o.s
-  // Lead distance the car starts ahead of the meet point.
-  const lead = ONCOMING_WINDOW * (o.vs / (o.vs + 18))
-  if (gap >= ONCOMING_WINDOW) return o.s + lead
-  // Lerp from (meet + lead) down to meet as the runner closes the gap.
-  return o.s + lead * (gap / ONCOMING_WINDOW)
+  // Continuous independent oncoming: car closes at `vs` while the runner
+  // advances at ~speedAt(meet). liveS = meet + gap*(vs/v) ⇒ world ds/dt = −vs
+  // (never a parked blocker that only starts moving inside a window).
+  const v = Math.max(8, speedAt(o.s))
+  return o.s + gap * (o.vs / v)
 }
 
 export type KeyItem = {
@@ -68,32 +69,34 @@ type Tok = 'E' | 'B' | 'O' | 'C' | 'D' | 'G'
 
 type Pattern = { p: string; min: number; w: (L: number) => number }
 
-/** Lane multisets; lanes are randomly permuted per row. Heavier on cars for oncoming traffic feel. */
+/** Lane multisets — cars dominate; lanes permuted per row. Density ramps with L. */
 const PATTERNS: Pattern[] = [
-  { p: 'BEE', min: 0, w: (L) => 0.85 - 0.5 * L },
-  { p: 'OEE', min: 0, w: (L) => 0.7 - 0.4 * L },
-  { p: 'CEE', min: 0, w: (L) => 1.25 - 0.35 * L },
-  { p: 'CCE', min: 0, w: () => 1.35 },
-  { p: 'BBE', min: 0.06, w: (L) => 0.3 + 0.25 * L },
-  { p: 'OOE', min: 0.1, w: (L) => 0.25 + 0.25 * L },
-  { p: 'BBB', min: 0.14, w: () => 0.45 },
-  { p: 'OOO', min: 0.14, w: () => 0.4 },
-  { p: 'GEE', min: 0.17, w: () => 0.4 },
-  { p: 'CCB', min: 0.12, w: (L) => 0.4 + 0.9 * L },
-  { p: 'CCO', min: 0.12, w: (L) => 0.4 + 0.8 * L },
-  { p: 'DEE', min: 0.12, w: () => 0.55 },
-  { p: 'DDE', min: 0.22, w: () => 0.65 },
-  { p: 'DCE', min: 0.22, w: () => 0.5 },
-  { p: 'BOE', min: 0.2, w: () => 0.35 },
-  { p: 'GGE', min: 0.3, w: () => 0.35 },
-  { p: 'GGG', min: 0.34, w: () => 0.38 },
-  { p: 'CCG', min: 0.3, w: () => 0.5 },
-  { p: 'BOC', min: 0.28, w: () => 0.55 },
-  { p: 'BOB', min: 0.32, w: () => 0.3 },
-  { p: 'OBO', min: 0.32, w: () => 0.3 },
-  { p: 'DDB', min: 0.38, w: () => 0.5 },
-  { p: 'DDO', min: 0.38, w: () => 0.5 },
-  { p: 'GBO', min: 0.45, w: () => 0.28 },
+  // Single / double oncoming cars (core dodge loop)
+  { p: 'CEE', min: 0, w: (L) => 2.4 - 0.6 * L },
+  { p: 'ECE', min: 0, w: (L) => 2.2 - 0.5 * L },
+  { p: 'EEC', min: 0, w: (L) => 2.2 - 0.5 * L },
+  { p: 'CCE', min: 0, w: (L) => 1.6 + 0.7 * L },
+  { p: 'CEC', min: 0.04, w: (L) => 1.4 + 0.9 * L },
+  { p: 'ECC', min: 0.04, w: (L) => 1.4 + 0.9 * L },
+  // Packed waves (late run)
+  { p: 'CCC', min: 0.28, w: (L) => 0.2 + 1.4 * L },
+  // Staggered double-stack in a lane (D)
+  { p: 'DEE', min: 0.06, w: (L) => 1.1 + 0.3 * L },
+  { p: 'EDE', min: 0.06, w: (L) => 1.1 + 0.3 * L },
+  { p: 'EED', min: 0.06, w: (L) => 1.1 + 0.3 * L },
+  { p: 'DDE', min: 0.18, w: (L) => 0.7 + 0.9 * L },
+  { p: 'DED', min: 0.22, w: (L) => 0.55 + 0.8 * L },
+  { p: 'DCE', min: 0.2, w: (L) => 0.6 + 0.5 * L },
+  // Occasional spice — never the main threat
+  { p: 'BEE', min: 0.12, w: (L) => 0.35 - 0.15 * L },
+  { p: 'OEE', min: 0.16, w: (L) => 0.28 - 0.1 * L },
+  { p: 'GEE', min: 0.2, w: () => 0.22 },
+  { p: 'BOE', min: 0.28, w: () => 0.18 },
+  { p: 'CCB', min: 0.24, w: (L) => 0.25 + 0.35 * L },
+  { p: 'CCO', min: 0.24, w: (L) => 0.25 + 0.3 * L },
+  { p: 'CCG', min: 0.32, w: () => 0.28 },
+  { p: 'BOC', min: 0.35, w: () => 0.3 },
+  { p: 'GGE', min: 0.4, w: () => 0.18 },
 ]
 
 const PERMS = [
@@ -146,8 +149,8 @@ export class Track {
   }
 
   private carVs(L: number) {
-    // Oncoming: 7–16 m/s closing (plus runner speed ≈ 23–58 m/s relative)
-    return q(7 + L * 9 + this.r() * 3)
+    // Oncoming approach: 14–22 early → 28–40 late (plus runner ≈ 34–90 relative closing)
+    return q(14 + L * 18 + this.r() * 8)
   }
 
   private nextPower(): PowerKind {
@@ -207,6 +210,8 @@ export class Track {
     const gapLen = q(Math.min(5, Math.max(2.6, 0.3 * v)))
 
     let rowEnd = s0
+    // Per-row stagger seed so multi-lane cars arrive offset (weave, not a flat wall)
+    const waveSkew = this.r() * 2.8
     for (let lane = 0; lane < 3; lane++) {
       const t = toks[lane]
       if (t === 'B') {
@@ -216,13 +221,20 @@ export class Track {
         this.addOb('overhead', lane, s0, OB.overhead.len)
         rowEnd = Math.max(rowEnd, s0 + OB.overhead.len)
       } else if (t === 'C') {
-        this.addOb('car', lane, s0, OB.car.len, this.carVs(L))
-        rowEnd = Math.max(rowEnd, s0 + OB.car.len)
+        // Stagger meet-points across lanes + jitter — Subway Surfers wave feel
+        const stagger = lane * (1.8 + this.r() * 1.6) + waveSkew * (lane === 1 ? 0.25 : 0.7) + this.r() * 1.4
+        const meet = s0 + stagger
+        this.addOb('car', lane, meet, OB.car.len, this.carVs(L))
+        rowEnd = Math.max(rowEnd, meet + OB.car.len)
       } else if (t === 'D') {
         const vs = this.carVs(L)
-        this.addOb('car', lane, s0, OB.car.len, vs)
-        this.addOb('car', lane, s0 + OB.car.len + 0.3, OB.car.len, vs)
-        rowEnd = Math.max(rowEnd, s0 + 2 * OB.car.len + 0.3)
+        const stagger = lane * (1.5 + this.r() * 1.4) + this.r() * 1.2
+        const meet = s0 + stagger
+        // Stacked pair in-lane with a dodge gap between them
+        const gap = 5.5 + this.r() * 3.5
+        this.addOb('car', lane, meet, OB.car.len, vs)
+        this.addOb('car', lane, meet + OB.car.len + gap, OB.car.len, this.carVs(L))
+        rowEnd = Math.max(rowEnd, meet + 2 * OB.car.len + gap)
       } else if (t === 'G') {
         this.addOb('gap', lane, s0, gapLen)
         rowEnd = Math.max(rowEnd, s0 + gapLen)
@@ -275,10 +287,10 @@ export class Track {
     this.pathLane = path
     this.prevEnd = rowEnd
 
-    // ── spacing to next row: reaction time shrinks with difficulty ──
-    const base = 1.45 - 0.9 * L
-    const T = Math.max(0.58, base * (0.85 + 0.4 * this.r()))
-    this.cursor = q(rowEnd + Math.max(10, v * T))
+    // ── spacing to next wave: reaction window shrinks; density ramps like Surfers ──
+    const base = 0.95 - 0.55 * L
+    const T = Math.max(0.32, base * (0.7 + 0.35 * this.r()))
+    this.cursor = q(rowEnd + Math.max(5.2, v * T))
     this.rows++
   }
 }
