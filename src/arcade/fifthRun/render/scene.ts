@@ -1,8 +1,8 @@
 /**
- * Fifth Gear — three.js scene. Drive a sports coupe through Miami night → galaxy biomes.
- * Wet road reflections, oncoming traffic, 💫 stars, bloom. Galaxy run: city → cosmos → deep space.
+ * Fifth Glide — three.js scene. On-foot 3-lane runner through Miami night → galaxy biomes.
+ * Wet road reflections, oncoming traffic, 💫 stars, bloom. Over-shoulder chase cam.
  *
- * World convention: the player car stays at z = 0; track objects live in `world` at z = −s and the
+ * World convention: the runner stays at z = 0; track objects live in `world` at z = −s and the
  * group is translated by +runnerS each frame. Sky, planet, stars and skyline are camera-locked.
  */
 import * as THREE from 'three'
@@ -22,7 +22,7 @@ import {
   palmMaterial,
   type CarParts,
 } from './props'
-import { PlayerCar, type PoseInput } from './playerCar'
+import { RunnerFigure, type PoseInput } from './runnerFigure'
 import { mergeStatic } from './merge'
 import { glowMaterial, PALETTE, roadMaterial, skyMaterial, towerMaterial } from './shaders'
 import { blobTexture, chevronTexture, glowTexture, planetTexture, shootingStarTexture, streakTexture } from './textures'
@@ -51,7 +51,7 @@ export type ViewState = {
   lives: number
   hand: number
   invuln: boolean
-  /** 🖐️ active — car fades / ghosted */
+  /** Fifth Dimension logo power — runner fades / ghosted */
   invisible: boolean
   stumble: number
   obstacles: Obstacle[]
@@ -85,7 +85,7 @@ export class FrScene {
   dprCap = 2
   width = 1
   height = 1
-  runner: PlayerCar
+  runner: RunnerFigure
 
   private world = new THREE.Group()
   private skyGroup = new THREE.Group()
@@ -131,7 +131,7 @@ export class FrScene {
   private sparkData: { p: THREE.Vector3; v: THREE.Vector3; life: number; max: number }[] = []
   private sparkGeo!: THREE.BufferGeometry
   private camX = 0
-  private camY = 4.15
+  private camY = 3.35
   private fov = 62
   private tmpM = new THREE.Matrix4()
   private tmpQ = new THREE.Quaternion()
@@ -142,7 +142,7 @@ export class FrScene {
 
   constructor(canvas: HTMLCanvasElement, tier: QualityTier, emblem: THREE.Texture | null) {
     this.tier = tier
-    this.runner = new PlayerCar()
+    this.runner = new RunnerFigure()
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: tier === 'high', powerPreference: 'high-performance', alpha: false })
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping
@@ -201,7 +201,7 @@ export class FrScene {
     // ── runner + fx ──
     for (const m of this.runner.meshes) m.layers.enable(REFL)
     this.scene.add(this.runner.group)
-    this.blob = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 4.0), new THREE.MeshBasicMaterial({ map: blobTexture(), transparent: true, depthWrite: false, opacity: 0.6 }))
+    this.blob = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.9), new THREE.MeshBasicMaterial({ map: blobTexture(), transparent: true, depthWrite: false, opacity: 0.55 }))
     this.blob.rotation.x = -Math.PI / 2
     this.blob.position.y = 0.012
     this.scene.add(this.blob)
@@ -214,8 +214,8 @@ export class FrScene {
       fragmentShader:
         'uniform float uTime; uniform float uAlpha; varying vec3 vN; varying vec3 vV; void main(){ float f = pow(1.0 - abs(dot(vN, vV)), 2.2); float hex = 0.5 + 0.5*sin(vN.y*40.0 + uTime*3.0); gl_FragColor = vec4(vec3(0.72,0.45,1.0) * (f*1.4 + hex*0.08) * uAlpha, 1.0); }',
     })
-    this.shieldMesh = new THREE.Mesh(new THREE.SphereGeometry(1.35, 28, 18), this.shieldMat)
-    this.shieldMesh.scale.set(1.15, 0.75, 1.6)
+    this.shieldMesh = new THREE.Mesh(new THREE.SphereGeometry(0.95, 28, 18), this.shieldMat)
+    this.shieldMesh.scale.set(1.05, 1.35, 1.05)
     this.scene.add(this.shieldMesh)
     this.fiveRing = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 2.4), glowMaterial(this.glow, '#ffc83c', 0.9))
     this.fiveRing.rotation.x = -Math.PI / 2
@@ -649,7 +649,6 @@ export class FrScene {
       deadT: v.deadT,
       deathKind: v.deathKind,
       idle: v.idle,
-      invisible: v.invisible,
     }
     this.runner.group.userData.prevX = v.x
     this.runner.update(pose)
@@ -665,14 +664,15 @@ export class FrScene {
     this.blob.scale.set(bs, bs, bs)
     this.blob.visible = !(v.dead && v.deathKind === 'gap')
 
-    // power-up fx — 🖐️ hand = soft violet ghost shell while invisible
+    // power-up fx — 5D logo = soft violet ghost shell while invincible
     this.shieldMesh.visible = v.invisible && !v.dead
-    this.shieldMesh.position.set(v.x, v.y + 0.7 - (v.sliding ? 0.25 : 0), 0)
+    this.shieldMesh.position.set(v.x, v.y + 0.95 - (v.sliding ? 0.45 : 0), 0)
     this.shieldMat.uniforms.uTime.value = t
     this.shieldMat.uniforms.uAlpha.value = 0.35 + 0.2 * Math.sin(t * 5)
     this.fiveRing.visible = false
     this.magnetRing.visible = false
-    this.runner.setGhostRim(v.invisible)
+    const rim = this.runner.hoodieMat.userData.rim as { uRimColor: { value: THREE.Color } } | undefined
+    if (rim) rim.uRimColor.value.set(v.invisible ? '#b48cff' : '#ff3fc8')
 
     // decor recycling
     this.writeTowers(false, S)
@@ -701,18 +701,10 @@ export class FrScene {
     this.towerMat.uniforms.uTime.value = t
   }
 
-  /** Swap procedural cars for the Draco sports-car GLTF (iPhone casual-game bar). */
+  /** Upgrade traffic pool to Draco sports-car GLTF (player stays the hooded runner). */
   async loadGltfCars() {
     try {
       const template = await loadCarTemplate()
-      // Replace player
-      const oldPlayer = this.runner
-      this.scene.remove(oldPlayer.group)
-      this.runner = new PlayerCar(instantiateGltfCar(template))
-      this.scene.add(this.runner.group)
-      this.runner.group.traverse((o) => o.layers.enable(REFL))
-
-      // Replace traffic pool
       for (const c of this.pools.car) {
         this.world.remove(c.group)
         c.group.traverse((o) => {
@@ -732,7 +724,7 @@ export class FrScene {
       }
       return true
     } catch (e) {
-      console.warn('[Fifth Gear] GLTF cars failed, keeping procedural', e)
+      console.warn('[Fifth Glide] GLTF traffic failed, keeping procedural', e)
       return false
     }
   }
@@ -979,25 +971,25 @@ export class FrScene {
   }
 
   private updateCamera(v: ViewState, dt: number) {
-    const k = 1 - Math.exp(-dt * 8)
-    this.camX += (v.x * 0.55 - this.camX) * k
-    // Raised chase cam — more top-down so lanes read clearly for swipes
-    const ty = 4.2 + Math.max(0, v.y) * 0.35 - (v.sliding ? 0.22 : 0)
-    this.camY += (ty - this.camY) * (1 - Math.exp(-dt * 5.5))
-    const speedF = THREE.MathUtils.clamp((v.speed - 14) / 28, 0, 1)
+    const k = 1 - Math.exp(-dt * 7)
+    this.camX += (v.x * 0.62 - this.camX) * k
+    // Over-shoulder chase — runner fills lower third, lanes readable for swipes
+    const ty = 3.4 + Math.max(0, v.y) * 0.32 - (v.sliding ? 0.25 : 0)
+    this.camY += (ty - this.camY) * (1 - Math.exp(-dt * 5))
+    const speedF = THREE.MathUtils.clamp((v.speed - 12) / 20, 0, 1)
     const aspect = this.camera.aspect
-    const baseFov = aspect > 0.8 ? 54 : 64
-    const tf = baseFov + speedF * 10 + (v.invisible ? 2.5 : 0)
+    const baseFov = aspect > 0.8 ? 52 : 64
+    const tf = baseFov + speedF * 9 + (v.invisible ? 2.5 : 0)
     this.fov += (tf - this.fov) * (1 - Math.exp(-dt * 3))
     const sh = v.shake
     const sx = sh ? (Math.sin(v.time * 61) + Math.sin(v.time * 37)) * 0.06 * sh : 0
     const sy = sh ? Math.sin(v.time * 53) * 0.05 * sh : 0
-    let dz = 10.2 - speedF * 0.7
+    let dz = 6.8 - speedF * 0.55
     if (v.dead) dz -= Math.min(1.2, v.deadT * 1.5)
     this.camera.position.set(this.camX + sx, this.camY + sy, dz)
-    this.lookT.set(v.x * 0.35, 0.15, -14)
+    this.lookT.set(v.x * 0.5, 1.15, -14)
     this.camera.lookAt(this.lookT)
-    this.camera.rotation.z += (this.runner.group.rotation.z || 0) * 0.12
+    this.camera.rotation.z += (this.runner.group.rotation.z || 0) * 0.15
     this.camera.fov = this.fov
     this.camera.updateProjectionMatrix()
     this.camera.updateMatrixWorld(true)

@@ -2,7 +2,7 @@ import { challengePublicUrl } from './config'
 
 export { challengePublicUrl }
 
-export const GAME_TITLES: Record<string, string> = { 'court-vision': 'Court Vision', 'fifth-run': 'Fifth Gear' }
+export const GAME_TITLES: Record<string, string> = { 'court-vision': 'Court Vision', 'fifth-run': 'Fifth Glide' }
 
 export const gameTitle = (game?: string | null) => GAME_TITLES[game ?? ''] ?? 'Court Vision'
 
@@ -10,8 +10,8 @@ export const gameTitle = (game?: string | null) => GAME_TITLES[game ?? ''] ?? 'C
 export function sameSeedCopy(game: string | null | undefined, rivalHandle?: string | null): string {
   if (game === 'fifth-run') {
     return rivalHandle
-      ? `${rivalHandle} gets an alert. Same highway, same stars, same traffic.`
-      : 'Your friend drives the exact same highway — same stars, same traffic.'
+      ? `${rivalHandle} gets an alert. Same run, same stars, same traffic.`
+      : 'Your friend runs the exact same track — same stars, same traffic.'
   }
   return rivalHandle
     ? `${rivalHandle} gets an alert. Same court, same sway, same wind.`

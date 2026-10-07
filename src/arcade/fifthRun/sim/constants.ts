@@ -1,5 +1,5 @@
 /**
- * Fifth Gear — deterministic sim constants.
+ * Fifth Glide — deterministic sim constants (on-foot runner).
  *
  * Determinism note: the track generator and the runner step only use + − × ÷ and comparisons
  * (no Math.exp / sin / pow), which are exactly rounded IEEE-754 ops in every JS engine. Same seed
@@ -11,8 +11,8 @@ export const FR_DT = 1 / FR_HZ
 export const LANE_W = 2.0
 export const laneX = (lane: number) => (lane - 1) * LANE_W
 
-/** Forward speed (m/s) — Surfers-like ramp: punchy start, climbs hard. */
-export const SPEED = { v0: 22, vmax: 58, k: 780 }
+/** Forward speed (m/s) — Surfers-like ramp for on-foot: punchy start, climbs hard. */
+export const SPEED = { v0: 17, vmax: 44, k: 980 }
 export const speedAt = (s: number) => SPEED.v0 + (SPEED.vmax - SPEED.v0) * (s / (s + SPEED.k))
 /** Difficulty 0..1 (pattern mix + spacing). */
 export const DIFF_K = 720
@@ -25,18 +25,18 @@ export const GRAVITY = (8 * JUMP_APEX) / (JUMP_T * JUMP_T)
 export const JUMP_VY = (4 * JUMP_APEX) / JUMP_T
 export const FAST_FALL_VY = 16
 export const SLIDE_TICKS = Math.round(0.58 * FR_HZ)
-/** Lateral speed: one lane in ~0.1 s — tight Surfers weave. */
-export const LANE_SPEED = LANE_W / 0.1
+/** Lateral speed: one lane in ~0.11 s — tight Surfers weave. */
+export const LANE_SPEED = LANE_W / 0.11
 /** Buffered input window. */
 export const BUFFER_TICKS = Math.round(0.22 * FR_HZ)
 
-/** Car body AABB (feet/ground = y0). Hop clears barriers; slide ducks overhead. */
-export const BODY = { h: 1.35, slideH: 0.62, halfD: 1.9, halfW: 0.82 }
+/** Runner AABB (feet/ground = y0). Jump clears barriers; slide ducks overhead. */
+export const BODY = { h: 1.75, slideH: 0.85, halfD: 0.28, halfW: 0.32 }
 
 export const OB = {
   barrier: { h: 0.75, len: 0.4, halfW: 0.8 },
   overhead: { bottom: 1.2, len: 0.45, halfW: 0.95 },
-  car: { h: 1.35, len: 4.4, halfW: 0.88 },
+  car: { h: 1.45, len: 5.0, halfW: 0.9 },
   gap: { halfW: 1.0 },
 } as const
 
@@ -46,7 +46,7 @@ export const ONCOMING_WINDOW = 95
 export const START_LIVES = 3
 
 export const POWER_TICKS = {
-  /** 🖐️ open-hand invulnerability */
+  /** Fifth Dimension logo — 15s invulnerability */
   hand: 15 * FR_HZ,
   /** brief i-frames after losing a life */
   hitInvuln: Math.round(1.5 * FR_HZ),

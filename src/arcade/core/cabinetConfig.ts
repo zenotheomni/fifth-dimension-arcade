@@ -26,8 +26,8 @@ export const cabinets: Cabinet[] = [
   },
   {
     id: 'fifth-run',
-    title: 'Fifth Gear',
-    tagline: 'Miami to the galaxies. Swipe. Boost. Drift.',
+    title: 'Fifth Glide',
+    tagline: 'Miami to the galaxies. Swipe. Jump. Slide.',
     status: 'lit',
     route: '/fifth-run',
   },

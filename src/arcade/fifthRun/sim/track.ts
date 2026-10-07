@@ -1,17 +1,17 @@
 /**
- * Fifth Gear — seeded endless track (v2).
+ * Fifth Glide — seeded endless track.
  *
  * Rows of lane obstacles are generated strictly in order from a single Mulberry32 stream, so the
  * layout depends only on the seed (never on the player). Cars are the main threat: they carry an
  * independent oncoming speed (`vs`) and spawn in staggered waves that densify + speed up over
  * distance. Barriers / overheads / gaps are occasional spice, not parked blockers. Power-ups are
- * 🖐️ hand (15 s invuln) only. Collectibles are shooting stars (💫).
+ * Fifth Dimension logo (15 s invuln) only. Collectibles are shooting stars (💫).
  */
 import { hashSeed, mulberry32 } from '../../core/seededRandom'
 import { JUMP_APEX, JUMP_T, OB, START_CLEAR_M, levelAt, speedAt } from './constants'
 
 export type ObKind = 'barrier' | 'overhead' | 'car' | 'gap'
-/** v2: only the open-hand invuln pickup. */
+/** Rare 5D logo invuln pickup. */
 export type PowerKind = 'hand'
 
 export type Obstacle = {
@@ -155,7 +155,7 @@ export class Track {
 
   private nextPower(): PowerKind {
     if (!this.pickupBag.length) {
-      // bag of hands only (v2)
+      // bag of 5D logos
       const bag: PowerKind[] = ['hand', 'hand', 'hand', 'hand']
       for (let i = bag.length - 1; i > 0; i--) {
         const j = Math.floor(this.r() * (i + 1))

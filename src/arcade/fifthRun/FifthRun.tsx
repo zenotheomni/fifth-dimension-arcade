@@ -301,7 +301,7 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
         <div className="fr-powers">
           {hud.hand > 0 ? (
             <span className="fr-power fr-power--hand" style={{ ['--p' as string]: hud.hand }}>
-              <i aria-hidden>🖐️</i>Invisible
+              <i aria-hidden>✦</i>Invincible
             </span>
           ) : null}
         </div>
@@ -314,20 +314,20 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
 
         {hud.phase === 'intro' ? (
           <div className="fr-intro">
-            <p className="fr-intro__title">Fifth Gear</p>
-            <p className="fr-intro__tag">How far can you drive?</p>
+            <p className="fr-intro__title">Fifth Glide</p>
+            <p className="fr-intro__tag">How far can you run?</p>
             <div className="fr-intro__controls">
               <span>
                 <b>←→</b>Lanes
               </span>
               <span>
-                <b>↑</b>Boost
+                <b>↑</b>Jump
               </span>
               <span>
-                <b>↓</b>Drift
+                <b>↓</b>Slide
               </span>
             </div>
-            <p className="fr-intro__go">Swipe to drive</p>
+            <p className="fr-intro__go">Swipe to run</p>
             {hud.pb > 0 ? <p className="fr-intro__pb">Best {hud.pb.toLocaleString('en-US')}</p> : null}
           </div>
         ) : null}
@@ -341,7 +341,7 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
 
       {ended && !(challenge && onRunResult) ? (
         <div className="fr-end">
-          <p className="fr-end__eyebrow">{seeded ? (seeded.rivalHandle ? `Rematch vs ${seeded.rivalHandle}` : 'Set the bar') : 'Fifth Gear'}</p>
+          <p className="fr-end__eyebrow">{seeded ? (seeded.rivalHandle ? `Rematch vs ${seeded.rivalHandle}` : 'Set the bar') : 'Fifth Glide'}</p>
           <h2>{headline}</h2>
           <div className="fr-end__score">{ended.score.toLocaleString('en-US')}</div>
           <div className="fr-end__stats">
@@ -438,7 +438,7 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
       ) : null}
       {ended && challenge && onRunResult ? (
         <div className="fr-end">
-          <p className="fr-end__eyebrow">Fifth Gear</p>
+          <p className="fr-end__eyebrow">Fifth Glide</p>
           <h2>Final: {ended.score.toLocaleString('en-US')}</h2>
           <p className="fr-end__pb">{runState === 'error' ? 'Couldn’t post — check your connection.' : 'Tallying the head-to-head…'}</p>
         </div>

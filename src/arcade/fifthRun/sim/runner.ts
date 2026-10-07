@@ -1,6 +1,6 @@
 /**
- * Fifth Gear — fixed-step runner sim (120 Hz), v2.
- * Lives (3), oncoming cars, 💫 stars boosting distance score, 🖐️ hand invuln.
+ * Fifth Glide — fixed-step on-foot runner sim (120 Hz).
+ * Lives (3), oncoming cars, 💫 stars, Fifth Dimension logo = 15s invincible.
  */
 import {
   BODY,
@@ -54,7 +54,7 @@ export type RunState = {
   deathKind: ObKind | null
   deathOb: number
   lives: number
-  /** 🖐️ hand invuln ticks remaining */
+  /** 5D logo invuln ticks remaining */
   hand: number
   /** brief post-hit i-frames */
   invuln: number

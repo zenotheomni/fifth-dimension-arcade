@@ -1,5 +1,5 @@
 /**
- * Fifth Gear bots (harness + in-game autopilot for QA captures).
+ * Fifth Glide bots (harness + in-game autopilot for QA captures).
  *
  * - oracleSurvive: exhaustive breadth-first search over inputs every 50 ms with the real step
  *   function. If its frontier ever empties, the seed has an unavoidable obstacle combo.

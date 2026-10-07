@@ -1,4 +1,4 @@
-/** Suspense fallback shown while the Fifth Gear chunk (three.js) streams in. Kept tiny + inline-styled. */
+/** Suspense fallback shown while the Fifth Glide chunk (three.js) streams in. Kept tiny + inline-styled. */
 export default function FifthRunLoading() {
   return (
     <div
@@ -15,7 +15,7 @@ export default function FifthRunLoading() {
         fontWeight: 700,
       }}
     >
-      Loading Fifth Gear…
+      Loading Fifth Glide…
     </div>
   )
 }

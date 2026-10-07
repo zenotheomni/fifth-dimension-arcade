@@ -1,5 +1,5 @@
 /**
- * Fifth Gear — player sports coupe (pearl clearcoat).
+ * Fifth Glide (legacy traffic helper) — player sports coupe (pearl clearcoat).
  * Facing −Z; wheel spin, bank, hop, slide squat, crash tumble.
  * Slightly undersized vs traffic for lane readability under a higher chase cam.
  */

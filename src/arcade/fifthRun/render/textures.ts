@@ -1,4 +1,4 @@
-/** Fifth Gear — procedural canvas textures (no external assets). */
+/** Fifth Glide — procedural canvas textures (no external assets). */
 import * as THREE from 'three'
 
 function canvas(w: number, h: number) {
