@@ -4,6 +4,7 @@ import { courtVisionSeedConfig, type CourtVisionSeedConfig } from '../core/seede
 import { loadPersonalBest, savePersonalBest, scoreShot, streakMultiplier } from '../courtVision/scoring'
 import type { CvBridge, CvHudState, CvMode } from '../courtVisionPhaser/types'
 import { CourtScene, type QualityTier } from './render/scene'
+import { BallFire, type FireEmitter } from './render/fire'
 import {
   setSfxMuted,
   sfxBounce,
@@ -12,6 +13,7 @@ import {
   sfxRelease,
   sfxRim,
   sfxSwish,
+  sfxTimeBonus,
   unlockSfx,
 } from './sfx3d'
 import { DIM, SIM_DT } from './sim/constants'
@@ -20,6 +22,9 @@ import { DIM, SIM_DT } from './sim/constants'
 const SIM_SPEED = 1.12
 const RESPAWN_POP_S = 0.18
 const GHOST_FADE_S = 0.15
+/** 60s modes: reach this score once per run for bonus seconds. */
+export const TIME_BONUS_AT = 50
+export const TIME_BONUS_S = 15
 import { hoopPoseAt } from './sim/hoop'
 import { integrateSpin, makeBall, stepBall, type BallState, type SimEvent, type V3 } from './sim/physics'
 import {
@@ -38,6 +43,8 @@ export type CourtVision3DHandle = {
   destroy: () => void
   requestEnd: () => void
   setMuted: (m: boolean) => void
+  /** Hold the clock + shooting (How-to screen up); false = go. */
+  setHold: (h: boolean) => void
 }
 
 type Shot = {
@@ -94,6 +101,10 @@ class Engine {
   firstMake = false
   announcedX5 = false
   announcedX10 = false
+  timeBonusGiven = false
+  /** How-to overlay up: clock frozen, flicks ignored */
+  hold = false
+  clockBonusId = 0
   lastShotMeta: ShotMeta | null = null
   calloutT = 0
 
@@ -135,6 +146,13 @@ class Engine {
   backdropBase = new THREE.Color()
   private ro: ResizeObserver | null = null
   private tmpV = new THREE.Vector3()
+  /** Flow-state fire (visual only) */
+  fire!: BallFire
+  fireLevel = 0
+  private fireEm: FireEmitter[] = [
+    { pos: new THREE.Vector3(), prev: new THREE.Vector3(), vel: new THREE.Vector3(), radius: DIM.ballR, strength: 1 },
+    { pos: new THREE.Vector3(), prev: new THREE.Vector3(), vel: new THREE.Vector3(), radius: DIM.ballR, strength: 1 },
+  ]
 
   constructor(host: HTMLElement, bridge: CvBridge, mode: CvMode) {
     this.host = host
@@ -158,6 +176,8 @@ class Engine {
     this.canvas.style.touchAction = 'none'
     host.appendChild(this.canvas)
     this.view = new CourtScene(this.canvas, detectTier())
+    this.fire = new BallFire(DIM.ballR, this.view.tier === 'low')
+    this.view.scene.add(this.fire.group)
   }
 
   async init() {
@@ -197,6 +217,7 @@ class Engine {
       pb: this.pb,
       newPb: false,
       mode: this.mode,
+      clockBonusId: this.clockBonusId,
     })
   }
 
@@ -216,7 +237,7 @@ class Engine {
 
   onDown = (e: PointerEvent) => {
     unlockSfx()
-    if (!this.canShoot()) return
+    if (this.hold || !this.canShoot()) return
     const p = this.toLocal(e)
     // Start on/near the ball or anywhere in the lower part of the court
     this.tmpV.set(this.home.x, this.home.y, this.home.z).project(this.view.camera)
@@ -422,6 +443,18 @@ class Engine {
       this.announcedX10 = true
       this.callout = COURT_VISION_COPY.STREAK_X10
     }
+    if (
+      (this.mode === 'timed' || this.mode === 'challenge') &&
+      !this.timeBonusGiven &&
+      this.score >= TIME_BONUS_AT &&
+      this.timeLeft > 0
+    ) {
+      this.timeBonusGiven = true
+      this.timeLeft += TIME_BONUS_S
+      this.clockBonusId++
+      this.callout = `+${TIME_BONUS_S}s`
+      sfxTimeBonus()
+    }
     if (this.streak >= 3) {
       sfxCrowd(Math.min(4, this.streak / 3))
       this.crowdPulse = Math.min(1.4, 0.6 + this.streak * 0.08)
@@ -516,7 +549,7 @@ class Engine {
 
   update(dt: number, skipRender = false) {
     // Clock (real time)
-    if (this.phase === 'playing' && !this.ended && (this.mode === 'timed' || this.mode === 'challenge')) {
+    if (this.phase === 'playing' && !this.hold && !this.ended && (this.mode === 'timed' || this.mode === 'challenge')) {
       this.timerAcc += dt
       while (this.timerAcc >= 1 && !this.ended) {
         this.timerAcc -= 1
@@ -563,10 +596,10 @@ class Engine {
       steps++
     }
     if (steps >= 80) this.accum = 0
-    if (!skipRender) this.renderFrame(dt)
+    this.renderFrame(dt, skipRender)
   }
 
-  renderFrame(dt: number) {
+  renderFrame(dt: number, skipDraw = false) {
     const v = this.view
     const alpha = this.accum / SIM_DT
     const s = this.shot
@@ -611,6 +644,10 @@ class Engine {
     sh.scale.setScalar(0.36 * (1 + h * 0.45))
     ;(sh.material as THREE.MeshBasicMaterial).opacity = 0.62 / (1 + h * 1.6)
 
+    if (skipDraw) {
+      this.updateFire(dt)
+      return
+    }
     v.net.updateMesh()
 
     // Rim glow
@@ -634,7 +671,47 @@ class Engine {
       v.camBase.z - n * 0.22,
     )
     v.camera.rotation.set(v.pitch + n * 0.006, 0, 0)
+    this.updateFire(dt)
     v.render()
+  }
+
+  /** previous emitter pos, unless the ball teleported (respawn) */
+  private fireJump(prev: THREE.Vector3, cur: THREE.Vector3) {
+    return prev.distanceTo(cur) > 0.6 ? cur : prev
+  }
+
+  /** Ball on fire while in flow state (streak ≥5), bigger at 10+. */
+  updateFire(dt: number) {
+    const v = this.view
+    const level = this.ended ? 0 : this.streak >= 10 ? 2 : this.streak >= 5 ? 1 : 0
+    const ems: FireEmitter[] = []
+    const e0 = this.fireEm[0]
+    e0.prev!.copy(this.fireJump(e0.pos, v.ball.position))
+    e0.pos.copy(v.ball.position)
+    if (this.shot) e0.vel.set(this.shot.b.v.x, this.shot.b.v.y, this.shot.b.v.z)
+    else e0.vel.set(0, 0, 0)
+    e0.strength = this.shot ? 1 : Math.max(0.05, this.respawnT) * 0.8
+    e0.radius = DIM.ballR * v.ball.scale.x
+    ems.push(e0)
+    if (this.ghost && v.ballGhost.visible) {
+      const e1 = this.fireEm[1]
+      e1.prev!.copy(this.fireJump(e1.pos, v.ballGhost.position))
+      e1.pos.copy(v.ballGhost.position)
+      e1.vel.set(this.ghost.b.v.x, this.ghost.b.v.y, this.ghost.b.v.z)
+      e1.strength = 1 - Math.min(1, this.ghost.fade)
+      e1.radius = DIM.ballR * v.ballGhost.scale.x
+      ems.push(e1)
+    }
+    if (this.fireLevel > 0 && level === 0) {
+      for (const e of ems) this.fire.puff(e.pos, DIM.ballR)
+    }
+    this.fireLevel = level
+    this.fire.setViewHeight(v.renderer.domElement.height)
+    this.fire.update(dt, level, ems, v.ball, v.ballGhost)
+    const m = v.ball.material as THREE.MeshPhysicalMaterial
+    const glow = (level >= 2 ? 0.32 : 0.2) * (level > 0 ? 1 : 0)
+    m.emissive.setRGB(1, 0.32, 0.06)
+    m.emissiveIntensity += (glow - m.emissiveIntensity) * Math.min(1, dt * 8)
   }
 
   adapt(dt: number) {
@@ -685,6 +762,7 @@ class Engine {
     window.removeEventListener('pointermove', this.onMove)
     window.removeEventListener('pointerup', this.onUp)
     window.removeEventListener('pointercancel', this.onUp)
+    this.fire?.dispose()
     this.view.dispose()
     this.canvas.remove()
     const g = globalThis as unknown as { __CV_SCENE?: Engine; __CV3D?: Engine }
@@ -702,5 +780,8 @@ export function createCourtVision3D(host: HTMLElement, bridge: CvBridge, mode: C
     destroy: () => engine.destroy(),
     requestEnd: () => engine.requestEnd(),
     setMuted: (m) => engine.setMuted(m),
+    setHold: (h) => {
+      engine.hold = h
+    },
   }
 }

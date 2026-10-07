@@ -177,3 +177,15 @@ export function sfxCrowd(level: number) {
     src.stop(t + dur + 0.05)
   }
 }
+
+/** Bonus time: bright rising three-note chime + shimmer. */
+export function sfxTimeBonus() {
+  const a = ac()
+  if (!a) return
+  const t = a.currentTime
+  ;[784, 988, 1319].forEach((f, i) => {
+    partial(a, t + i * 0.08, f, 0.42, 0.2, 'triangle')
+    partial(a, t + i * 0.08, f * 2.01, 0.25, 0.05)
+  })
+  noise(a, t + 0.18, 0.45, 'highpass', 6000, 9000, 0.6, 0.08, 0.02)
+}

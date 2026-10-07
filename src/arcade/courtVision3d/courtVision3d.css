@@ -641,3 +641,88 @@
     background-position: 200% 0;
   }
 }
+
+/* +15s bonus: clock flash + big callout */
+.cv3-root .cvp-clock-bonus {
+  animation: cv3-clock-flash 0.9s ease-out 2;
+}
+@keyframes cv3-clock-flash {
+  0% { box-shadow: 0 0 0 0 rgba(120, 255, 170, 0); background-color: rgba(60, 220, 130, 0.85); transform: scale(1.12); }
+  60% { box-shadow: 0 0 24px 6px rgba(120, 255, 170, 0.55); }
+  100% { box-shadow: 0 0 0 0 rgba(120, 255, 170, 0); transform: scale(1); }
+}
+.cv3-root .cvp-callout--time {
+  font-size: clamp(56px, 18vw, 96px);
+  color: #7dffb0;
+  text-shadow: 0 0 18px rgba(80, 255, 150, 0.7), 0 4px 0 rgba(0, 0, 0, 0.35);
+}
+.cv3-root .cvp-streak { color: #ffb347; }
+
+/* How to play */
+.cv3-root .cv3-howto {
+  position: absolute;
+  inset: 0;
+  z-index: 18;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 5rem 1.4rem 2rem;
+  background: radial-gradient(ellipse at 50% 35%, rgba(42, 22, 70, 0.82), rgba(8, 6, 14, 0.93) 72%);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  text-align: center;
+  pointer-events: auto;
+}
+.cv3-root .cv3-howto__eyebrow {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: #ffcf5a;
+}
+.cv3-root .cv3-howto__title {
+  margin: 0 0 0.4rem;
+  font-size: clamp(1.7rem, 8vw, 2.3rem);
+  font-weight: 900;
+  font-style: italic;
+  letter-spacing: 0.02em;
+  color: #fff;
+  text-transform: uppercase;
+}
+.cv3-root .cv3-howto__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: min(100%, 22rem);
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+.cv3-root .cv3-howto__list li {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  text-align: left;
+  font-size: 0.98rem;
+  line-height: 1.3;
+  color: rgba(255, 255, 255, 0.88);
+}
+.cv3-root .cv3-howto__list b { color: #fff; }
+.cv3-root .cv3-howto__ico { font-size: 1.35rem; width: 1.8rem; text-align: center; flex: none; }
+.cv3-root .cv3-howto__start {
+  margin-top: 1rem;
+  width: min(100%, 22rem);
+  min-height: 3.6rem;
+  font-size: 1.25rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.cv3-root .cvp-mode,
+.cv3-root > .cvp-back { z-index: 19; }

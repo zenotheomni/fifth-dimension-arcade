@@ -121,7 +121,7 @@ export function makeLifecycle(d: LifecycleDeps) {
       d.streakRef.current = 0
       d.missesRef.current += 1
       d.setStreak(0)
-      d.pushToast('Miss · multiplier reset')
+      d.pushToast('Miss · streak reset')
       track('arcade_court_vision_shot', {
         kind,
         points: 0,

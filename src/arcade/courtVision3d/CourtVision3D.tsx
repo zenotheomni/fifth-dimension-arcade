@@ -81,6 +81,7 @@ export default function CourtVision3D({
     mode: initialMode,
   })
   const [ended, setEnded] = useState<CvEndPayload | null>(null)
+  const [howTo, setHowTo] = useState(true)
   const [run, setRun] = useState<RunResult | null>(null)
   const [runState, setRunState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [shareChallenge, setShareChallenge] = useState<ChallengeInfo | null>(null)
@@ -176,6 +177,8 @@ export default function CourtVision3D({
       mode,
     )
     gameRef.current = game
+    game.setHold(true)
+    setHowTo(true)
     return () => destroyGame()
   }, [mode, remount, destroyGame, engineChallenge, challenge, seeded, onChallengeResolved])
 
@@ -286,16 +289,68 @@ export default function CourtVision3D({
         </div>
       ) : null}
 
+      {howTo && !ended ? (
+        <div className="cv3-howto" role="dialog" aria-label="How to play">
+          <p className="cv3-howto__eyebrow">Court Vision</p>
+          <h2 className="cv3-howto__title">How to play</h2>
+          <ul className="cv3-howto__list">
+            <li>
+              <span className="cv3-howto__ico">☝️</span>
+              <span><b>Flick up</b> on the ball to shoot. Aim straight, don't overpower it.</span>
+            </li>
+            <li>
+              <span className="cv3-howto__ico">🏀</span>
+              <span><b>3 pts</b> every make.</span>
+            </li>
+            <li>
+              <span className="cv3-howto__ico">🔥</span>
+              <span><b>5 in a row = FLOW STATE.</b> Ball's on fire, every make is <b>5 pts</b>.</span>
+            </li>
+            <li>
+              <span className="cv3-howto__ico">❌</span>
+              <span>A miss resets your streak.</span>
+            </li>
+            {hud.mode !== 'endless' ? (
+              <li>
+                <span className="cv3-howto__ico">⏱️</span>
+                <span><b>60 seconds.</b> Hit <b>50 pts</b> for <b>+15s</b> (once a run).</span>
+              </li>
+            ) : (
+              <li>
+                <span className="cv3-howto__ico">∞</span>
+                <span>Endless: no clock. End the run whenever you're ready.</span>
+              </li>
+            )}
+          </ul>
+          <button
+            type="button"
+            className="ffa-btn ffa-btn--primary cv3-howto__start"
+            disabled={hud.phase === 'ready'}
+            onClick={() => {
+              setHowTo(false)
+              gameRef.current?.setHold(false)
+            }}
+          >
+            {hud.phase === 'ready' ? 'Loading…' : 'Tap to play'}
+          </button>
+        </div>
+      ) : null}
+
       <div className="cvp-hud" aria-live="polite">
         <div className="cvp-hud__top">
           <div className="cvp-panel">
             <span className="cvp-panel__label">Score</span>
             <span className="cvp-panel__value">{hud.score}</span>
-            {hud.streak >= 3 ? (
-              <div className="cvp-streak">x{hud.multiplier} streak fire</div>
+            {hud.streak >= 5 ? (
+              <div className="cvp-streak">🔥 FLOW STATE · 5 PTS</div>
+            ) : hud.streak >= 1 ? (
+              <div className="cvp-streak">{hud.streak} in a row · {5 - hud.streak} to flow</div>
             ) : null}
           </div>
-          <div className="cvp-panel cvp-panel--center">
+          <div
+            className={`cvp-panel cvp-panel--center${hud.clockBonusId ? ' cvp-clock-bonus' : ''}`}
+            key={`clock-${hud.clockBonusId ?? 0}`}
+          >
             <span className="cvp-panel__label">
               {showClock ? 'Clock' : 'Endless'}
             </span>
@@ -311,7 +366,9 @@ export default function CourtVision3D({
           </div>
         </div>
 
-        {hud.callout ? <p className="cvp-callout">{hud.callout}</p> : null}
+        {hud.callout ? (
+          <p className={`cvp-callout${/^\+\d+s$/.test(hud.callout) ? ' cvp-callout--time' : ''}`}>{hud.callout}</p>
+        ) : null}
         {hud.lastPoints ? (
           <p className="cvp-points" key={`${hud.score}-${hud.lastPoints}`}>
             +{hud.lastPoints}

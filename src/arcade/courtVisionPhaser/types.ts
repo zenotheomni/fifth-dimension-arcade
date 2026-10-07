@@ -20,6 +20,8 @@ export type CvHudState = {
   pb: number
   newPb: boolean
   mode: CvMode
+  /** Increments each time bonus time is added (UI flashes the clock). */
+  clockBonusId?: number
 }
 
 export type CvEndPayload = {

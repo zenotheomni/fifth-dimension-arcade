@@ -64,7 +64,7 @@ export default function CourtVisionEndless({ onExit }: CourtVisionEndlessProps) 
             <h1 className="cv-overlay__title">Endless</h1>
             <p className="cv-overlay__copy">
               Hold the ball, pull to aim and power, release. One mid-air nudge.
-              Misses reset your multiplier. End the run whenever you're ready.
+              3 pts a make, 5 in flow state (5 in a row). Misses reset your streak. End the run whenever you're ready.
             </p>
             <button
               type="button"

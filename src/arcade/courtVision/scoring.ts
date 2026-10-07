@@ -1,8 +1,8 @@
 /**
  * Court Vision scoring — CREATIVE_BRIEF.md
- * Make=2, Swish=3; streak x3/x5/x10 → 1.5x/2x/3x;
- * Perfect release=+1; Bank off backboard logo=+2 “5D bounce”;
- * Miss resets multiplier.
+ * Dead simple: every make (swish, rim-in or bank) = 3 points.
+ * Flow state (5+ makes in a row, ball on fire) = 5 points per make.
+ * A miss resets the streak. No bonuses, no multipliers.
  */
 
 export type ShotKind = 'make' | 'swish' | 'miss'
@@ -19,10 +19,21 @@ export type ShotResult = {
   streakAfter: number
 }
 
-export function streakMultiplier(streak: number): number {
-  if (streak >= 10) return 3
-  if (streak >= 5) return 2
-  if (streak >= 3) return 1.5
+export const MAKE_POINTS = 3
+export const FLOW_POINTS = 5
+export const FLOW_STREAK = 5
+
+export function inFlowState(streak: number): boolean {
+  return streak >= FLOW_STREAK
+}
+
+/** Points a make is worth at this streak (kept name for callers). */
+export function pointsPerMake(streak: number): number {
+  return inFlowState(streak) ? FLOW_POINTS : MAKE_POINTS
+}
+
+/** @deprecated multipliers removed — always 1. */
+export function streakMultiplier(_streak: number): number {
   return 1
 }
 
@@ -46,12 +57,11 @@ export function scoreShot(opts: {
   }
 
   const streakAfter = opts.streakBefore + 1
-  const base = opts.kind === 'swish' ? 3 : 2
-  const perfectBonus = opts.perfectRelease ? 1 : 0
-  const bounce5dBonus = opts.banked5d ? 2 : 0
-  const multiplier = streakMultiplier(streakAfter)
-  const raw = base + perfectBonus + bounce5dBonus
-  const points = Math.round(raw * multiplier)
+  const base = pointsPerMake(streakAfter)
+  const perfectBonus = 0
+  const bounce5dBonus = 0
+  const multiplier = 1
+  const points = base
 
   return {
     kind: opts.kind,

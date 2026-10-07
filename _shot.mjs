@@ -1,0 +1,10 @@
+import { chromium } from 'playwright'
+const b = await chromium.launch({ args:['--use-gl=swiftshader','--enable-unsafe-swiftshader'] })
+const p = await b.newPage({ viewport:{width:390,height:844}, deviceScaleFactor:3, isMobile:true, hasTouch:true })
+await p.goto('http://localhost:4791/arcade/fifth-glide')
+await p.waitForSelector('.fr-howto__start:not([disabled])',{timeout:60000})
+await p.waitForTimeout(1000)
+await p.screenshot({ path:'/workspace/arcade-shots/glide-howto.png' })
+await p.click('.fr-howto__start'); await p.waitForTimeout(1500)
+console.log('after', await p.$('.fr-howto'), await p.$eval('.fr-board',e=>e.className))
+await b.close()
