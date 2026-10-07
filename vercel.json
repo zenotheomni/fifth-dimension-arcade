@@ -9,6 +9,7 @@
     { "source": "/arcade", "destination": "/arcade/index.html" },
     { "source": "/arcade/court-vision", "destination": "/arcade/index.html" },
     { "source": "/arcade/fifth-run", "destination": "/arcade/index.html" },
+    { "source": "/arcade/fifth-glide", "destination": "/arcade/index.html" },
     { "source": "/arcade/challenge/:id", "destination": "/api/challenge-page?id=:id" },
     { "source": "/arcade/claim", "destination": "/arcade/index.html" },
     { "source": "/arcade/key", "destination": "/arcade/index.html" },

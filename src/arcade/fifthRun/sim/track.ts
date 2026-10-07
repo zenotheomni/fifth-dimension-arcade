@@ -8,7 +8,7 @@
  * Fifth Dimension logo (15 s invuln) only. Collectibles are shooting stars (💫).
  */
 import { hashSeed, mulberry32 } from '../../core/seededRandom'
-import { JUMP_APEX, JUMP_T, OB, START_CLEAR_M, levelAt, speedAt } from './constants'
+import { BODY, JUMP_APEX, JUMP_T, LANE_SPEED, LANE_W, OB, START_CLEAR_M, levelAt, speedAt, warmAt } from './constants'
 
 export type ObKind = 'barrier' | 'overhead' | 'car' | 'gap'
 /** Rare 5D logo invuln pickup. */
@@ -148,9 +148,9 @@ export class Track {
     this.obstacles.push({ id: this.nextId++, kind, lane, s: q(s), len: q(len), vs, variant, smashed: false })
   }
 
-  private carVs(L: number) {
-    // Oncoming approach: 14–22 early → 28–40 late (plus runner ≈ 34–90 relative closing)
-    return q(14 + L * 18 + this.r() * 8)
+  private carVs(L: number, W = 0) {
+    // Oncoming approach: 7–10 in the warm-up → 11–18 → 27–36 late (plus runner speed = closing)
+    return q(11 - 4 * W + L * 18 + this.r() * (7 - 4 * W))
   }
 
   private nextPower(): PowerKind {
@@ -183,11 +183,13 @@ export class Track {
     if (this.pickups.length > 10 && this.pickups[0].s < cut) this.pickups = this.pickups.filter((p) => p.s >= cut)
   }
 
-  private pickPattern(L: number): Tok[] {
+  private pickPattern(L: number, W = 0): Tok[] {
     let total = 0
     const ws: number[] = []
     for (const p of PATTERNS) {
-      const w = L >= p.min ? Math.max(0, p.w(L)) : 0
+      let w = L >= p.min ? Math.max(0, p.w(L)) : 0
+      // warm-up: multi-car rows fade in only as the warm-up ends
+      if (W > 0 && /C.*C|D/.test(p.p)) w *= W > 0.5 ? 0 : 1 - 2 * W
       ws.push(w)
       total += w
     }
@@ -205,13 +207,23 @@ export class Track {
   private genRow() {
     const s0 = this.cursor
     const L = levelAt(s0)
+    const W = warmAt(s0)
     const v = speedAt(s0)
-    const toks = this.pickPattern(L)
+    const toks = this.pickPattern(L, W)
+    // first rows of the warm-up: traffic uses the outer lanes so a new player isn't met head-on
+    // in the lane they start in before they've learned to swipe
+    if (W > 0.62 && toks[1] === 'C') {
+      const e = toks[0] === 'E' ? 0 : 2
+      toks[1] = toks[e]
+      toks[e] = 'C'
+    }
     const gapLen = q(Math.min(5, Math.max(2.6, 0.3 * v)))
 
     let rowEnd = s0
     // Per-row stagger seed so multi-lane cars arrive offset (weave, not a flat wall)
     const waveSkew = this.r() * 2.8
+    const wall = toks[0] === 'C' && toks[1] === 'C' && toks[2] === 'C'
+    const weaveUp = waveSkew < 1.4
     for (let lane = 0; lane < 3; lane++) {
       const t = toks[lane]
       if (t === 'B') {
@@ -220,11 +232,21 @@ export class Track {
       } else if (t === 'O') {
         this.addOb('overhead', lane, s0, OB.overhead.len)
         rowEnd = Math.max(rowEnd, s0 + OB.overhead.len)
+      } else if (t === 'C' && wall) {
+        // Full-width wave (CCC): a readable weave, never a wall. Cars arrive lane-by-lane with enough
+        // room after each one passes to slip into its lane before the next car reaches yours.
+        const vs = this.carVs(L, W)
+        const k = weaveUp ? lane : 2 - lane
+        const block = (OB.car.len * v) / (v + vs) + 2 * BODY.halfD + 0.4
+        const change = (LANE_W / LANE_SPEED) * v * 1.5
+        const meet = s0 + k * (block + change + 1.2 + this.r() * 1.5)
+        this.addOb('car', lane, meet, OB.car.len, vs)
+        rowEnd = Math.max(rowEnd, meet + OB.car.len)
       } else if (t === 'C') {
         // Stagger meet-points across lanes + jitter — Subway Surfers wave feel
         const stagger = lane * (1.8 + this.r() * 1.6) + waveSkew * (lane === 1 ? 0.25 : 0.7) + this.r() * 1.4
         const meet = s0 + stagger
-        this.addOb('car', lane, meet, OB.car.len, this.carVs(L))
+        this.addOb('car', lane, meet, OB.car.len, this.carVs(L, W))
         rowEnd = Math.max(rowEnd, meet + OB.car.len)
       } else if (t === 'D') {
         const vs = this.carVs(L)
@@ -289,7 +311,9 @@ export class Track {
 
     // ── spacing to next wave: reaction window shrinks; density ramps like Surfers ──
     const base = 0.95 - 0.55 * L
-    const T = Math.max(0.32, base * (0.7 + 0.35 * this.r()))
+    // warm-up: up to ~2.9× the gap between waves at the start line, tapering by WARM_M; a little
+    // extra breathing room while the level is still low (fades out as L → 1)
+    const T = Math.max(0.32, base * (0.7 + 0.35 * this.r()) * (1 + 1.6 * W + 0.3 * (1 - L)))
     this.cursor = q(rowEnd + Math.max(5.2, v * T))
     this.rows++
   }

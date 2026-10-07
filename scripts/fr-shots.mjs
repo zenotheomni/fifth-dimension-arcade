@@ -11,6 +11,7 @@ const OUT = process.env.OUT || '/workspace/arcade-shots'
 const SEED = process.env.SEED || 'run:5d1959ca'
 const Q = process.env.Q || 'high'
 const ONLY = process.argv.slice(2)
+const P = process.env.PREFIX || 'glide2'
 const want = (n) => ONLY.length === 0 || ONLY.includes(n)
 fs.mkdirSync(OUT, { recursive: true })
 
@@ -99,7 +100,7 @@ await page.evaluate(() => {
 })
 
 if (want('video')) {
-  const dir = path.join(OUT, 'glide-run-frames')
+  const dir = path.join(OUT, `${P}-run-frames`)
   fs.rmSync(dir, { recursive: true, force: true })
   fs.mkdirSync(dir, { recursive: true })
   await step(7000) // get up to speed
@@ -108,21 +109,22 @@ if (want('video')) {
     await page.screenshot({ path: path.join(dir, `f${String(f++).padStart(3, '0')}.png`) })
     await step(1000 / 30)
   }
-  execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-framerate', '30', '-i', path.join(dir, 'f%03d.png'), '-vf', 'scale=780:1688:flags=lanczos,format=yuv420p', '-c:v', 'libx264', '-crf', '20', '-movflags', '+faststart', path.join(OUT, 'glide-run.mp4')])
-  console.log('wrote glide-run.mp4 frames', f)
+  execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-framerate', '30', '-i', path.join(dir, 'f%03d.png'), '-vf', 'scale=780:1688:flags=lanczos,format=yuv420p', '-c:v', 'libx264', '-crf', '20', '-movflags', '+faststart', path.join(OUT, `${P}-run.mp4`)])
+  console.log(`wrote ${P}-run.mp4 frames`, f)
 }
 
 if (want('run')) {
-  await until((s) => s.t > 22, 40000, 100)
-  await until((s) => !s.air && s.slide === 0 && !s.near, 6000)
+  await until((s) => s.t > 22 && s.hand === 0, 60000, 100)
+  await until((s) => !s.air && s.slide === 0 && !s.near && s.hand === 0, 6000)
   await settle()
-  await shot('glide-run.png')
+  await shot(`${P}-run.png`)
 }
 
 if (want('jump')) {
-  const st = await until((s) => s.air && s.y > 0.95 && s.hurdle, 40000)
+  let st = await until((s) => s.air && s.vy > 0 && s.hurdle, 60000, 1000 / 30)
+  st = await until((s) => s.air && s.y > 0.9, 1000, 1000 / 120)
   console.log('jump', st)
-  await shot('fr-jump.png')
+  await shot(`${P}-jump.png`)
 }
 
 if (want('powerup')) {
@@ -148,7 +150,7 @@ if (want('crash') || want('end')) {
   await until((s) => s.phase === 'ended', 4000)
   await page.waitForSelector('.fr-end', { timeout: 10000 })
   await page.waitForTimeout(1200)
-  if (want('end')) await shot('glide-end.png')
+  if (want('end')) await shot(`${P}-end.png`)
 }
 
 console.log('final', await state(), 'lastScore', lastScore)
