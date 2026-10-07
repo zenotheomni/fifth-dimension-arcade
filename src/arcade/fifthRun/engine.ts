@@ -125,7 +125,7 @@ class Engine {
   async init() {
     const [emblem, logo] = await Promise.all([
       loadTexture(`${import.meta.env.BASE_URL}art/emblem-160.webp`),
-      loadTexture(`${import.meta.env.BASE_URL}art/glide-logo-512.webp`),
+      loadTexture(`${import.meta.env.BASE_URL}art/5d-logo-color.png`),
     ])
     if (this.destroyed) return
     this.view = new FrScene(this.canvas, detectTier(), emblem, logo)

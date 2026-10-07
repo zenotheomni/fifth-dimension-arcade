@@ -678,10 +678,10 @@ export class FrScene {
     this.shieldMat.uniforms.uTime.value = t
     // last 2 s: pulse faster so the player knows it is about to end
     const ending = v.hand > 0 && v.hand < 2
-    this.shieldMat.uniforms.uAlpha.value = ending ? 0.06 + 0.08 * Math.max(0, Math.sin(t * 14)) : 0.09 + 0.025 * Math.sin(t * 4)
+    this.shieldMat.uniforms.uAlpha.value = ending ? 0.08 + 0.12 * Math.max(0, Math.sin(t * 14)) : 0.17 + 0.05 * Math.sin(t * 5)
     this.fiveRing.visible = false
     this.magnetRing.visible = false
-    this.runner.setRim(v.invisible ? '#b48cff' : '#ff4fd0')
+    this.runner.setRim(v.invisible ? '#ffd36a' : '#ff4fd0')
 
     // decor recycling
     this.writeTowers(false, S)
@@ -873,16 +873,22 @@ export class FrScene {
           continue
         }
         item.group.scale.setScalar(1 + age * 4)
-        ;(item.halo.material as THREE.MeshBasicMaterial).opacity = 0.65 * (1 - age / 0.3)
+        ;(item.halo.material as THREE.MeshBasicMaterial).opacity = 0.45 * (1 - age / 0.3)
       } else {
         item.group.scale.setScalar(1)
-        ;(item.halo.material as THREE.MeshBasicMaterial).opacity = 0.65
+        ;(item.halo.material as THREE.MeshBasicMaterial).opacity = 0.45
       }
       item.group.visible = true
       item.group.position.set(laneX(p.lane), 0, -p.s)
       item.spin.rotation.y = t * 2.2
-      item.spin.position.y = 1.0 + Math.sin(t * 3 + p.id) * 0.1
-      item.ring.scale.setScalar(1 + 0.15 * Math.sin(t * 5))
+      item.spin.position.y = 1.35 + Math.sin(t * 3 + p.id) * 0.12
+      item.ring.scale.setScalar(1 + 0.18 * Math.sin(t * 5))
+      // pulse so it reads from far away; billboard the glows to the camera
+      const pulse = 1 + 0.22 * Math.sin(t * 6)
+      if (!p.taken) item.halo.scale.setScalar(pulse)
+      item.flare.scale.setScalar(0.85 + 0.3 * Math.abs(Math.sin(t * 2.4)))
+      item.halo.quaternion.copy(this.camera.quaternion)
+      item.flare.quaternion.copy(this.camera.quaternion)
     }
     for (const k of ['hand'] as PowerKind[]) for (let i = idx[k]; i < this.pickupPools[k].length; i++) this.pickupPools[k][i].group.visible = false
   }

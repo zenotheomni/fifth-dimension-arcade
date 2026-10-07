@@ -173,8 +173,8 @@
   width: clamp(110px, 32vw, 168px);
   height: auto;
   margin-bottom: 0.25rem;
-  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.5));
-  image-rendering: pixelated;
+  filter: drop-shadow(0 0 12px rgba(255, 240, 210, 0.6)) drop-shadow(0 0 26px rgba(255, 200, 60, 0.3));
+  border-radius: 50%;
 }
 
 /* CSS chrome logotype — never cropped from art */

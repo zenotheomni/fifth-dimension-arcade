@@ -17,6 +17,7 @@ import { requestAlertsRefresh } from '../arcade/social/alertStore'
 import FifthRunLoading from '../arcade/fifthRun/FifthRunLoading'
 import '../arcade/courtVisionPhaser/courtVisionPhaser.css'
 import '../arcade/social/social.css'
+import BrandLockup from '../arcade/brand/BrandLockup'
 
 const CourtVision3D = lazy(() => import('../arcade/courtVision3d/CourtVision3D'))
 const FifthRun = lazy(() => import('../arcade/fifthRun/FifthRun'))
@@ -184,8 +185,7 @@ export default function ChallengePage() {
 
         <div className="cvp-challenger__panel">
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 10 }}>
-            <img src={`${BASE}art/fifth-floor-logo.png`} alt="Fifth Floor Arcade" width={64} height={64} style={{ display: 'block', borderRadius: '50%' }} />
-            <span style={{ marginTop: 4, fontSize: 11, letterSpacing: '0.18em', fontWeight: 700, color: '#ffc83c' }}>FIFTH FLOOR ARCADE</span>
+            <BrandLockup size={72} />
           </div>
           {phase === 'loading' || phase === 'starting' ? (
             <>

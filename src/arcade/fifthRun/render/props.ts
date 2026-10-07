@@ -306,28 +306,125 @@ export function buildCar(shared: {
   return { group, paint, tail, head, shadow }
 }
 
-export function buildBarrier(chev: THREE.Texture, metal: THREE.Material) {
-  const group = new THREE.Group()
-  const faceMat = new THREE.MeshStandardMaterial({ map: chev, roughness: 0.5, emissive: new THREE.Color('#ff3d5a'), emissiveMap: chev, emissiveIntensity: 0.55 })
-  const plank = new THREE.Mesh(box(1.6, 0.3, 0.07), faceMat)
-  plank.position.y = 0.58
-  group.add(plank)
-  const plank2 = new THREE.Mesh(box(1.6, 0.18, 0.07), faceMat)
-  plank2.position.y = 0.24
-  group.add(plank2)
-  for (const x of [-0.7, 0.7]) {
-    for (const dz of [-0.16, 0.16]) {
-      const leg = new THREE.Mesh(box(0.06, 0.76, 0.05), metal)
-      leg.position.set(x, 0.37, dz)
-      leg.rotation.x = dz > 0 ? -0.22 : 0.22
-      group.add(leg)
-    }
+// ── Realistic debris: displaced-noise rock / asteroid chunks with a procedural albedo+roughness+bump map ──
+let _rockTex: { map: THREE.Texture; bump: THREE.Texture } | null = null
+function rockTextures() {
+  if (_rockTex) return _rockTex
+  const N = 256
+  const c = document.createElement('canvas')
+  c.width = c.height = N
+  const g = c.getContext('2d')!
+  const img = g.createImageData(N, N)
+  const b = document.createElement('canvas')
+  b.width = b.height = N
+  const bg = b.getContext('2d')!
+  const bimg = bg.createImageData(N, N)
+  // value-noise fbm (tileable)
+  const R = (x: number, y: number) => {
+    const h = Math.sin(((x % 64) + 64) % 64 * 127.1 + (((y % 64) + 64) % 64) * 311.7) * 43758.5453
+    return h - Math.floor(h)
   }
-  const lamp = new THREE.MeshStandardMaterial({ color: '#ffb020', emissive: new THREE.Color('#ffa000'), emissiveIntensity: 3 })
-  for (const x of [-0.62, 0.62]) {
-    const l = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), lamp)
-    l.position.set(x, 0.8, 0)
-    group.add(l)
+  const vn = (x: number, y: number) => {
+    const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi
+    const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf)
+    const a = R(xi, yi), b2 = R(xi + 1, yi), c2 = R(xi, yi + 1), d = R(xi + 1, yi + 1)
+    return a + (b2 - a) * u + (c2 - a) * v + (a - b2 - c2 + d) * u * v
+  }
+  for (let y = 0; y < N; y++)
+    for (let x = 0; x < N; x++) {
+      let f = 0, amp = 0.5, fr = 4 / N * 4
+      for (let o = 0; o < 5; o++) {
+        f += amp * vn(x * fr * 4, y * fr * 4)
+        amp *= 0.5
+        fr *= 2
+      }
+      const crack = Math.abs(vn(x / 9, y / 9) - 0.5) < 0.025 ? 0.45 : 1
+      const i = (y * N + x) * 4
+      const l = (34 + f * 70) * crack
+      img.data[i] = l * 0.95
+      img.data[i + 1] = l * 0.9
+      img.data[i + 2] = l * 1.02
+      img.data[i + 3] = 255
+      const bv = f * 255 * crack
+      bimg.data[i] = bimg.data[i + 1] = bimg.data[i + 2] = bv
+      bimg.data[i + 3] = 255
+    }
+  g.putImageData(img, 0, 0)
+  bg.putImageData(bimg, 0, 0)
+  const map = new THREE.CanvasTexture(c)
+  map.colorSpace = THREE.SRGBColorSpace
+  const bump = new THREE.CanvasTexture(b)
+  for (const t of [map, bump]) {
+    t.wrapS = t.wrapT = THREE.RepeatWrapping
+    t.anisotropy = 4
+  }
+  _rockTex = { map, bump }
+  return _rockTex
+}
+
+let _rockMat: THREE.MeshStandardMaterial | null = null
+function rockMaterial() {
+  const t = rockTextures()
+  return (_rockMat ??= new THREE.MeshStandardMaterial({ map: t.map, bumpMap: t.bump, bumpScale: 2.2, roughnessMap: t.bump, roughness: 0.95, metalness: 0.08, color: '#9a94a6' }))
+}
+
+/** Jagged rock: icosphere with seeded radial noise, squashed to (sx, sy, sz). Faceted look via flat normals. */
+function rockGeometry(seed: number, sx: number, sy: number, sz: number, detail = 2) {
+  let g: THREE.BufferGeometry = new THREE.IcosahedronGeometry(1, detail)
+  g = g.index ? g.toNonIndexed() : g
+  const pos = g.getAttribute('position') as THREE.BufferAttribute
+  const h = (x: number, y: number, z: number) => {
+    const v = Math.sin(x * 12.9898 + y * 78.233 + z * 37.719 + seed * 4.13) * 43758.5453
+    return v - Math.floor(v)
+  }
+  const v = new THREE.Vector3()
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i)
+    const k = 0.72 + 0.5 * h(Math.round(v.x * 4), Math.round(v.y * 4), Math.round(v.z * 4)) + 0.12 * h(Math.round(v.x * 9), Math.round(v.y * 9), Math.round(v.z * 9))
+    v.multiplyScalar(k)
+    pos.setXYZ(i, v.x * sx, v.y * sy, v.z * sz)
+  }
+  g.computeVertexNormals()
+  // planar-ish UVs for the noise maps
+  const uv = new Float32Array(pos.count * 2)
+  for (let i = 0; i < pos.count; i++) {
+    uv[i * 2] = pos.getX(i) * 0.9 + pos.getZ(i) * 0.6
+    uv[i * 2 + 1] = pos.getY(i) * 0.9 + pos.getZ(i) * 0.3
+  }
+  g.setAttribute('uv', new THREE.BufferAttribute(uv, 2))
+  return g
+}
+
+let _rockSeed = 1
+/** Low debris line (jump it): broken asteroid chunks + a bent steel rail, faint ember cracks. */
+export function buildBarrier(chev: THREE.Texture, metal: THREE.Material) {
+  void chev
+  const seed = _rockSeed++
+  const group = new THREE.Group()
+  const mat = rockMaterial()
+  const chunks: [number, number, number, number][] = [
+    [-0.55, 0.42, 0.36, 0.3],
+    [0.05, 0.5, 0.42, 0.34],
+    [0.6, 0.38, 0.34, 0.3],
+  ]
+  chunks.forEach(([x, w, hgt, d], i) => {
+    const m = new THREE.Mesh(rockGeometry(seed * 7 + i, w, hgt, d), mat)
+    m.position.set(x, hgt * 0.78, 0)
+    m.rotation.set(0.2 * i, seed * 0.7 + i, 0.1)
+    group.add(m)
+  })
+  const rust = new THREE.MeshStandardMaterial({ color: '#4a3a33', metalness: 0.85, roughness: 0.62 })
+  const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 1.7, 8), rust)
+  rail.rotation.z = Math.PI / 2 + 0.08
+  rail.position.set(0, 0.6, 0.1)
+  group.add(rail)
+  void metal
+  // dim ember glow in the cracks (blinks slowly; keeps it readable on the dark track)
+  const lamp = new THREE.MeshStandardMaterial({ color: '#2a0d06', emissive: new THREE.Color('#ff5a1f'), emissiveIntensity: 1.2 })
+  for (const x of [-0.5, 0.15, 0.62]) {
+    const e = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 6), lamp)
+    e.position.set(x, 0.32, 0.3)
+    group.add(e)
   }
   return { group, lamp }
 }
@@ -409,14 +506,14 @@ export function buildPickup(kind: 'hand', glow: THREE.Texture, emblem: THREE.Tex
   void kind
   const group = new THREE.Group()
   const spin = new THREE.Group()
-  spin.position.y = 1.05
+  spin.position.y = 1.35
   group.add(spin)
-  const color = '#c9a0ff'
+  const color = '#ffd36a'
   // Rare Fifth Dimension logo — spinning emblem disc (15s invincible when collected)
   if (emblem) {
     const disc = new THREE.Mesh(
-      new THREE.CircleGeometry(0.42, 32),
-      new THREE.MeshBasicMaterial({ map: emblem, transparent: true, side: THREE.DoubleSide, depthWrite: false }),
+      new THREE.CircleGeometry(0.72, 48),
+      new THREE.MeshBasicMaterial({ map: emblem, transparent: true, side: THREE.DoubleSide, depthWrite: true, alphaTest: 0.3, toneMapped: false }),
     )
     spin.add(disc)
     const back = disc.clone()
@@ -442,18 +539,29 @@ export function buildPickup(kind: 'hand', glow: THREE.Texture, emblem: THREE.Tex
     spin.add(five)
   }
 
-  const halo = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 1.9), glowMaterial(glow, color, 0.7))
-  halo.position.y = 1.05
+  const halo = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 3.4), glowMaterial(glow, color, 0.45))
+  halo.position.y = 1.35
+  halo.renderOrder = -1
   group.add(halo)
+  // wide far-visibility flare
+  const flare = new THREE.Mesh(new THREE.PlaneGeometry(7, 7), glowMaterial(glow, '#b48cff', 0.35))
+  flare.position.y = 1.35
+  flare.renderOrder = -2
+  group.add(flare)
+  const rim = new THREE.Mesh(
+    new THREE.RingGeometry(0.74, 0.84, 48),
+    new THREE.MeshBasicMaterial({ color: '#ffe7a0', transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+  )
+  spin.add(rim)
   const ring = new THREE.Mesh(
-    new THREE.RingGeometry(0.48, 0.68, 32),
+    new THREE.RingGeometry(0.8, 1.15, 48),
     new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
   )
   ring.rotation.x = -Math.PI / 2
   ring.position.y = 0.03
   group.add(ring)
   const beam = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.42, 0.42, 7, 20, 1, true),
+    new THREE.CylinderGeometry(0.5, 0.75, 26, 24, 1, true),
     new THREE.ShaderMaterial({
       transparent: true,
       depthWrite: false,
@@ -461,12 +569,12 @@ export function buildPickup(kind: 'hand', glow: THREE.Texture, emblem: THREE.Tex
       side: THREE.DoubleSide,
       uniforms: { uColor: { value: new THREE.Color(color) } },
       vertexShader: 'varying float vY; void main(){ vY = uv.y; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-      fragmentShader: 'uniform vec3 uColor; varying float vY; void main(){ gl_FragColor = vec4(uColor * (1.0 - vY) * 0.55, 1.0); }',
+      fragmentShader: 'uniform vec3 uColor; varying float vY; void main(){ gl_FragColor = vec4(uColor * pow(1.0 - vY, 1.6) * 0.6, 1.0); }',
     }),
   )
-  beam.position.y = 3.5
+  beam.position.y = 2.3 + 13
   group.add(beam)
-  return { group, spin, halo, ring }
+  return { group, spin, halo, ring, flare, beam }
 }
 
 
@@ -589,33 +697,31 @@ export function buildLamp(glow: THREE.Texture, metal: THREE.Material, side: numb
   return group
 }
 
-/** Tall crate stack (lane blocker — switch lanes). Dark steel cargo crates with a hazard strip. */
+/** Tall blocker (switch lanes): a huge fractured asteroid boulder with a chunk of twisted hull plating. */
 export function buildBlock(chev: THREE.Texture, metal: THREE.Material) {
-  const group = new THREE.Group()
-  const crate = new THREE.MeshStandardMaterial({ color: '#1d2230', metalness: 0.65, roughness: 0.42 })
-  const rib = new THREE.MeshStandardMaterial({ color: '#2c3346', metalness: 0.8, roughness: 0.3 })
-  const strip = new THREE.MeshStandardMaterial({ map: chev, emissive: new THREE.Color('#ff3d5a'), emissiveMap: chev, emissiveIntensity: 0.6, roughness: 0.5 })
-  const sizes: [number, number, number, number][] = [
-    [1.62, 1.25, 1.5, 0.62],
-    [1.4, 1.1, 1.3, 1.82],
-  ]
-  for (const [w, h, d, y] of sizes) {
-    const b = new THREE.Mesh(box(w, h, d), crate)
-    b.position.y = y
-    group.add(b)
-    for (let i = -2; i <= 2; i++) {
-      const r = new THREE.Mesh(box(0.05, h * 0.92, 0.04), rib)
-      r.position.set((i * w) / 5.2, y, d / 2 + 0.02)
-      group.add(r)
-    }
-  }
-  const s = new THREE.Mesh(box(1.64, 0.16, 0.06), strip)
-  s.position.set(0, 0.2, 0.77)
-  group.add(s)
-  const lampMat = new THREE.MeshStandardMaterial({ color: '#ff2040', emissive: new THREE.Color('#ff2040'), emissiveIntensity: 3.5 })
-  const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), lampMat)
-  lamp.position.set(0, 2.42, 0.4)
-  group.add(lamp)
+  void chev
   void metal
+  const seed = _rockSeed++ + 100
+  const group = new THREE.Group()
+  const mat = rockMaterial()
+  const big = new THREE.Mesh(rockGeometry(seed, 0.95, 1.3, 0.9, 3), mat)
+  big.position.y = 1.25
+  big.rotation.y = seed
+  group.add(big)
+  const small = new THREE.Mesh(rockGeometry(seed + 3, 0.5, 0.42, 0.5), mat)
+  small.position.set(0.55, 0.38, 0.45)
+  group.add(small)
+  const plate = new THREE.MeshStandardMaterial({ color: '#3b3f4a', metalness: 0.9, roughness: 0.48, side: THREE.DoubleSide })
+  const hull = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.6, 4, 3), plate)
+  const hp = hull.geometry.getAttribute('position') as THREE.BufferAttribute
+  for (let i = 0; i < hp.count; i++) hp.setZ(i, Math.sin(hp.getX(i) * 4 + seed) * 0.08)
+  hull.geometry.computeVertexNormals()
+  hull.position.set(-0.45, 0.5, 0.75)
+  hull.rotation.set(-0.3, 0.4, 0.5)
+  group.add(hull)
+  const lampMat = new THREE.MeshStandardMaterial({ color: '#2a0806', emissive: new THREE.Color('#ff3b1f'), emissiveIntensity: 1.6 })
+  const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), lampMat)
+  lamp.position.set(-0.3, 0.66, 0.86)
+  group.add(lamp)
   return { group, lamp: lampMat }
 }

@@ -4,6 +4,7 @@ import { track } from '../arcade/analytics'
 import { issueTicket } from '../arcade/core/arcadeApi'
 import type { SeededRun } from '../arcade/courtVision3d/CourtVision3D'
 import '../arcade/social/social.css'
+import BrandLockup from '../arcade/brand/BrandLockup'
 
 const CourtVision3D = lazy(() => import('../arcade/courtVision3d/CourtVision3D'))
 
@@ -21,7 +22,10 @@ const loading = (
       fontSize: '0.8rem',
     }}
   >
-    Loading Court Vision…
+    <div style={{ display: 'grid', justifyItems: 'center', gap: 18 }}>
+      <BrandLockup size={120} />
+      <span>Loading Court Vision…</span>
+    </div>
   </div>
 )
 

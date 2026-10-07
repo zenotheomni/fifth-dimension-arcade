@@ -25,6 +25,7 @@ import type {
   CvMode,
 } from '../courtVisionPhaser/types'
 import './courtVision3d.css'
+import BrandLockup from '../brand/BrandLockup'
 
 const initialHud: CvHudState = {
   score: 0,
@@ -284,6 +285,7 @@ export default function CourtVision3D({
       <div className="cv3-vignette" aria-hidden />
       {hud.phase === 'ready' && !ended ? (
         <div className="cv3-loading" aria-live="polite">
+          <BrandLockup size={96} />
           <span className="cv3-loading__bar" />
           Warming up the court…
         </div>
@@ -291,6 +293,7 @@ export default function CourtVision3D({
 
       {howTo && !ended ? (
         <div className="cv3-howto" role="dialog" aria-label="How to play">
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}><BrandLockup size={64} /></div>
           <p className="cv3-howto__eyebrow">Court Vision</p>
           <h2 className="cv3-howto__title">How to play</h2>
           <ul className="cv3-howto__list">
