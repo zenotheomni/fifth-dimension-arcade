@@ -11,12 +11,23 @@ export const FR_DT = 1 / FR_HZ
 export const LANE_W = 2.0
 export const laneX = (lane: number) => (lane - 1) * LANE_W
 
-/** Forward speed (m/s) — Surfers-like ramp for on-foot: punchy start, climbs hard. */
-export const SPEED = { v0: 17, vmax: 44, k: 980 }
+/**
+ * Forward speed (m/s). Gentle on-ramp for first-timers (≈14 → 21.5 m/s over the first 30 s), then it
+ * keeps climbing toward vmax (≈27 m/s at 60 s, ≈33 m/s at 2 min).
+ */
+export const SPEED = { v0: 14, vmax: 44, k: 1600 }
 export const speedAt = (s: number) => SPEED.v0 + (SPEED.vmax - SPEED.v0) * (s / (s + SPEED.k))
-/** Difficulty 0..1 (pattern mix + spacing). */
-export const DIFF_K = 720
-export const levelAt = (s: number) => (s <= 0 ? 0 : s / (s + DIFF_K))
+/**
+ * Warm-up distance (≈ first 40 s, easing out linearly): sparse single-car rows, slower oncoming
+ * traffic, wider spacing.
+ * warmAt = 1 at the start line → 0 at WARM_M (linear; exact IEEE ops only).
+ */
+export const WARM_M = 750
+export const warmAt = (s: number) => (s >= WARM_M ? 0 : s <= 0 ? 1 : 1 - s / WARM_M)
+/** Difficulty 0..1 (pattern mix + spacing). Held at 0 through the first LEVEL_OFFSET metres. */
+export const DIFF_K = 950
+export const LEVEL_OFFSET = 460
+export const levelAt = (s: number) => (s <= LEVEL_OFFSET ? 0 : (s - LEVEL_OFFSET) / (s - LEVEL_OFFSET + DIFF_K))
 
 /** Jump: fixed airtime / apex (feet height). */
 export const JUMP_T = 0.62
@@ -69,4 +80,4 @@ export const multFor = (combo: number) => {
   return m
 }
 
-export const START_CLEAR_M = 70
+export const START_CLEAR_M = 110

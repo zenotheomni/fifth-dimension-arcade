@@ -1,5 +1,6 @@
 /**
- * Fifth Run — procedural low-poly hooded runner (no external model).
+ * Fifth Glide — procedural low-poly hooded runner. Lightweight FALLBACK only: shown instantly while
+ * the rigged human (`humanRunner.ts`, runner.glb) streams in, and kept if that load fails.
  * Joint hierarchy animated procedurally: run cycle, jump tuck, slide, lane-change bank, crash tumble.
  * Faces −Z (away from the camera), feet at y = 0.
  */
@@ -20,6 +21,15 @@ export type PoseInput = {
   idle: boolean
 }
 
+/** Common surface the scene drives (procedural fallback + rigged GLB runner). */
+export interface RunnerView {
+  group: THREE.Group
+  meshes: THREE.Mesh[]
+  update(p: PoseInput): void
+  setRim(color: string): void
+  dispose?(): void
+}
+
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t
 
 function capsule(r: number, len: number, mat: THREE.Material, seg = 8) {
@@ -28,7 +38,7 @@ function capsule(r: number, len: number, mat: THREE.Material, seg = 8) {
   return m
 }
 
-export class RunnerFigure {
+export class RunnerFigure implements RunnerView {
   group = new THREE.Group()
   private body = new THREE.Group()
   private spine = new THREE.Group()
@@ -162,6 +172,11 @@ export class RunnerFigure {
     g.traverse((o) => {
       if ((o as THREE.Mesh).isMesh) this.meshes.push(o as THREE.Mesh)
     })
+  }
+
+  setRim(color: string) {
+    const rim = this.hoodieMat.userData.rim as { uRimColor: { value: THREE.Color } } | undefined
+    rim?.uRimColor.value.set(color)
   }
 
   update(p: PoseInput) {

@@ -171,7 +171,7 @@ const check = (name, pass, detail) => {
 
 // ── 4. bots ──
 const bots = {}
-for (const name of ['novice', 'decent', 'expert', 'perfect']) {
+for (const name of ['rookie', 'novice', 'decent', 'expert', 'perfect']) {
   const n = name === 'perfect' ? 40 : N_SEEDS
   const runs = seedList(n, 'bot').map((sd, i) => runBot(sd, SKILLS[name], name === 'perfect' ? 300 : 400, 1000 + i))
   const ts = runs.map((r) => r.t)
@@ -205,7 +205,9 @@ if (!JSON_OUT) {
   for (const [k, b] of Object.entries(bots)) console.log(k.padEnd(8), JSON.stringify(pub(b)))
 }
 const d = bots.decent
-check('decent player lasts ~90–320 s (median, 3-life)', d.medianT >= 90 && d.medianT <= 320, `median ${d.medianT}s, IQR ${d.p25T}–${d.p75T}s`)
+check('decent player lasts ~90–360 s (median, 3-life)', d.medianT >= 90 && d.medianT <= 360, `median ${d.medianT}s, IQR ${d.p25T}–${d.p75T}s`)
+const rk = bots.rookie
+check('first-timer (rookie bot) median ≥ 60 s, nobody out before 30 s', rk.medianT >= 60 && rk.under30 === 0, `median ${rk.medianT}s, IQR ${rk.p25T}–${rk.p75T}s, ${rk.under30} under 30 s`)
 check('perfect-timing bot (info): survives 300 s', true, `${bots.perfect.survivedCap}/${bots.perfect.n}`)
 check('scores fit server cap (500000)', Math.max(...Object.values(bots).map((b) => b.maxScore)) < 500000, `max ${Math.max(...Object.values(bots).map((b) => b.maxScore))}`)
 

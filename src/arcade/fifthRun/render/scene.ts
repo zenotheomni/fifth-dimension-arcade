@@ -22,7 +22,9 @@ import {
   palmMaterial,
   type CarParts,
 } from './props'
-import { RunnerFigure, type PoseInput } from './runnerFigure'
+import { RunnerFigure, type PoseInput, type RunnerView } from './runnerFigure'
+import { loadHumanRunner } from './humanRunner'
+import { neonEnvironment } from './env'
 import { mergeStatic } from './merge'
 import { glowMaterial, PALETTE, roadMaterial, skyMaterial, towerMaterial } from './shaders'
 import { blobTexture, chevronTexture, glowTexture, planetTexture, shootingStarTexture, streakTexture } from './textures'
@@ -51,7 +53,7 @@ export type ViewState = {
   lives: number
   hand: number
   invuln: boolean
-  /** Fifth Dimension logo power — runner fades / ghosted */
+  /** Fifth Dimension logo power — invincible (violet shell + rim) */
   invisible: boolean
   stumble: number
   obstacles: Obstacle[]
@@ -85,7 +87,8 @@ export class FrScene {
   dprCap = 2
   width = 1
   height = 1
-  runner: RunnerFigure
+  runner: RunnerView
+  private runnerLight: THREE.SpotLight | null = null
 
   private world = new THREE.Group()
   private skyGroup = new THREE.Group()
@@ -212,10 +215,10 @@ export class FrScene {
       uniforms: { uTime: { value: 0 }, uAlpha: { value: 1 } },
       vertexShader: 'varying vec3 vN; varying vec3 vV; void main(){ vec4 mv = modelViewMatrix*vec4(position,1.0); vN = normalize(normalMatrix*normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix*mv; }',
       fragmentShader:
-        'uniform float uTime; uniform float uAlpha; varying vec3 vN; varying vec3 vV; void main(){ float f = pow(1.0 - abs(dot(vN, vV)), 2.2); float hex = 0.5 + 0.5*sin(vN.y*40.0 + uTime*3.0); gl_FragColor = vec4(vec3(0.72,0.45,1.0) * (f*1.4 + hex*0.08) * uAlpha, 1.0); }',
+        'uniform float uTime; uniform float uAlpha; varying vec3 vN; varying vec3 vV; void main(){ float f = pow(1.0 - abs(dot(vN, vV)), 3.4); float band = 0.5 + 0.5*sin(vN.y*18.0 - uTime*2.5); gl_FragColor = vec4(vec3(0.7,0.5,1.0) * (f*(1.1 + band*0.35)) * uAlpha, 1.0); }',
     })
     this.shieldMesh = new THREE.Mesh(new THREE.SphereGeometry(0.95, 28, 18), this.shieldMat)
-    this.shieldMesh.scale.set(1.05, 1.35, 1.05)
+    this.shieldMesh.scale.set(0.92, 1.2, 0.85)
     this.scene.add(this.shieldMesh)
     this.fiveRing = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 2.4), glowMaterial(this.glow, '#ffc83c', 0.9))
     this.fiveRing.rotation.x = -Math.PI / 2
@@ -652,27 +655,30 @@ export class FrScene {
     }
     this.runner.group.userData.prevX = v.x
     this.runner.update(pose)
-    if (v.dead && v.deathKind === 'gap') this.runner.group.position.y = -Math.min(6, v.deadT * v.deadT * 9)
-    if (v.invisible) {
-      this.runner.group.visible = Math.floor(t * 8) % 3 !== 0
-    } else {
-      const flick = v.invuln ? (Math.floor(t * 18) % 2 ? 0.35 : 1) : 1
-      this.runner.group.visible = flick > 0.5 || !v.invuln
+    if (this.runnerLight) {
+      this.runnerLight.position.set(v.x * 0.7 - 0.6, v.y + 4.2, 4.6)
+      this.runnerLight.target.position.set(v.x, v.y + 1.0, 0)
+      this.runnerLight.target.updateMatrixWorld()
     }
+    if (v.dead && v.deathKind === 'gap') this.runner.group.position.y = -Math.min(6, v.deadT * v.deadT * 9)
+    // post-hit i-frames flicker; the 5D invincibility keeps the runner solid (shell + rim show it)
+    const flick = v.invuln && !v.invisible ? (Math.floor(t * 18) % 2 ? 0.35 : 1) : 1
+    this.runner.group.visible = flick > 0.5
     this.blob.position.set(v.x, 0.012, 0.05)
     const bs = Math.max(0.35, 1 - v.y * 0.35)
     this.blob.scale.set(bs, bs, bs)
     this.blob.visible = !(v.dead && v.deathKind === 'gap')
 
-    // power-up fx — 5D logo = soft violet ghost shell while invincible
+    // power-up fx — 5D logo = faint violet fresnel shell + violet rim while invincible (subtle)
     this.shieldMesh.visible = v.invisible && !v.dead
-    this.shieldMesh.position.set(v.x, v.y + 0.95 - (v.sliding ? 0.45 : 0), 0)
+    this.shieldMesh.position.set(v.x, v.y + 0.92 - (v.sliding ? 0.4 : 0), 0)
     this.shieldMat.uniforms.uTime.value = t
-    this.shieldMat.uniforms.uAlpha.value = 0.35 + 0.2 * Math.sin(t * 5)
+    // last 2 s: pulse faster so the player knows it is about to end
+    const ending = v.hand > 0 && v.hand < 2
+    this.shieldMat.uniforms.uAlpha.value = ending ? 0.1 + 0.12 * Math.max(0, Math.sin(t * 14)) : 0.16 + 0.05 * Math.sin(t * 4)
     this.fiveRing.visible = false
     this.magnetRing.visible = false
-    const rim = this.runner.hoodieMat.userData.rim as { uRimColor: { value: THREE.Color } } | undefined
-    if (rim) rim.uRimColor.value.set(v.invisible ? '#b48cff' : '#ff3fc8')
+    this.runner.setRim(v.invisible ? '#b48cff' : '#ff4fd0')
 
     // decor recycling
     this.writeTowers(false, S)
@@ -701,7 +707,35 @@ export class FrScene {
     this.towerMat.uniforms.uTime.value = t
   }
 
-  /** Upgrade traffic pool to Draco sports-car GLTF (player stays the hooded runner). */
+  /** Swap the procedural fallback for the rigged GLB human (keeps the fallback if the load fails). */
+  async loadGltfRunner() {
+    try {
+      const human = await loadHumanRunner()
+      const old = this.runner
+      human.group.userData.prevX = old.group.userData.prevX
+      this.scene.remove(old.group)
+      old.group.traverse((o) => {
+        const m = o as THREE.Mesh
+        if (m.isMesh) m.geometry?.dispose?.()
+      })
+      for (const m of human.meshes) m.layers.enable(REFL)
+      human.setEnv(neonEnvironment(this.renderer))
+      this.runner = human
+      this.scene.add(human.group)
+      // soft white chase light from behind/above the camera so the suit reads white, not neon-tinted
+      const chase = new THREE.SpotLight('#eef2ff', 26, 14, 0.42, 0.85, 1.6)
+      chase.position.set(0, 0, 0)
+      this.runnerLight = chase
+      this.scene.add(chase)
+      this.scene.add(chase.target)
+      return true
+    } catch (e) {
+      console.warn('[fifth-glide] runner GLB failed, keeping procedural fallback', e)
+      return false
+    }
+  }
+
+  /** Upgrade traffic pool to Draco sports-car GLTF. */
   async loadGltfCars() {
     try {
       const template = await loadCarTemplate()

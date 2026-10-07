@@ -27,7 +27,15 @@
 
 ## Fifth Glide (`src/arcade/fifthRun/`, id `fifth-run`)
 
-- **Player** — procedural hooded runner (`render/runnerFigure.ts`), original.
+- **Player (astronaut)** — `public/art/runner/astronaut.glb`, derived from the
+  [Microsoft Rocketbox Avatar Library](https://github.com/microsoft/Microsoft-Rocketbox) — **MIT License**,
+  © 2020 Microsoft. Base: `Male_Adult_18` rigged/skinned body (re-textured + inflated into an EVA suit);
+  mocap clips `m_run_fast_01` (run), `m_idle_neutral_01` (idle), `m_crouch_idle` (slide). Helmet, gold visor,
+  PLSS backpack, chest module and bearing rings are original geometry added on the Rocketbox skeleton;
+  suit / backpack textures derived + original. Build notes: `scripts/astronaut-build/`.
+  Loaded with `GLTFLoader` + three.js `MeshoptDecoder` (meshopt + WebP, ~0.6 MB).
+- **Player fallback** — procedural hooded runner (`render/runnerFigure.ts`), original; shown only while
+  the GLB streams in or if it fails to load.
 - **Traffic car mesh** — `public/art/cars/sports.glb` is the [three.js Ferrari glTF sample](https://github.com/mrdoob/three.js/tree/dev/examples/models/gltf)
   (Draco-compressed). Loaded via `GLTFLoader` + `DRACOLoader`; body paint recolored per traffic variant.
   Decoder wasm/js vendored under `public/draco/` from three.js examples (Apache-2.0 / three.js license).

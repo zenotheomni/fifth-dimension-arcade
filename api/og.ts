@@ -23,7 +23,7 @@ type ChallengeView = {
 
 const GAME_TITLES: Record<string, string> = {
   'court-vision': 'Court Vision',
-  'fifth-run': 'Fifth Gear',
+  'fifth-run': 'Fifth Glide',
 }
 
 async function loadChallenge(id: string): Promise<ChallengeView | null> {

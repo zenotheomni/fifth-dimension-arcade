@@ -1,0 +1,176 @@
+<!doctype html><html><body>
+<script type="importmap">{"imports":{"three":"/deploy/fifth-dimension-arcade/node_modules/three/build/three.module.js","three/addons/":"/deploy/fifth-dimension-arcade/node_modules/three/examples/jsm/"}}</script>
+<script>window.addEventListener('error', e => { window.err = String(e.message); window.done = true }); window.addEventListener('unhandledrejection', e => { window.err = String(e.reason && e.reason.stack || e.reason); window.done = true })</script>
+<script type="module">
+import * as THREE from 'three'
+import { FBXLoader } from 'three/addons/loaders/FBXLoader.js'
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js'
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
+const B = '/glide-assets/rb/'
+const q = new URLSearchParams(location.search)
+const INF = Number(q.get('inf') || 2.6)
+const mgr = new THREE.LoadingManager(); mgr.setURLModifier(u => /\.tga$/i.test(u) ? 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=' : u)
+const L = new FBXLoader(mgr)
+const av = await L.loadAsync(B + 'Male_Adult_18.fbx')
+av.updateMatrixWorld(true)
+const tl = new THREE.TextureLoader()
+const tex = async (n, srgb, flip = false) => { const t = await tl.loadAsync(B + n); t.flipY = flip; t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace; t.name = n; return t }
+const info = {}
+let skinned
+av.traverse(o => { if (o.isSkinnedMesh) skinned = o })
+const bones = {}; skinned.skeleton.bones.forEach(b => bones[b.name] = b)
+const g = skinned.geometry
+// --- keep only body groups (head/face sits inside the helmet) ---
+const mats = skinned.material
+const headIdx = mats.findIndex(m => /head/i.test(m.name))
+const idx = g.index ? g.index.array : null
+const keep = [], headVerts = new Set()
+for (const gr of g.groups) for (let i = gr.start; i < gr.start + gr.count; i++) { const vi = idx ? idx[i] : i; gr.materialIndex === headIdx ? headVerts.add(vi) : keep.push(vi) }
+// head centre (bind pose, world) from the head-group vertices
+const pos = g.attributes.position, nrm = g.attributes.normal
+const hb = new THREE.Box3(); const v = new THREE.Vector3()
+for (const i of headVerts) { v.fromBufferAttribute(pos, i).applyMatrix4(skinned.matrixWorld); hb.expandByPoint(v) }
+info.headBox = [hb.min.toArray(), hb.max.toArray()]
+// --- inflate the suit along normals; less on hands/fingers ---
+const si = g.attributes.skinIndex, sw = g.attributes.skinWeight
+const names = skinned.skeleton.bones.map(b => b.name)
+const used = new Set(keep)
+for (const i of used) {
+  let best = 0, bw = -1
+  for (let k = 0; k < 4; k++) { const w = sw.getComponent(i, k); if (w > bw) { bw = w; best = si.getComponent(i, k) } }
+  const bn = names[best]
+  let d = INF
+  if (/Finger/.test(bn)) d = 0.5
+  else if (/Hand/.test(bn)) d = 0.9
+  else if (/Foot|Toe/.test(bn)) d = 1.2
+  else if (/Neck|Head/.test(bn)) d = 1.6
+  else if (/Spine|Clavicle/.test(bn)) d = INF * 1.15
+  pos.setXYZ(i, pos.getX(i) + nrm.getX(i) * d, pos.getY(i) + nrm.getY(i) * d, pos.getZ(i) + nrm.getZ(i) * d)
+}
+pos.needsUpdate = true
+// drop the hoodie's hood / collar inside the helmet: triangles above the neck ring
+{
+  const cutY = hb.max.y - 12.5 - 17.2 * 0.9
+  const wp = new THREE.Vector3(); const kept = []
+  for (let t = 0; t < keep.length; t += 3) {
+    let cy = 0
+    for (let k = 0; k < 3; k++) { wp.fromBufferAttribute(pos, keep[t + k]).applyMatrix4(skinned.matrixWorld); cy += wp.y / 3 }
+    if (cy < cutY) kept.push(keep[t], keep[t + 1], keep[t + 2])
+  }
+  info.dropped = (keep.length - kept.length) / 3
+  keep.length = 0; keep.push(...kept)
+}
+g.setIndex(keep); g.clearGroups()
+const uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setY(i, 1 - uv.getY(i))
+g.computeBoundingBox(); g.computeBoundingSphere()
+const suitMat = new THREE.MeshStandardMaterial({ name: 'suit', map: await tex('suit_color.jpg', true), normalMap: await tex('body_normal.jpg'), roughnessMap: await tex('suit_mr.jpg'), roughness: 1, metalness: 0 })
+suitMat.normalScale.set(1.4, 1.4)
+skinned.material = suitMat
+skinned.name = 'suit'
+
+// --- rigid gear attached to bones (modelled in world axes, bind pose, cm) ---
+const attach = (bone, mesh, worldPos, worldQuat = new THREE.Quaternion()) => {
+  bone.updateMatrixWorld(true)
+  const m = new THREE.Matrix4().compose(worldPos, worldQuat, new THREE.Vector3(1, 1, 1))
+  const local = new THREE.Matrix4().copy(bone.matrixWorld).invert().multiply(m)
+  local.decompose(mesh.position, mesh.quaternion, mesh.scale)
+  bone.add(mesh)
+}
+const shellMat = new THREE.MeshStandardMaterial({ name: 'shell', color: '#eeede8', roughness: 0.32, metalness: 0 })
+const visorMat = new THREE.MeshStandardMaterial({ name: 'visor', color: '#f0c050', roughness: 0.05, metalness: 1 })
+const metalMat = new THREE.MeshStandardMaterial({ name: 'metal', color: '#b9bec6', roughness: 0.28, metalness: 1 })
+const darkMat = new THREE.MeshStandardMaterial({ name: 'darkmetal', color: '#3a3e46', roughness: 0.4, metalness: 0.8 })
+const blueMat = new THREE.MeshStandardMaterial({ name: 'anodized', color: '#3d6fd0', roughness: 0.3, metalness: 0.85 })
+const packMat = new THREE.MeshStandardMaterial({ name: 'pack', map: await tex('pack_color.jpg', true, false), roughness: 0.62, metalness: 0 })
+const lampMat = new THREE.MeshStandardMaterial({ name: 'lamp', color: '#ffffff', emissive: '#dff4ff', emissiveIntensity: 2.2, roughness: 0.2 })
+
+// helmet
+const hc = hb.getCenter(new THREE.Vector3()); const hs = hb.getSize(new THREE.Vector3())
+const R = 17.2
+const HC = new THREE.Vector3(hc.x, hb.max.y - 12.5, hc.z + 0.5)
+info.helmetR = R
+const helmet = new THREE.Group(); helmet.name = 'helmet'
+const shell = new THREE.Mesh(new THREE.SphereGeometry(R, 40, 28), shellMat); shell.scale.set(1, 1.07, 1.06); helmet.add(shell)
+const visor = new THREE.Mesh(new THREE.SphereGeometry(R * 1.035, 40, 24, Math.PI / 2 - 1.05, 2.1, 0.62, 1.15), visorMat); visor.scale.set(1, 1.07, 1.06); helmet.add(visor)
+// visor hood (EV visor assembly rim)
+const rim = new THREE.Mesh(new THREE.TorusGeometry(R * 1.05, 1.1, 8, 48, Math.PI * 1.15), shellMat); rim.rotation.set(0.35, 0, Math.PI * -0.075 + Math.PI / 2 - Math.PI * 1.15 / 2 + Math.PI / 2 - Math.PI / 2); rim.scale.set(1, 1.07, 1.06)
+for (const sx of [-1, 1]) {
+  const lamp = new THREE.Group()
+  const can = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 7, 16), shellMat); can.rotation.x = Math.PI / 2; lamp.add(can)
+  const lens = new THREE.Mesh(new THREE.CircleGeometry(1.8, 16), lampMat); lens.position.z = 3.6; lamp.add(lens)
+  lamp.position.set(sx * R * 0.93, R * 0.42, R * 0.1); helmet.add(lamp)
+}
+const ring = new THREE.Mesh(new THREE.TorusGeometry(R * 0.78, 2.4, 12, 40), metalMat); ring.rotation.x = Math.PI / 2; ring.position.y = -R * 0.95; helmet.add(ring)
+const ring2 = new THREE.Mesh(new THREE.TorusGeometry(R * 0.8, 1.2, 8, 40), blueMat); ring2.rotation.x = Math.PI / 2; ring2.position.y = -R * 1.02; helmet.add(ring2)
+attach(bones['Bip01_Head'], helmet, HC)
+
+// back: find back surface at chest height
+const sp2 = new THREE.Vector3().setFromMatrixPosition(bones['Bip01_Spine2'].matrixWorld)
+let minZ = 1e9, maxZ = -1e9
+for (const i of used) { v.fromBufferAttribute(pos, i).applyMatrix4(skinned.matrixWorld); if (Math.abs(v.y - sp2.y) < 10 && Math.abs(v.x) < 12) { minZ = Math.min(minZ, v.z); maxZ = Math.max(maxZ, v.z) } }
+info.back = [minZ, maxZ, sp2.toArray()]
+const pack = new THREE.Group(); pack.name = 'plss'
+const PW = 42, PH = 56, PD = 21
+const box = new THREE.Mesh(new RoundedBoxGeometry(PW, PH, PD, 4, 4.5), packMat); pack.add(box)
+// top cap + side frames
+const cap = new THREE.Mesh(new RoundedBoxGeometry(PW * 0.92, 8, PD * 0.9, 3, 3), shellMat); cap.position.y = PH / 2 + 3; pack.add(cap)
+for (const sx of [-1, 1]) {
+  const rail = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, PH * 0.9, 10), metalMat); rail.position.set(sx * (PW / 2 + 0.8), 0, -PD * 0.2); pack.add(rail)
+  const conn = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 2.6, 4, 16), blueMat); conn.rotation.z = Math.PI / 2; conn.position.set(sx * (PW / 2 + 2), -PH * 0.32, PD * 0.15); pack.add(conn)
+  const hose = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(sx * (PW / 2 + 3), -PH * 0.32, PD * 0.15), new THREE.Vector3(sx * (PW / 2 + 5), -PH * 0.45, PD * 0.6), new THREE.Vector3(sx * (PW / 2 + 2), -PH * 0.55, PD * 1.1)]), 12, 1.5, 8), darkMat); pack.add(hose)
+}
+// lower module (secondary O2 pack) + side frame plates
+const low = new THREE.Mesh(new RoundedBoxGeometry(PW + 4, 14, PD + 3, 3, 3), shellMat); low.position.y = -PH / 2 - 4; pack.add(low)
+const lowBand = new THREE.Mesh(new RoundedBoxGeometry(PW + 4.4, 2.2, PD + 3.4, 2, 1), darkMat); lowBand.position.y = -PH / 2 + 2.5; pack.add(lowBand)
+const ant = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 14, 8), metalMat); ant.position.set(PW * 0.32, PH / 2 + 12, -PD * 0.2); pack.add(ant)
+const beacon = new THREE.Mesh(new THREE.SphereGeometry(1.3, 12, 8), new THREE.MeshStandardMaterial({ name: 'beacon', color: '#ff3fc8', emissive: '#ff3fc8', emissiveIntensity: 3 })); beacon.position.set(PW * 0.32, PH / 2 + 19.5, -PD * 0.2); pack.add(beacon)
+// 5D emblem patch on the back panel (faces −Z = toward camera in game)
+const emb = await tex('emblem-160.webp', true, true)
+const patch = new THREE.Mesh(new THREE.CircleGeometry(6.2, 32), new THREE.MeshStandardMaterial({ name: 'patch', map: emb, roughness: 0.6, alphaTest: 0.4 }))
+patch.position.set(-PW * 0.28, PH * 0.32, -PD / 2 - 0.15); patch.rotation.y = Math.PI; pack.add(patch)
+attach(bones['Bip01_Spine2'], pack, new THREE.Vector3(0, sp2.y - 4, minZ - PD / 2 + 1.5))
+
+// chest display & control module
+let fz = -1e9
+for (const i of used) { v.fromBufferAttribute(pos, i).applyMatrix4(skinned.matrixWorld); if (Math.abs(v.y - (sp2.y - 6)) < 6 && Math.abs(v.x) < 8) fz = Math.max(fz, v.z) }
+const dcm = new THREE.Mesh(new RoundedBoxGeometry(24, 11, 7, 3, 2), shellMat)
+const knobs = new THREE.Mesh(new RoundedBoxGeometry(18, 3, 2, 2, 0.8), darkMat); knobs.position.set(0, 1, 3.6); dcm.add(knobs)
+attach(bones['Bip01_Spine2'], dcm, new THREE.Vector3(0, sp2.y - 8, fz + 2.5))
+
+// wrist disconnects + boot ankle rings
+for (const side of ['L', 'R']) {
+  const fa = new THREE.Vector3().setFromMatrixPosition(bones[`Bip01_${side}_Forearm`].matrixWorld)
+  const hd = new THREE.Vector3().setFromMatrixPosition(bones[`Bip01_${side}_Hand`].matrixWorld)
+  const dir = hd.clone().sub(fa).normalize()
+  const qd = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir)
+  const wr = new THREE.Mesh(new THREE.TorusGeometry(5.0, 1.5, 10, 28), side === 'L' ? blueMat : new THREE.MeshStandardMaterial({ name: 'anodizedRed', color: '#c8443c', roughness: 0.3, metalness: 0.85 }))
+  attach(bones[`Bip01_${side}_Forearm`], wr, hd.clone().addScaledVector(dir, -2.5), qd)
+  const up = new THREE.Vector3().setFromMatrixPosition(bones[`Bip01_${side}_UpperArm`].matrixWorld)
+  const dir2 = fa.clone().sub(up).normalize()
+  const ab = new THREE.Mesh(new THREE.TorusGeometry(6.6, 1.0, 8, 28), metalMat)
+  attach(bones[`Bip01_${side}_UpperArm`], ab, up.clone().addScaledVector(dir2, 9), new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir2))
+}
+info.ok = true
+
+const clips = []
+for (const [f, name] of [['m_run_fast_01.max.fbx','run'],['m_idle_neutral_01.max.fbx','idle'],['m_crouch_idle.max.fbx','crouch']]) {
+  const a = await L.loadAsync(B + f)
+  const c = a.animations[0]; c.name = name
+  const face = /Eye|Jaw|Tongue|Mouth|Lip|Masseter|Brow|Nose|Caninus|Cheek|lip/
+  c.tracks = c.tracks.filter(t => !t.name.endsWith('.scale') && !face.test(t.name.split('.')[0]) && !/MotionExtraction|Footsteps/.test(t.name))
+  for (const t of c.tracks) {
+    if (t.name !== 'Bip01.position') continue
+    const vv = t.values, n = vv.length / 3
+    const x0 = vv[0], z0 = vv[2], x1 = vv[(n-1)*3], z1 = vv[(n-1)*3+2]
+    for (let i = 0; i < n; i++) { const f = n > 1 ? i / (n - 1) : 0
+      if (name === 'run') { vv[i*3] -= x0 + (x1 - x0) * f; vv[i*3+2] -= z0 + (z1 - z0) * f } else { vv[i*3] = 0; vv[i*3+2] = 0 } }
+  }
+  clips.push(c)
+}
+av.traverse(o => { if (o.isLight) o.parent.remove(o) })
+window.info = info
+const glb = await new GLTFExporter().parseAsync(av, { binary: true, animations: clips, onlyVisible: true })
+const bytes = new Uint8Array(glb); let s = ''
+for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000))
+window.glb = btoa(s); window.done = true
+</script></body></html>

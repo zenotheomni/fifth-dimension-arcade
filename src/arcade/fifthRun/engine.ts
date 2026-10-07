@@ -115,8 +115,8 @@ class Engine {
     const emblem = await loadTexture(`${import.meta.env.BASE_URL}art/emblem-160.webp`)
     if (this.destroyed) return
     this.view = new FrScene(this.canvas, detectTier(), emblem)
-    // Upgrade to realistic sports-car GLTF (falls back to procedural on failure)
-    await this.view.loadGltfCars()
+    // Upgrade to the rigged human runner + realistic sports-car GLTF (each falls back to procedural on failure)
+    await Promise.all([this.view.loadGltfRunner(), this.view.loadGltfCars()])
     if (this.destroyed) return
     this.onResize()
     this.ro = new ResizeObserver(() => this.onResize())
@@ -542,6 +542,6 @@ class Engine {
 
 export function createFifthRun(host: HTMLElement, bridge: FrBridge): FifthRunHandle {
   const engine = new Engine(host, bridge)
-  void engine.init().catch((err) => console.error('[fifth-gear] init failed', err))
+  void engine.init().catch((err) => console.error('[fifth-glide] init failed', err))
   return { destroy: () => engine.destroy(), setMuted: (m) => engine.setMuted(m), pause: () => engine.pause() }
 }
