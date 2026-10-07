@@ -142,7 +142,7 @@ export class HumanRunner implements RunnerView {
     this.leap.setEffectiveWeight((1 - I) * A * (1 - S))
     this.crouch.setEffectiveWeight((1 - I) * S)
     // stride rate follows game speed (17 → 44 m/s maps to ~1.3× → 1.85×)
-    this.run.timeScale = THREE.MathUtils.clamp(0.75 + p.speed * 0.025, 1, 1.9)
+    this.run.timeScale = THREE.MathUtils.clamp(0.8 + p.speed * 0.03, 1.3, 2.6)
 
     if (p.dead) this.crashT = p.deadT
     else this.crashT = 0

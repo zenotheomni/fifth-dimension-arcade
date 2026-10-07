@@ -25,16 +25,19 @@ void main(){
   float d = fbm(p*1.3 + q*1.8 + vec2(t*0.1, -t*0.7));
   // height falloff: thick at the ground, tendrils higher at the sides, clear lane around the runner
   float side = smoothstep(0.3, 1.35, abs(vW.x - uRunnerX));
-  float top = mix(1.0, 3.3, side) + uThreat*0.45 + (d-0.5)*1.1;
+  float top = mix(0.95, 4.2, side) + uThreat*0.9 + (d-0.5)*1.3;
   float hgt = 1.0 - smoothstep(top-0.8, top+0.2, vW.y);
   float dens = smoothstep(0.3, 0.72, d) * hgt;
-  dens = clamp(dens*(0.95 + 0.4*uThreat) + hgt*(0.35*side + 0.12), 0.0, 1.0);
+  dens = clamp(dens*(1.0 + 0.4*uThreat) + hgt*(0.45*side + 0.15), 0.0, 0.97);
   // energy filaments: thin ridges of a second warped field
   float r = abs(fbm(p*2.1 - q*1.4 + vec2(-t*0.9, t*0.35)) - 0.5);
   float crack = (1.0 - smoothstep(0.0, 0.016, r)) * smoothstep(0.35, 0.8, dens);
   float flick = 0.55 + 0.45*sin(t*9.0 + vW.x*2.0 + uLayer*4.0);
-  float lit = smoothstep(0.45, 0.95, fbm(p*2.6 + q*2.2 - vec2(0.0, t*0.9)));
-  vec3 smoke = mix(vec3(0.012,0.008,0.022), vec3(0.17,0.12,0.24), lit * (1.0 - 0.6*hgt) + 0.15*(1.0-hgt));
+  float lit = smoothstep(0.35, 0.9, fbm(p*2.6 + q*2.2 - vec2(0.0, t*0.9)));
+  // smoky gray body (reads against the night) with dark churning cores
+  float core = smoothstep(0.55, 0.85, d);
+  vec3 smoke = mix(vec3(0.30,0.29,0.33), vec3(0.62,0.60,0.66), lit);
+  smoke = mix(smoke, vec3(0.035,0.03,0.05), core*0.85);
   vec3 col = smoke + vec3(0.55,0.28,1.0) * crack * flick * (0.25 + 0.55*uThreat);
   // soft edges of the slab
   float edge = smoothstep(0.0, 0.08, vUv.x) * smoothstep(1.0, 0.92, vUv.x);
@@ -67,7 +70,7 @@ export class DarkEnergy {
   /** threat 0..1 (1 = on your heels); fade 0 hides (logo surge leaves it behind). */
   update(time: number, dt: number, threat: number, runnerX: number, fade: number) {
     // distance behind the runner's feet: far edge of frame at 0 → right behind the heels at 1
-    const target = 3.4 - threat * 2.4
+    const target = 3.6 - threat * 2.8
     this.z += (target - this.z) * (1 - Math.exp(-dt * 4))
     this.group.position.z = this.z
     this.group.visible = fade > 0.01

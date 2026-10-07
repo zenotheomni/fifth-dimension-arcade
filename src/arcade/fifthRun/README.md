@@ -35,7 +35,7 @@ tall crate stacks (switch lanes); full-width BBB / OOO / GGG rows force the jump
   speed lines, smoke fades away), then 1.5 s grace.
 
 ## Difficulty curve (first-timer friendly)
-- Speed `14 → 44 m/s`, `k = 1600` (≈21.5 m/s at 30 s, ≈27 at 60 s, ≈31 at 90 s).
+- Speed `21 → 58 m/s`, `k = 1300` (≈29 m/s at 15 s, ≈36 at 30 s, ≈44 at 60 s). Stars move: bob (some need a jump), drift-in, zig-zag snake, bait lines before crates, high floaters.
 - Warm-up `WARM_M = 750 m` (≈ first 40 s): no double-crate / mixed rows until mid-warm-up, up to ~2.9× row spacing,
   no crate in the start lane early, 110 m empty runway. Level held at 0 for 460 m, then `(s−460)/(s−460+950)`.
 - Harness: `node scripts/fr-tune.mjs` (full) / `node scripts/fr-quick.mjs` (bots only). The `rookie`

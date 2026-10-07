@@ -15,18 +15,18 @@ export const laneX = (lane: number) => (lane - 1) * LANE_W
  * Forward speed (m/s). Gentle on-ramp for first-timers (≈14 → 21.5 m/s over the first 30 s), then it
  * keeps climbing toward vmax (≈27 m/s at 60 s, ≈33 m/s at 2 min).
  */
-export const SPEED = { v0: 14, vmax: 44, k: 1600 }
+export const SPEED = { v0: 21, vmax: 58, k: 1300 }
 export const speedAt = (s: number) => SPEED.v0 + (SPEED.vmax - SPEED.v0) * (s / (s + SPEED.k))
 /**
  * Warm-up distance (≈ first 40 s, easing out linearly): sparse single-car rows, slower oncoming
  * traffic, wider spacing.
  * warmAt = 1 at the start line → 0 at WARM_M (linear; exact IEEE ops only).
  */
-export const WARM_M = 750
+export const WARM_M = 900
 export const warmAt = (s: number) => (s >= WARM_M ? 0 : s <= 0 ? 1 : 1 - s / WARM_M)
 /** Difficulty 0..1 (pattern mix + spacing). Held at 0 through the first LEVEL_OFFSET metres. */
 export const DIFF_K = 950
-export const LEVEL_OFFSET = 460
+export const LEVEL_OFFSET = 520
 export const levelAt = (s: number) => (s <= LEVEL_OFFSET ? 0 : (s - LEVEL_OFFSET) / (s - LEVEL_OFFSET + DIFF_K))
 
 /** Jump: fixed airtime / apex (feet height). */

@@ -57,11 +57,11 @@ await mockApi(ctx)
 const page = await ctx.newPage()
 page.on('pageerror', (e) => console.log('PAGEERROR', e.message))
 page.on('console', (m) => (m.type() === 'error' || m.type() === 'warning') && console.log('console.' + m.type(), m.text().slice(0, 300)))
-await page.goto(`http://127.0.0.1:${process.env.PORT || 4183}/arcade/fifth-run?q=${Q}&seed=${encodeURIComponent(SEED)}`, { waitUntil: 'networkidle', timeout: 90000 })
-await page.waitForFunction(() => globalThis.__FR?.ready, null, { timeout: 90000 })
+await page.goto(`http://127.0.0.1:${process.env.PORT || 4183}/arcade/fifth-run?q=${Q}&seed=${encodeURIComponent(SEED)}`, { waitUntil: 'networkidle', timeout: 400000 })
+await page.waitForFunction(() => globalThis.__FR?.ready, null, { timeout: 400000 })
 await page.evaluate(() => { globalThis.__FR.setManual(true); globalThis.__FR.advance(900) })
 const P3 = process.env.PREFIX || 'glide3'
-const shot = (n) => page.screenshot({ path: path.join(OUT, `${P3}-${n}.png`) })
+const shot = (n) => page.screenshot({ path: path.join(OUT, `${P3}-${n}.png`), timeout: 0 })
 const adv = (ms) => page.evaluate((m) => globalThis.__FR.advance(m), ms)
 await shot('howto')
 await page.click('.fr-howto__start')
@@ -71,6 +71,15 @@ await adv(7000)
 await page.evaluate(() => { const r = globalThis.__FR.run; r.threat = 0.62 })
 await adv(500)
 await shot('run')
+await page.evaluate(() => { globalThis.__FR.run.threat = 0 })
+await adv(1500)
+for (let i = 0; i < 60; i++) {
+  const ok = await page.evaluate(() => { const e = globalThis.__FR; const n = e.track.keys.filter((k) => k.state === 0 && k.mv === 3 && k.s > e.run.s + 12 && k.s < e.run.s + 45).length; const b = e.track.keys.filter((k) => k.state === 0 && k.mv >= 1 && k.s > e.run.s + 8 && k.s < e.run.s + 60).length; return n >= 3 && b >= 6 })
+  if (ok) break
+  await adv(200)
+}
+await shot('stars')
+console.log('mv', await page.evaluate(() => { const e = globalThis.__FR; const c = [0,0,0,0]; for (const k of e.track.keys) if (k.s > e.run.s && k.s < e.run.s + 150) c[k.mv]++; return c }))
 if (process.env.VIDEO !== '0') {
   const dir = fs.mkdtempSync('/tmp/g3v-')
   let f = 0
@@ -78,7 +87,7 @@ if (process.env.VIDEO !== '0') {
   for (let i = 0; i < 240; i++) {
     await adv(1000 / 30)
     if (i === 150) await page.evaluate(() => { const r = globalThis.__FR.run; r.hand = 1200 })
-    await page.screenshot({ path: path.join(dir, `f${String(f++).padStart(3, '0')}.png`) })
+    await page.screenshot({ path: path.join(dir, `f${String(f++).padStart(3, '0')}.png`), timeout: 0 })
   }
   execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-framerate', '30', '-i', path.join(dir, 'f%03d.png'), '-vf', 'scale=780:1688:flags=lanczos,format=yuv420p', '-c:v', 'libx264', '-crf', '20', '-movflags', '+faststart', path.join(OUT, `${P3}-run.mp4`)])
 }

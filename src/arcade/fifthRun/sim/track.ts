@@ -6,7 +6,7 @@
  * Fifth Dimension logo (15 s invuln) only. Collectibles are shooting stars (💫).
  */
 import { hashSeed, mulberry32 } from '../../core/seededRandom'
-import { JUMP_APEX, JUMP_T, OB, START_CLEAR_M, levelAt, speedAt, warmAt } from './constants'
+import { JUMP_APEX, JUMP_T, LANE_W, OB, laneX, START_CLEAR_M, levelAt, speedAt, warmAt } from './constants'
 
 export type ObKind = 'barrier' | 'overhead' | 'block' | 'gap'
 /** Rare 5D logo invuln pickup. */
@@ -51,6 +51,36 @@ export type KeyItem = {
   state: 0 | 1 | 2
   magnet: boolean
   takenTick: number
+  /** motion: 0 static · 1 bob (up/down, some need a jump) · 2 drift (slides lane0 → lane) · 3 zig-zag (snakes across lanes) */
+  mv: 0 | 1 | 2 | 3
+  /** phase (bob / zig-zag) */
+  a: number
+  /** drift start lane */
+  lane0: number
+}
+
+/** Exact-op triangle wave 0..1..0 (period 1) — deterministic on every engine. */
+const tri = (u: number) => {
+  const f = u - Math.floor(u)
+  return f < 0.5 ? 2 * f : 2 - 2 * f
+}
+const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x)
+
+/** Live position of a star (depends only on star params + runner distance → deterministic). */
+export function keyPos(k: KeyItem, runnerS: number): { x: number; y: number } {
+  const dz = k.s - runnerS
+  if (k.mv === 1) return { x: laneX(k.lane), y: k.y + 1.2 * tri(dz / 8 + k.a) }
+  if (k.mv === 2) {
+    // slides from lane0 to its lane as you approach (30 m → 9 m out)
+    const f = clamp01((30 - dz) / 21)
+    const x0 = laneX(k.lane0)
+    return { x: x0 + (laneX(k.lane) - x0) * f, y: k.y }
+  }
+  if (k.mv === 3) {
+    // snakes across all three lanes; lands on its lane at the pickup point
+    return { x: (tri(dz / 14 + k.a) * 2 - 1) * LANE_W, y: k.y }
+  }
+  return { x: laneX(k.lane), y: k.y }
 }
 
 export type Pickup = {
@@ -129,8 +159,8 @@ export class Track {
     return this.rng()
   }
 
-  private addKey(lane: number, s: number, y: number) {
-    this.keys.push({ id: this.nextId++, lane, s: q(s), y: q(y), state: 0, magnet: false, takenTick: -1 })
+  private addKey(lane: number, s: number, y: number, mv: 0 | 1 | 2 | 3 = 0, a = 0, lane0 = lane) {
+    this.keys.push({ id: this.nextId++, lane, s: q(s), y: q(y), state: 0, magnet: false, takenTick: -1, mv, a: q(a), lane0 })
   }
 
   private addOb(kind: ObKind, lane: number, s: number, len: number, vs = 0) {
@@ -248,9 +278,22 @@ export class Track {
         pickupAt = Math.floor(keyS.length / 2)
         this.nextPickupS = s0 + 900 + this.r() * 600
       }
+      // Star motion style for this line (seeded): static / bobbing wave / drift-in / zig-zag snake
+      const W2 = warmAt(s0)
+      const r = this.r()
+      const style = r < 0.3 + 0.3 * W2 ? 0 : r < 0.55 + 0.15 * W2 ? 1 : r < 0.8 ? 2 : 3
+      const side = path === 0 ? 1 : path === 2 ? -1 : this.r() < 0.5 ? -1 : 1
+      const zz = [0, 0.25, 0.5, 0.75]
       keyS.forEach((s, i) => {
         if (i === pickupAt) {
           this.pickups.push({ id: this.nextId++, kind: this.nextPower(), lane: path, s: q(s), y: 1.0, taken: false, takenTick: -1 })
+        } else if (style === 1) this.addKey(path, s, 0.5, 1, i * 0.12)
+        else if (style === 2) this.addKey(path, s, 0.9, 2, 0, path + side)
+        else if (style === 3) {
+          // zig-zag: phase picks which lane each star lands on (+W, 0, −W, 0 …)
+          const a = zz[i % 4]
+          const lane = a === 0 ? 2 : a === 0.5 ? 0 : 1
+          this.addKey(lane, s, 0.9, 3, a)
         } else this.addKey(path, s, 0.9)
       })
       if (tok === 'B' || tok === 'G') {
@@ -265,6 +308,21 @@ export class Track {
         for (const d of [-1.5, 0.2, 1.9]) this.addKey(path, s0 + d, 0.45)
       }
     }
+    // risky bait: 3 stars in a crate's lane right up to it — grab them and swerve late
+    const kl = toks.indexOf('K')
+    if (kl >= 0 && L > 0.05 && this.r() < 0.35) {
+      for (const d of [-9, -6.5, -4]) this.addKey(kl, s0 + d, 0.9)
+    }
+    // floating singles high over the clear lane (jump to grab)
+    if (this.r() < 0.18) {
+      const el = toks.indexOf('E')
+      if (el >= 0) this.addKey(el, rowEnd + 3 + this.r() * 3, 2.2)
+    }
+    // keep keys sorted by s (bait / floaters can land out of order); only the freshly generated
+    // tail (far ahead of the runner) is touched
+    const n0 = Math.max(0, this.keys.length - 40)
+    const tail = this.keys.slice(n0).sort((a, b) => a.s - b.s || a.id - b.id)
+    for (let i = 0; i < tail.length; i++) this.keys[n0 + i] = tail[i]
     this.pathLane = path
     this.prevEnd = rowEnd
 

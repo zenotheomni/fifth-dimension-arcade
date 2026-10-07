@@ -379,7 +379,7 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
               <h3>Scoring</h3>
               <ul>
                 <li><b>m</b>Your score is your distance, 1 point per metre</li>
-                <li><b>💫</b>Each shooting star adds +{STAR_M} m</li>
+                <li><b>💫</b>Each shooting star adds +{STAR_M} m. Some bob, drift or zig-zag between lanes, and high ones need a jump</li>
                 <li><b className="fr-howto__logo">5D</b>Rare 5D logo: {Math.round(POWER_TICKS.hand / FR_HZ)} s invincible plus a {BOOST.mul}× speed surge. Nothing can catch you, you can’t fall, you blast through everything</li>
               </ul>
             </section>
