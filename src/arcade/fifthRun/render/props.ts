@@ -355,7 +355,7 @@ export function buildGantry(chev: THREE.Texture, metal: THREE.Material, glow: TH
     post.position.set(x, 0.875, 0)
     group.add(post)
   }
-  const halo = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 0.9), glowMaterial(glow, '#00e0d0', 0.35))
+  const halo = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 0.9), glowMaterial(glow, '#00e0d0', 0.22))
   halo.position.set(0, 1.26, 0.2)
   group.add(halo)
   return { group }
@@ -546,7 +546,7 @@ export function buildGate(glow: THREE.Texture, emblem: THREE.Texture | null, met
   const cols = ['#00e0d0', '#ff3d8a', '#8a4dff']
   const tubes: THREE.MeshStandardMaterial[] = []
   cols.forEach((c, i) => {
-    const m = new THREE.MeshStandardMaterial({ color: c, emissive: new THREE.Color(c), emissiveIntensity: 3.2 })
+    const m = new THREE.MeshStandardMaterial({ color: c, emissive: new THREE.Color(c), emissiveIntensity: 1.9 })
     tubes.push(m)
     const y = H - 0.32 - i * 0.16
     const t = new THREE.Mesh(box(2 * X - 0.3, 0.06, 0.06), m)
@@ -565,7 +565,7 @@ export function buildGate(glow: THREE.Texture, emblem: THREE.Texture | null, met
     )
     e.position.set(0, H + 1.2, 0.05)
     group.add(e)
-    const h = new THREE.Mesh(new THREE.PlaneGeometry(4, 4), glowMaterial(glow, '#ffc83c', 0.4))
+    const h = new THREE.Mesh(new THREE.PlaneGeometry(4, 4), glowMaterial(glow, '#ffc83c', 0.22))
     h.position.set(0, H + 1.2, 0)
     group.add(h)
   }
@@ -580,10 +580,10 @@ export function buildLamp(glow: THREE.Texture, metal: THREE.Material, side: numb
   const arm = new THREE.Mesh(box(1.3, 0.07, 0.07), metal)
   arm.position.set(-side * 0.6, 5.55, 0)
   group.add(arm)
-  const head = new THREE.Mesh(box(0.5, 0.08, 0.22), new THREE.MeshStandardMaterial({ color: '#fde', emissive: new THREE.Color('#ffb4e6'), emissiveIntensity: 4 }))
+  const head = new THREE.Mesh(box(0.5, 0.08, 0.22), new THREE.MeshStandardMaterial({ color: '#fde', emissive: new THREE.Color('#ffb4e6'), emissiveIntensity: 3 }))
   head.position.set(-side * 1.2, 5.48, 0)
   group.add(head)
-  const g = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 2.6), glowMaterial(glow, '#ff8ad8', 0.55))
+  const g = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 2.6), glowMaterial(glow, '#ff8ad8', 0.28))
   g.position.set(-side * 1.2, 5.4, 0.05)
   group.add(g)
   return group

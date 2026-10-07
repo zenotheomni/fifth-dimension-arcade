@@ -6,7 +6,7 @@
  * group is translated by +runnerS each frame. Sky, planet, stars and skyline are camera-locked.
  */
 import * as THREE from 'three'
-import { BloomEffect, EffectComposer, EffectPass, RenderPass, ToneMappingEffect, ToneMappingMode } from 'postprocessing'
+import { BloomEffect, EffectComposer, EffectPass, RenderPass, SMAAEffect, SMAAPreset, ToneMappingEffect, ToneMappingMode } from 'postprocessing'
 import { laneX } from '../sim/constants'
 import { obstacleS, type KeyItem, type Obstacle, type Pickup, type PowerKind } from '../sim/track'
 import {
@@ -84,7 +84,11 @@ export class FrScene {
   composer: EffectComposer | null = null
   bloom: BloomEffect | null = null
   dprScale = 1
-  dprCap = 2
+  /** Full device pixel ratio (phones are 2–3×); only the adaptive loop scales below this, as a last resort. */
+  dprCap = 2.5
+  /** Night grade: lower exposure keeps blacks deep and only real light sources hot. */
+  static EXPOSURE = 0.8
+  static BLOOM = 0.62
   width = 1
   height = 1
   runner: RunnerView
@@ -149,7 +153,8 @@ export class FrScene {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: tier === 'high', powerPreference: 'high-performance', alpha: false })
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping
-    this.renderer.toneMappingExposure = 0.95
+    this.renderer.toneMappingExposure = FrScene.EXPOSURE
+    if (tier === 'low') this.dprCap = 2
     this.camera = new THREE.PerspectiveCamera(64, 1, 0.1, 1600)
     this.camera.layers.enable(REFL)
     this.mirrorCam.layers.set(REFL)
@@ -172,7 +177,7 @@ export class FrScene {
     this.buildSkyline()
 
     // ── lights ──
-    const hemi = new THREE.HemisphereLight('#7a8aba', '#1a1018', 0.65)
+    const hemi = new THREE.HemisphereLight('#7a8aba', '#1a1018', 0.45)
     const key = new THREE.DirectionalLight('#ffe8d0', 1.35)
     key.position.set(-4, 12, -8)
     const back = new THREE.DirectionalLight('#ff6aa0', 0.55)
@@ -215,7 +220,7 @@ export class FrScene {
       uniforms: { uTime: { value: 0 }, uAlpha: { value: 1 } },
       vertexShader: 'varying vec3 vN; varying vec3 vV; void main(){ vec4 mv = modelViewMatrix*vec4(position,1.0); vN = normalize(normalMatrix*normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix*mv; }',
       fragmentShader:
-        'uniform float uTime; uniform float uAlpha; varying vec3 vN; varying vec3 vV; void main(){ float f = pow(1.0 - abs(dot(vN, vV)), 3.4); float band = 0.5 + 0.5*sin(vN.y*18.0 - uTime*2.5); gl_FragColor = vec4(vec3(0.7,0.5,1.0) * (f*(1.1 + band*0.35)) * uAlpha, 1.0); }',
+        'uniform float uTime; uniform float uAlpha; varying vec3 vN; varying vec3 vV; void main(){ float f = pow(1.0 - abs(dot(vN, vV)), 4.2); float band = 0.5 + 0.5*sin(vN.y*18.0 - uTime*2.5); gl_FragColor = vec4(vec3(0.7,0.5,1.0) * (f*(1.1 + band*0.35)) * uAlpha, 1.0); }',
     })
     this.shieldMesh = new THREE.Mesh(new THREE.SphereGeometry(0.95, 28, 18), this.shieldMat)
     this.shieldMesh.scale.set(0.92, 1.2, 0.85)
@@ -234,6 +239,7 @@ export class FrScene {
     this.buildSparks()
 
     if (tier === 'high') this.enableComposer()
+    this.applyAnisotropy()
   }
 
   // ───────────────────────── builders ─────────────────────────
@@ -316,7 +322,7 @@ export class FrScene {
     planet.rotation.set(0.3, -0.6, 0.2)
     planet.layers.enable(REFL)
     this.skyGroup.add(planet)
-    const halo = new THREE.Mesh(new THREE.PlaneGeometry(330, 330), glowMaterial(this.glow, '#5a8cff', 0.5))
+    const halo = new THREE.Mesh(new THREE.PlaneGeometry(330, 330), glowMaterial(this.glow, '#5a8cff', 0.3))
     halo.position.copy(planet.position).multiplyScalar(1.02)
     halo.lookAt(0, 0, 0)
     this.skyGroup.add(halo)
@@ -359,7 +365,7 @@ export class FrScene {
     mesh.layers.enable(REFL)
     this.skyGroup.add(mesh)
     // vanishing-point glow
-    const vg = new THREE.Mesh(new THREE.PlaneGeometry(260, 120), glowMaterial(this.glow, '#ff7ad8', 0.55))
+    const vg = new THREE.Mesh(new THREE.PlaneGeometry(260, 120), glowMaterial(this.glow, '#ff7ad8', 0.22))
     vg.position.set(0, 4, -360)
     vg.layers.enable(REFL)
     this.skyGroup.add(vg)
@@ -548,7 +554,7 @@ export class FrScene {
     this.keys.renderOrder = 2
     this.keys.count = 0
     this.world.add(this.keys)
-    this.keyHalos = new THREE.InstancedMesh(new THREE.PlaneGeometry(1.45, 1.45), glowMaterial(this.glow, '#ffb02a', 0.5), 160)
+    this.keyHalos = new THREE.InstancedMesh(new THREE.PlaneGeometry(1.45, 1.45), glowMaterial(this.glow, '#ffb02a', 0.32), 160)
     this.keyHalos.frustumCulled = false
     this.keyHalos.count = 0
     this.world.add(this.keyHalos)
@@ -599,12 +605,32 @@ export class FrScene {
     }
   }
 
+  /** Max anisotropic filtering on every sampled texture (road signs, cars, suit) — sharp at grazing angles. */
+  applyAnisotropy(root: THREE.Object3D = this.scene) {
+    const max = this.renderer.capabilities.getMaxAnisotropy()
+    root.traverse((o) => {
+      const mat = (o as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined
+      for (const m of Array.isArray(mat) ? mat : mat ? [mat] : []) {
+        for (const val of Object.values(m)) {
+          if (val instanceof THREE.Texture && val.anisotropy !== max) {
+            val.anisotropy = max
+            val.needsUpdate = true
+          }
+        }
+      }
+    })
+  }
+
   enableComposer() {
     if (this.composer) return
-    const composer = new EffectComposer(this.renderer, { frameBufferType: THREE.HalfFloatType, multisampling: 0 })
+    // MSAA on the HDR scene buffer (WebGL2), SMAA after tone mapping for the remaining shader edges.
+    const samples = Math.min(4, this.renderer.capabilities.maxSamples || 0)
+    const composer = new EffectComposer(this.renderer, { frameBufferType: THREE.HalfFloatType, multisampling: samples })
     composer.addPass(new RenderPass(this.scene, this.camera))
-    this.bloom = new BloomEffect({ intensity: 1.15, luminanceThreshold: 0.62, luminanceSmoothing: 0.25, mipmapBlur: true, radius: 0.72, levels: 6 })
+    // High threshold: only emissive sources (lamps, tail lights, rails, stars) bloom; the lit scene stays crisp.
+    this.bloom = new BloomEffect({ intensity: FrScene.BLOOM, luminanceThreshold: 0.86, luminanceSmoothing: 0.12, mipmapBlur: true, radius: 0.55, levels: 5 })
     composer.addPass(new EffectPass(this.camera, this.bloom, new ToneMappingEffect({ mode: ToneMappingMode.ACES_FILMIC })))
+    composer.addPass(new EffectPass(this.camera, new SMAAEffect({ preset: SMAAPreset.HIGH })))
     this.composer = composer
     this.renderer.toneMapping = THREE.NoToneMapping
     composer.setSize(this.width, this.height, false)
@@ -675,7 +701,7 @@ export class FrScene {
     this.shieldMat.uniforms.uTime.value = t
     // last 2 s: pulse faster so the player knows it is about to end
     const ending = v.hand > 0 && v.hand < 2
-    this.shieldMat.uniforms.uAlpha.value = ending ? 0.1 + 0.12 * Math.max(0, Math.sin(t * 14)) : 0.16 + 0.05 * Math.sin(t * 4)
+    this.shieldMat.uniforms.uAlpha.value = ending ? 0.06 + 0.08 * Math.max(0, Math.sin(t * 14)) : 0.09 + 0.025 * Math.sin(t * 4)
     this.fiveRing.visible = false
     this.magnetRing.visible = false
     this.runner.setRim(v.invisible ? '#b48cff' : '#ff4fd0')
@@ -690,7 +716,7 @@ export class FrScene {
     for (const g of this.gates) {
       if (g.s < S - 15) g.s += 3 * 70
       g.g.position.z = -g.s
-      g.tubes.forEach((m, i) => (m.emissiveIntensity = 2.4 + 1.4 * Math.max(0, Math.sin(t * 3 - i * 1.2 + g.s))))
+      g.tubes.forEach((m, i) => (m.emissiveIntensity = 1.5 + 0.7 * Math.max(0, Math.sin(t * 3 - i * 1.2 + g.s))))
     }
 
     this.updateObstacles(v)
@@ -703,7 +729,7 @@ export class FrScene {
     this.roadMat.uniforms.uScroll.value = S
     this.roadMat.uniforms.uTime.value = t
     this.roadMat.uniforms.uCam.value.copy(this.camera.position)
-    this.roadMat.uniforms.uBoost.value = v.invisible ? 0.35 : 0
+    this.roadMat.uniforms.uBoost.value = v.invisible ? 0.2 : 0
     this.towerMat.uniforms.uTime.value = t
   }
 
@@ -723,7 +749,7 @@ export class FrScene {
       this.runner = human
       this.scene.add(human.group)
       // soft white chase light from behind/above the camera so the suit reads white, not neon-tinted
-      const chase = new THREE.SpotLight('#eef2ff', 26, 14, 0.42, 0.85, 1.6)
+      const chase = new THREE.SpotLight('#eef2ff', 20, 14, 0.42, 0.85, 1.6)
       chase.position.set(0, 0, 0)
       this.runnerLight = chase
       this.scene.add(chase)
@@ -965,14 +991,14 @@ export class FrScene {
     // fog / road tint toward cosmic
     if (this.roadMat.uniforms.uFog) {
       const fog = this.roadMat.uniforms.uFog.value as THREE.Color
-      if (targetBiome === 0) fog.setRGB(0.1, 0.08, 0.16)
+      if (targetBiome === 0) fog.setRGB(0.047, 0.039, 0.086)
       else if (targetBiome === 1) fog.setRGB(0.04 + blend * 0.02, 0.02, 0.12 + blend * 0.08)
       else fog.setRGB(0.02, 0.01, 0.06 + blend * 0.04)
     }
     // denser bloom into deep space
     if (this.bloom) {
       const add = targetBiome === 0 ? blend * 0.08 : targetBiome === 1 ? 0.12 + blend * 0.15 : 0.28 + blend * 0.2
-      this.bloom.intensity = 1.15 + add * Math.min(1.2, starBoost * 0.5)
+      this.bloom.intensity = FrScene.BLOOM + add * 0.6 * Math.min(1.2, starBoost * 0.5)
     }
     for (const c of this.comets) {
       if (c.wait > 0) {
@@ -1029,7 +1055,7 @@ export class FrScene {
     this.camera.updateMatrixWorld(true)
 
     // speed lines
-    const op = THREE.MathUtils.clamp((v.speed - 15) / 12, 0, 1) * 0.42 + (v.invisible ? 0.2 : 0)
+    const op = THREE.MathUtils.clamp((v.speed - 15) / 12, 0, 1) * 0.18 + (v.invisible ? 0.08 : 0)
     this.speedMat.opacity = v.idle || v.dead ? 0 : op
     this.speedLines.visible = this.speedMat.opacity > 0.01
     if (this.speedLines.visible) {

@@ -46,3 +46,10 @@ Traffic cars stay as obstacles (Draco GLTF sports coupe when available; procedur
     npx vite build && npx vite preview --port 4173 &
     node scripts/fr-shots.mjs run end video
 Out: `glide2-run.png`, `glide2-jump.png`, `glide2-end.png`, `glide2-run.mp4` (`PREFIX=` / `OUT=` to change).
+
+## Image quality / grade
+
+- Renders at full device pixel ratio (cap 2.5 high tier, 2 low tier). The adaptive loop sheds planar-reflection updates first (every 2nd, then 3rd frame); it drops resolution (to 0.7× minimum) only after two consecutive sub-50 fps seconds; post-processing goes last.
+- Composer: 4× MSAA on the HDR buffer plus SMAA (high) after ACES tone mapping. Max anisotropic filtering is applied to every texture, including the GLB cars and suit.
+- Night grade: exposure 0.8, bloom 0.62 with luminance threshold 0.86, so only emissive sources glow. Darker fog, horizon haze, and facades; neon rails, gates, and lamp halos are toned down; speed lines are subtle; the invincible shield alpha is about 0.09.
+- Tower windows and road markings are analytically anti-aliased with `fwidth`, and far window grids resolve to average coverage instead of shimmering.

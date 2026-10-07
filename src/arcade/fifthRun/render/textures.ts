@@ -1,11 +1,14 @@
 /** Fifth Glide — procedural canvas textures (no external assets). */
 import * as THREE from 'three'
 
-function canvas(w: number, h: number) {
+/** Canvas in logical units; `s` supersamples the backing store (crisper on high-DPR phones). */
+function canvas(w: number, h: number, s = 1) {
   const c = document.createElement('canvas')
-  c.width = w
-  c.height = h
-  return { c, g: c.getContext('2d')! }
+  c.width = w * s
+  c.height = h * s
+  const g = c.getContext('2d')!
+  if (s !== 1) g.scale(s, s)
+  return { c, g }
 }
 
 function rand(seed: number) {
@@ -35,7 +38,7 @@ export function glowTexture(): THREE.Texture {
 
 /** Crisp gold/white shooting star (💫) — star head + diagonal trail for collectible billboards. */
 export function shootingStarTexture(): THREE.Texture {
-  const { c, g } = canvas(256, 256)
+  const { c, g } = canvas(256, 256, 2)
   g.clearRect(0, 0, 256, 256)
 
   // Soft gold bloom behind the mark
@@ -223,7 +226,7 @@ export function planetTexture(): THREE.Texture {
 
 /** Barrier face: coral / white chevrons. */
 export function chevronTexture(): THREE.Texture {
-  const { c, g } = canvas(256, 64)
+  const { c, g } = canvas(256, 64, 4)
   g.fillStyle = '#f4efe9'
   g.fillRect(0, 0, 256, 64)
   g.fillStyle = '#ff3d5a'
