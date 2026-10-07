@@ -19,6 +19,9 @@ export type FrHudState = {
   combo: number
   mult: number
   lives: number
+  /** dark energy closeness 0..1 */
+  threat: number
+  timeS: number
   callout: { text: string; id: number; tone: 'gold' | 'teal' | 'coral' } | null
   pb: number
   newPb: boolean
@@ -34,6 +37,10 @@ export type FrEndPayload = {
   keys: number
   maxCombo: number
   livesLeft: number
+  /** metres actually run */
+  ranM: number
+  /** bonus metres from stars */
+  starM: number
   durationS: number
   deathKind: string | null
   pb: number

@@ -170,7 +170,7 @@ export class RuleBot {
       for (let i = Math.max(0, st.obCur - 2); i < track.obstacles.length; i++) {
         const o = track.obstacles[i]
         if (o.s > sAt + 30) break
-        if (o.kind !== 'car' || o.lane !== lane || o.smashed) continue
+        if (o.kind !== 'block' || o.lane !== lane || o.smashed) continue
         const os = obstacleS(o, sAt)
         if (os - 0.45 < sAt && os + o.len + 0.3 > sAt) {
           tick = st.tick + Math.ceil(((os + o.len + 0.36 - st.s) / Math.max(v, 1)) * FR_HZ)
@@ -200,7 +200,7 @@ export class RuleBot {
       const o = track.obstacles[i]
       if (o.s > until) break
       if (o.smashed || o.s + o.len < st.s - 0.3 || o.lane !== lane) continue
-      if (o.kind === 'car' || this.done.has(o.id)) continue
+      if (o.kind === 'block' || this.done.has(o.id)) continue
       const mid = o.s + o.len / 2
       const lead = o.kind === 'overhead' ? o.s - st.s - v * 0.3 : mid - st.s - (v * JUMP_T) / 2
       const tk = st.tick + Math.round((lead / v) * FR_HZ)
@@ -235,7 +235,7 @@ export class RuleBot {
         end = o.s + o.len
         continue
       }
-      if (o.s <= rowS + 0.5 || (o.kind === 'car' && o.s < end + 0.5)) end = Math.max(end, o.s + o.len)
+      if (o.s <= rowS + 0.5 || (o.kind === 'block' && o.s < end + 0.5)) end = Math.max(end, o.s + o.len)
       else if (o.s > end + 0.5) break
     }
     return rowS < 0 ? null : end

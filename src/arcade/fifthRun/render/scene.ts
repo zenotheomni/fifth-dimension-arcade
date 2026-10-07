@@ -11,30 +11,22 @@ import { laneX } from '../sim/constants'
 import { obstacleS, type KeyItem, type Obstacle, type Pickup, type PowerKind } from '../sim/track'
 import {
   buildBarrier,
-  buildCar,
+  buildBlock,
   buildGantry,
   buildGap,
   buildGate,
   buildLamp,
   buildPickup,
-  CAR_COLORS,
   palmGeometry,
   palmMaterial,
-  type CarParts,
 } from './props'
+import { DarkEnergy } from './darkEnergy'
 import { RunnerFigure, type PoseInput, type RunnerView } from './runnerFigure'
 import { loadHumanRunner } from './humanRunner'
 import { neonEnvironment } from './env'
 import { mergeStatic } from './merge'
 import { glowMaterial, PALETTE, roadMaterial, skyMaterial, towerMaterial } from './shaders'
 import { blobTexture, chevronTexture, glowTexture, planetTexture, shootingStarTexture, streakTexture } from './textures'
-import {
-  instantiateGltfCar,
-  loadCarTemplate,
-  recolorPaint,
-  setLightIntensity,
-} from './carGltf'
-
 export type QualityTier = 'high' | 'low'
 
 export type ViewState = {
@@ -52,6 +44,10 @@ export type ViewState = {
   idle: boolean
   lives: number
   hand: number
+  /** dark energy closeness 0..1 */
+  threat: number
+  /** speed multiplier (logo surge > 1) */
+  boost: number
   invuln: boolean
   /** Fifth Dimension logo power — invincible (violet shell + rim) */
   invisible: boolean
@@ -121,9 +117,10 @@ export class FrScene {
   private pools: {
     barrier: { group: THREE.Group; lamp: THREE.MeshStandardMaterial }[]
     overhead: { group: THREE.Group }[]
-    car: CarParts[]
+    block: { group: THREE.Group; lamp: THREE.MeshStandardMaterial }[]
     gap: ReturnType<typeof buildGap>[]
-  } = { barrier: [], overhead: [], car: [], gap: [] }
+  } = { barrier: [], overhead: [], block: [], gap: [] }
+  dark: DarkEnergy
   private pickupPools: Record<PowerKind, ReturnType<typeof buildPickup>[]> = { hand: [] }
   private smashT = new Map<number, number>()
   private blob: THREE.Mesh
@@ -137,6 +134,7 @@ export class FrScene {
   private sparks!: THREE.Points
   private sparkData: { p: THREE.Vector3; v: THREE.Vector3; life: number; max: number }[] = []
   private sparkGeo!: THREE.BufferGeometry
+  private darkFade = 1
   private camX = 0
   private camY = 3.35
   private fov = 62
@@ -147,7 +145,7 @@ export class FrScene {
   private tmpE = new THREE.Euler()
   private lookT = new THREE.Vector3()
 
-  constructor(canvas: HTMLCanvasElement, tier: QualityTier, emblem: THREE.Texture | null) {
+  constructor(canvas: HTMLCanvasElement, tier: QualityTier, emblem: THREE.Texture | null, logo: THREE.Texture | null = null) {
     this.tier = tier
     this.runner = new RunnerFigure()
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: tier === 'high', powerPreference: 'high-performance', alpha: false })
@@ -203,7 +201,9 @@ export class FrScene {
     this.buildTowers()
     this.buildPalms()
     this.buildLampsAndGates(emblem)
-    this.buildPools(emblem)
+    this.buildPools(logo ?? emblem)
+    this.dark = new DarkEnergy(tier === 'high' ? 4 : 3)
+    this.scene.add(this.dark.group)
     this.buildKeys()
 
     // ── runner + fx ──
@@ -476,28 +476,6 @@ export class FrScene {
   private buildPools(emblem: THREE.Texture | null) {
     const chev = chevronTexture()
     const metal = new THREE.MeshStandardMaterial({ color: '#3a3448', metalness: 0.8, roughness: 0.3 })
-    const shared = {
-      chrome: new THREE.MeshPhysicalMaterial({
-        color: '#eef2fa',
-        metalness: 1,
-        roughness: 0.1,
-        envMapIntensity: 1.5,
-        clearcoat: 0.55,
-        clearcoatRoughness: 0.18,
-      }),
-      glass: new THREE.MeshPhysicalMaterial({
-        color: '#0a1522',
-        metalness: 0.15,
-        roughness: 0.05,
-        transmission: 0.35,
-        transparent: true,
-        opacity: 0.8,
-        envMapIntensity: 2.2,
-      }),
-      tire: new THREE.MeshStandardMaterial({ color: '#0a0a0c', roughness: 0.92, metalness: 0.05 }),
-      white: new THREE.MeshStandardMaterial({ color: '#f2f0ea', roughness: 0.5, metalness: 0.1 }),
-      glow: this.glow,
-    }
     for (let i = 0; i < 12; i++) {
       const b = buildBarrier(chev, metal)
       mergeStatic(b.group)
@@ -512,15 +490,14 @@ export class FrScene {
       this.world.add(o.group)
       this.pools.overhead.push(o)
     }
-    for (let i = 0; i < 28; i++) {
-      const c = buildCar(shared)
+    for (let i = 0; i < 16; i++) {
+      const c = buildBlock(chev, metal)
       mergeStatic(c.group)
       c.group.visible = false
       c.group.traverse((o) => o.layers.enable(REFL))
       this.world.add(c.group)
-      this.pools.car.push(c)
+      this.pools.block.push(c)
     }
-    // GLTF upgrade happens in loadGltfCars() — procedural is the instant fallback
     for (let i = 0; i < 9; i++) {
       const g = buildGap(this.glow)
       g.group.visible = false
@@ -725,6 +702,8 @@ export class FrScene {
     this.updateSparks(dt)
     this.updateSky(v, dt)
     this.updateCamera(v, dt)
+    this.darkFade += ((v.invisible || v.idle ? 0 : 1) - this.darkFade) * (1 - Math.exp(-dt * (v.invisible ? 1.5 : 2.5)))
+    this.dark.update(t, dt, v.dead && v.deathKind === 'caught' ? 1.25 : v.threat, v.x, v.idle ? 0.55 : Math.max(0.0, this.darkFade))
 
     this.roadMat.uniforms.uScroll.value = S
     this.roadMat.uniforms.uTime.value = t
@@ -761,44 +740,16 @@ export class FrScene {
     }
   }
 
-  /** Upgrade traffic pool to Draco sports-car GLTF. */
-  async loadGltfCars() {
-    try {
-      const template = await loadCarTemplate()
-      for (const c of this.pools.car) {
-        this.world.remove(c.group)
-        c.group.traverse((o) => {
-          const m = o as THREE.Mesh
-          if (m.isMesh) {
-            m.geometry?.dispose?.()
-          }
-        })
-      }
-      this.pools.car = []
-      for (let i = 0; i < 28; i++) {
-        const c = instantiateGltfCar(template)
-        c.group.visible = false
-        c.group.traverse((o: THREE.Object3D) => o.layers.enable(REFL))
-        this.world.add(c.group)
-        this.pools.car.push(c)
-      }
-      return true
-    } catch (e) {
-      console.warn('[Fifth Glide] GLTF traffic failed, keeping procedural', e)
-      return false
-    }
-  }
-
   private updateObstacles(v: ViewState) {
     const S = v.s
-    const idx = { barrier: 0, overhead: 0, car: 0, gap: 0 }
+    const idx = { barrier: 0, overhead: 0, block: 0, gap: 0 }
     const now = v.time
     for (const o of v.obstacles) {
       // Oncoming cars sit ahead of their meet-point — look further by o.s before breaking
       if (o.s > S + VIEW_AHEAD + 90) break
       const liveS = obstacleS(o, S)
       // passed props would otherwise fill the foreground between camera and runner
-      const behind = o.kind === 'gap' || v.dead ? 12 : o.kind === 'car' ? 3.5 : 2.6
+      const behind = o.kind === 'gap' || v.dead ? 12 : o.kind === 'block' ? 3.5 : 2.6
       if (liveS + o.len < S - behind) continue
       if (liveS > S + VIEW_AHEAD + 25) continue
       let scale = 1
@@ -827,21 +778,14 @@ export class FrScene {
         g.group.visible = true
         g.group.position.set(x, lift, -(liveS + o.len / 2))
         g.group.scale.setScalar(scale)
-      } else if (o.kind === 'car') {
-        const c = this.pools.car[idx.car++]
+      } else if (o.kind === 'block') {
+        const c = this.pools.block[idx.block++]
         if (!c) continue
         c.group.visible = true
         c.group.position.set(x, lift, -(liveS + o.len / 2))
-        // Slight size variance so traffic doesn't look cloned
-        const sizeJitter = 0.92 + (o.variant % 7) * 0.02
-        c.group.scale.setScalar(scale * sizeJitter)
-        // Oncoming: headlights toward the runner (rear of mesh faces +Z by default → rotate π)
-        const oncoming = o.vs > 0
-        c.group.rotation.y = oncoming ? Math.PI : 0
-        recolorPaint(c.paint, CAR_COLORS[o.variant % CAR_COLORS.length])
-        // Bright headlamps read as "coming AT you"; dim tails when facing us
-        setLightIntensity(c.head, oncoming ? 6.5 : 0.15, oncoming ? '#fff6d0' : '#fff2d0')
-        setLightIntensity(c.tail, oncoming ? 0.45 : 4.5, '#ff1a2a')
+        c.group.rotation.y = ((o.variant % 7) - 3) * 0.02
+        c.group.scale.setScalar(scale)
+        c.lamp.emissiveIntensity = Math.floor(now * 2 + o.id) % 2 ? 3.5 : 0.6
       } else {
         const g = this.pools.gap[idx.gap++]
         if (!g) continue
@@ -857,7 +801,7 @@ export class FrScene {
         g.nearGlow.position.z = -liveS + 0.3
       }
     }
-    for (const k of ['barrier', 'overhead', 'car', 'gap'] as const) {
+    for (const k of ['barrier', 'overhead', 'block', 'gap'] as const) {
       const pool = this.pools[k] as { group: THREE.Group }[]
       for (let i = idx[k]; i < pool.length; i++) pool[i].group.visible = false
     }
@@ -1039,7 +983,7 @@ export class FrScene {
     const speedF = THREE.MathUtils.clamp((v.speed - 12) / 20, 0, 1)
     const aspect = this.camera.aspect
     const baseFov = aspect > 0.8 ? 52 : 64
-    const tf = baseFov + speedF * 9 + (v.invisible ? 2.5 : 0)
+    const tf = baseFov + speedF * 9 + (v.boost - 1) * 22
     this.fov += (tf - this.fov) * (1 - Math.exp(-dt * 3))
     const sh = v.shake
     const sx = sh ? (Math.sin(v.time * 61) + Math.sin(v.time * 37)) * 0.06 * sh : 0
@@ -1055,7 +999,7 @@ export class FrScene {
     this.camera.updateMatrixWorld(true)
 
     // speed lines
-    const op = THREE.MathUtils.clamp((v.speed - 15) / 12, 0, 1) * 0.18 + (v.invisible ? 0.08 : 0)
+    const op = THREE.MathUtils.clamp((v.speed - 15) / 12, 0, 1) * 0.18 + (v.boost - 1) * 0.7
     this.speedMat.opacity = v.idle || v.dead ? 0 : op
     this.speedLines.visible = this.speedMat.opacity > 0.01
     if (this.speedLines.visible) {

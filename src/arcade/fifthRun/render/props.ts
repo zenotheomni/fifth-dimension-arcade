@@ -588,3 +588,34 @@ export function buildLamp(glow: THREE.Texture, metal: THREE.Material, side: numb
   group.add(g)
   return group
 }
+
+/** Tall crate stack (lane blocker — switch lanes). Dark steel cargo crates with a hazard strip. */
+export function buildBlock(chev: THREE.Texture, metal: THREE.Material) {
+  const group = new THREE.Group()
+  const crate = new THREE.MeshStandardMaterial({ color: '#1d2230', metalness: 0.65, roughness: 0.42 })
+  const rib = new THREE.MeshStandardMaterial({ color: '#2c3346', metalness: 0.8, roughness: 0.3 })
+  const strip = new THREE.MeshStandardMaterial({ map: chev, emissive: new THREE.Color('#ff3d5a'), emissiveMap: chev, emissiveIntensity: 0.6, roughness: 0.5 })
+  const sizes: [number, number, number, number][] = [
+    [1.62, 1.25, 1.5, 0.62],
+    [1.4, 1.1, 1.3, 1.82],
+  ]
+  for (const [w, h, d, y] of sizes) {
+    const b = new THREE.Mesh(box(w, h, d), crate)
+    b.position.y = y
+    group.add(b)
+    for (let i = -2; i <= 2; i++) {
+      const r = new THREE.Mesh(box(0.05, h * 0.92, 0.04), rib)
+      r.position.set((i * w) / 5.2, y, d / 2 + 0.02)
+      group.add(r)
+    }
+  }
+  const s = new THREE.Mesh(box(1.64, 0.16, 0.06), strip)
+  s.position.set(0, 0.2, 0.77)
+  group.add(s)
+  const lampMat = new THREE.MeshStandardMaterial({ color: '#ff2040', emissive: new THREE.Color('#ff2040'), emissiveIntensity: 3.5 })
+  const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), lampMat)
+  lamp.position.set(0, 2.42, 0.4)
+  group.add(lamp)
+  void metal
+  return { group, lamp: lampMat }
+}

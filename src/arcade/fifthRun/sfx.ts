@@ -160,3 +160,21 @@ export function sfxStart() {
   const t = a.currentTime
   ;[392, 523.25, 783.99].forEach((f, i) => tone(a, t + i * 0.07, f, f, 0.25, 'triangle', 0.06))
 }
+
+/** Dark-energy rumble: low filtered noise swell + sub drone (stumble / smoke closing in). */
+export function sfxRumble(strength = 1) {
+  const a = ac()
+  if (!a || !master) return
+  const t = a.currentTime
+  noise(a, t, 1.3, 'lowpass', 180, 60, 0.7, 0.55 * strength)
+  tone(a, t, 55, 38, 1.2, 'sawtooth', 0.12 * strength, 0.08)
+}
+
+/** Logo surge whoosh. */
+export function sfxSurge() {
+  const a = ac()
+  if (!a || !master) return
+  const t = a.currentTime
+  noise(a, t, 0.7, 'bandpass', 400, 3200, 1.2, 0.35)
+  tone(a, t, 220, 880, 0.6, 'triangle', 0.12, 0.02)
+}
