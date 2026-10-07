@@ -83,9 +83,9 @@ if (process.env.VIDEO !== '0') {
   const dir = fs.mkdtempSync('/tmp/g3v-')
   let f = 0
   await page.evaluate(() => { const r = globalThis.__FR.run; r.hand = 0; r.threat = 0.75 })
-  for (let i = 0; i < 240; i++) {
+  for (let i = 0; i < 120; i++) {
     await adv(1000 / 30)
-    if (i === 150) await page.evaluate(() => { const r = globalThis.__FR.run; r.hand = 1200 })
+    if (i === 70) await page.evaluate(() => { const r = globalThis.__FR.run; r.hand = 1200 })
     await page.screenshot({ path: path.join(dir, `f${String(f++).padStart(3, '0')}.png`), timeout: 0 })
   }
   execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-framerate', '30', '-i', path.join(dir, 'f%03d.png'), '-vf', 'scale=780:1688:flags=lanczos,format=yuv420p', '-c:v', 'libx264', '-crf', '20', '-movflags', '+faststart', path.join(OUT, `${P3}-run.mp4`)])

@@ -153,7 +153,7 @@ async function render(req: Request): Promise<ImageResponse> {
     h(
       'div',
       { position: 'absolute', right: 36, bottom: 26, width: 180, flexDirection: 'column', alignItems: 'center' },
-      logo ? { type: 'img', props: { src: logo, width: 112, height: 112 } } : h('div', { height: 112 }),
+      logo ? { type: 'img', props: { src: logo, width: 112, height: 112, style: { borderRadius: 56, boxShadow: '0 0 18px 6px rgba(255,240,210,0.55)' } } } : h('div', { height: 112 }),
       h('div', { marginTop: 8, fontSize: 17, letterSpacing: 2, color: '#ffc83c', textShadow: '0 0 10px rgba(0,0,0,0.9)' }, 'FIFTH FLOOR ARCADE'),
     ),
   )
@@ -296,7 +296,7 @@ export async function renderStoryCard(card: ScoreCard, origin: string): Promise<
       'div',
       { position: 'absolute', left: 60, right: 60, top: 150, bottom: 0, flexDirection: 'column', alignItems: 'center' },
       emblem
-        ? { type: 'img', props: { src: emblem, width: 260, height: 260 } }
+        ? { type: 'img', props: { src: emblem, width: 260, height: 260, style: { borderRadius: 130, boxShadow: '0 0 40px 12px rgba(255,240,210,0.5)' } } }
         : h('div', { height: 260 }),
       h('div', { marginTop: 18, fontSize: 52, letterSpacing: 10, color: '#ffc83c', textShadow: '0 0 20px rgba(255,200,60,0.6)' }, 'FIFTH FLOOR ARCADE'),
       h(
