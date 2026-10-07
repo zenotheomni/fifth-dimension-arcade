@@ -90,6 +90,7 @@ class Engine {
   fpsFrames = 0
   fpsTime = 0
   fpsGood = 0
+  fpsBad = 0
   startedAt = 0
   biomeCalled = 0
   private touch: { id: number; x: number; y: number; t: number; fired: boolean } | null = null
@@ -117,6 +118,7 @@ class Engine {
     this.view = new FrScene(this.canvas, detectTier(), emblem)
     // Upgrade to the rigged human runner + realistic sports-car GLTF (each falls back to procedural on failure)
     await Promise.all([this.view.loadGltfRunner(), this.view.loadGltfCars()])
+    this.view?.applyAnisotropy()
     if (this.destroyed) return
     this.onResize()
     this.ro = new ResizeObserver(() => this.onResize())
@@ -496,21 +498,28 @@ class Engine {
     const fps = this.fpsFrames / this.fpsTime
     this.fpsFrames = 0
     this.fpsTime = 0
+    // Sharpness first: shed reflection updates before resolution, and only drop below full DPR
+    // after two consecutive slow seconds (load hitches don't count). Composer (AA + bloom) goes last.
     if (fps < 50) {
       this.fpsGood = 0
-      if (v.dprScale > 0.6) {
-        v.dprScale = Math.max(0.55, v.dprScale - 0.15)
+      if (++this.fpsBad < 2) return
+      this.fpsBad = 0
+      if (v.reflEvery < 3) v.reflEvery++
+      else if (v.dprScale > 0.7) {
+        v.dprScale = Math.max(0.7, v.dprScale - 0.1)
         this.onResize()
-      } else if (v.reflEvery === 1) v.reflEvery = 2
-      else if (v.composer && fps < 42) v.disableComposer()
+      } else if (v.composer && fps < 40) v.disableComposer()
     } else if (fps > 58) {
+      this.fpsBad = 0
       this.fpsGood++
-      if (this.fpsGood >= 3 && v.dprScale < 1) {
-        v.dprScale = Math.min(1, v.dprScale + 0.1)
+      if (this.fpsGood >= 3) {
         this.fpsGood = 0
-        this.onResize()
+        if (v.dprScale < 1) {
+          v.dprScale = Math.min(1, v.dprScale + 0.1)
+          this.onResize()
+        } else if (v.reflEvery > 1) v.reflEvery--
       }
-    }
+    } else this.fpsBad = 0
   }
 
   onResize() {
