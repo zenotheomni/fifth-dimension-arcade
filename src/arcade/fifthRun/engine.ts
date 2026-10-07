@@ -1,5 +1,5 @@
 /**
- * Fifth Gear — game engine: fixed 120 Hz sim, interpolated render, swipe/keyboard input,
+ * Fifth Glide — game engine: fixed 120 Hz sim, interpolated render, swipe/keyboard input,
  * callouts (copy locks), PB, adaptive quality. Exposes `__FR` for QA captures.
  */
 import { FIFTH_RUN_COPY } from '../copyLocks'

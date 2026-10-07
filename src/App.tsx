@@ -18,6 +18,7 @@ export default function App() {
         <Route index element={<LobbyPage />} />
         <Route path="court-vision" element={<CourtVisionPage />} />
         <Route path="fifth-run" element={<FifthRunPage />} />
+        <Route path="fifth-glide" element={<FifthRunPage />} />
         <Route path="challenge/:id" element={<ChallengePage />} />
         <Route path="claim" element={<ClaimPage />} />
         <Route path="key" element={<KeyPage />} />

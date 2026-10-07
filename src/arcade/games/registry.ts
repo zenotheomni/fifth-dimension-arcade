@@ -38,10 +38,10 @@ export const GAMES: ArcadeGame[] = [
   },
   {
     id: 'fifth-run',
-    title: 'Fifth Gear',
-    tagline: 'Drive the galaxy. Catch the stars.',
+    title: 'Fifth Glide',
+    tagline: 'Miami to the galaxies. Catch the stars.',
     status: 'new',
-    boxArt: art('box-fifth-run.webp'),
+    boxArt: art('box-fifth-glide.webp'),
     route: '/fifth-run',
     accent: '#00C8C4',
     accentAlt: '#FF8C28',

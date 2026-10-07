@@ -1,4 +1,4 @@
-/** Fifth Gear — procedural props: shooting stars, modern sports coupe, barriers, gantries, gaps, power-ups, palms, gates, lamps. */
+/** Fifth Glide — procedural props: shooting stars, traffic cars, barriers, gantries, gaps, 5D logo power-up, palms, gates, lamps. */
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { addRim, glowMaterial } from './shaders'
@@ -405,49 +405,48 @@ export function buildGap(glow: THREE.Texture) {
   return { group, hole, near, far, nearGlow, mat }
 }
 
-export function buildPickup(kind: 'hand', glow: THREE.Texture, _emblem: THREE.Texture | null) {
+export function buildPickup(kind: 'hand', glow: THREE.Texture, emblem: THREE.Texture | null) {
   void kind
   const group = new THREE.Group()
   const spin = new THREE.Group()
-  spin.position.y = 1.0
+  spin.position.y = 1.05
   group.add(spin)
   const color = '#c9a0ff'
-  // Open hand / five-fingers silhouette (🖐️ vibe) — palm disc + five finger capsules
-  const palmMat = new THREE.MeshStandardMaterial({
-    color: '#f2d9c8',
-    emissive: new THREE.Color('#b48cff'),
-    emissiveIntensity: 0.55,
-    roughness: 0.55,
-    metalness: 0.15,
-  })
-  const palm = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 12), palmMat)
-  palm.scale.set(1.05, 1.15, 0.55)
-  spin.add(palm)
-  const fingerMat = new THREE.MeshStandardMaterial({
-    color: '#f6e0d2',
-    emissive: new THREE.Color('#9a6dff'),
-    emissiveIntensity: 0.4,
-    roughness: 0.5,
-  })
-  const spreads = [-0.34, -0.17, 0, 0.17, 0.34]
-  spreads.forEach((x, i) => {
-    const len = i === 2 ? 0.42 : i === 0 || i === 4 ? 0.32 : 0.38
-    const f = new THREE.Mesh(new THREE.CapsuleGeometry(0.055, len, 4, 8), fingerMat)
-    f.position.set(x, 0.28 + len * 0.35, 0.02)
-    f.rotation.z = -x * 0.55
-    spin.add(f)
-  })
-  // thumb
-  const thumb = new THREE.Mesh(new THREE.CapsuleGeometry(0.06, 0.28, 4, 8), fingerMat)
-  thumb.position.set(-0.32, 0.05, 0.06)
-  thumb.rotation.z = 1.1
-  spin.add(thumb)
+  // Rare Fifth Dimension logo — spinning emblem disc (15s invincible when collected)
+  if (emblem) {
+    const disc = new THREE.Mesh(
+      new THREE.CircleGeometry(0.42, 32),
+      new THREE.MeshBasicMaterial({ map: emblem, transparent: true, side: THREE.DoubleSide, depthWrite: false }),
+    )
+    spin.add(disc)
+    const back = disc.clone()
+    back.rotation.y = Math.PI
+    spin.add(back)
+  } else {
+    const fallback = new THREE.Mesh(
+      new THREE.CircleGeometry(0.4, 28),
+      new THREE.MeshStandardMaterial({
+        color: '#1a1028',
+        emissive: new THREE.Color('#b48cff'),
+        emissiveIntensity: 0.85,
+        roughness: 0.4,
+        metalness: 0.2,
+      }),
+    )
+    spin.add(fallback)
+    const five = new THREE.Mesh(
+      new THREE.RingGeometry(0.12, 0.28, 5),
+      new THREE.MeshBasicMaterial({ color: '#ff5a1f', side: THREE.DoubleSide }),
+    )
+    five.position.z = 0.02
+    spin.add(five)
+  }
 
-  const halo = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 1.8), glowMaterial(glow, color, 0.65))
-  halo.position.y = 1.0
+  const halo = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 1.9), glowMaterial(glow, color, 0.7))
+  halo.position.y = 1.05
   group.add(halo)
   const ring = new THREE.Mesh(
-    new THREE.RingGeometry(0.45, 0.62, 32),
+    new THREE.RingGeometry(0.48, 0.68, 32),
     new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
   )
   ring.rotation.x = -Math.PI / 2

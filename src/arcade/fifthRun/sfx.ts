@@ -1,4 +1,4 @@
-/** Fifth Gear — synthesized WebAudio SFX (no samples). */
+/** Fifth Glide — synthesized WebAudio SFX (no samples). */
 let ctx: AudioContext | null = null
 let master: GainNode | null = null
 let noiseBuf: AudioBuffer | null = null

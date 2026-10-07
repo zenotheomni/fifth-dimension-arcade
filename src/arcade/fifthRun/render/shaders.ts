@@ -1,4 +1,4 @@
-/** Fifth Gear — custom materials: sky dome, wet neon road (planar reflection), instanced towers. */
+/** Fifth Glide — custom materials: sky dome, wet neon road (planar reflection), instanced towers. */
 import * as THREE from 'three'
 
 export const PALETTE = {
