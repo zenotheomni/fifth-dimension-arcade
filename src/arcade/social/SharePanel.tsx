@@ -39,6 +39,10 @@ export default function SharePanel({
     <div className="soc-share">
       <p className="soc-share__eyebrow">{rivalHandle ? `Rematch sent to ${rivalHandle}` : 'Challenge ready'}</p>
       <div className="soc-share__card">
+        <span className="soc-share__brand" aria-label="Fifth Floor Arcade">
+          <img src={`${import.meta.env.BASE_URL}art/5d-logo-color.png`} alt="" width={44} height={44} />
+          <span>Fifth Floor<br />Arcade</span>
+        </span>
         <span className="soc-share__game">{gameTitle(game)} · Challenge</span>
         <span className="soc-share__handle">{handle}</span>
         <span className="soc-share__score">{score}</span>

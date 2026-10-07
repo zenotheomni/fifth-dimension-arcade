@@ -520,7 +520,7 @@
   color: var(--soc-pink);
   text-shadow: 0 0 10px rgba(255, 79, 163, 0.7);
 }
-.soc-sheet__x { appearance: none; border: 1px solid rgba(242, 240, 234, 0.3); background: none; color: #f2f0ea; width: 34px; height: 34px; border-radius: 999px; cursor: pointer; }
+.soc-sheet__x { appearance: none; border: 1px solid rgba(242, 240, 234, 0.3); background: none; color: #f2f0ea; width: 44px; height: 44px; border-radius: 999px; cursor: pointer; }
 .soc-sheet__empty { text-align: center; font-size: 0.82rem; color: rgba(242, 240, 234, 0.75); display: grid; gap: 0.4rem; justify-items: center; }
 .soc-sheet__empty p { margin: 0; }
 .soc-sheet__empty .ffa-btn { margin-top: 0.4rem; width: min(260px, 100%); }
@@ -789,3 +789,33 @@
 /* Three-tab toggle (All-time / Weekly / Contest): compact so it fits a 390px phone. */
 .soc-board__title { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .soc-toggle--3 button { padding: 0.38rem 0.42rem; letter-spacing: 0.04em; }
+
+/* brand badge so screenshots of the card are recognisable */
+.soc-share__card > .soc-share__brand {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 60px;
+  pointer-events: none;
+}
+.soc-share__brand img {
+  display: block;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+}
+.soc-share__brand span {
+  margin-top: 2px;
+  font-size: 0.5rem;
+  line-height: 1.05;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-align: center;
+  text-transform: uppercase;
+  color: var(--soc-gold);
+  text-shadow: 0 1px 2px #000;
+}
