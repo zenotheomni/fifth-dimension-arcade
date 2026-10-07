@@ -8,7 +8,7 @@
 import * as THREE from 'three'
 import { BloomEffect, EffectComposer, EffectPass, RenderPass, SMAAEffect, SMAAPreset, ToneMappingEffect, ToneMappingMode } from 'postprocessing'
 import { laneX } from '../sim/constants'
-import { obstacleS, type KeyItem, type Obstacle, type Pickup, type PowerKind } from '../sim/track'
+import { keyPos, obstacleS, type KeyItem, type Obstacle, type Pickup, type PowerKind } from '../sim/track'
 import {
   buildBarrier,
   buildBlock,
@@ -818,8 +818,9 @@ export class FrScene {
       if (k.s < S - 3 && k.state !== 1) continue
       if (k.s > S + VIEW_AHEAD) break
       if (k.state === 2) continue
-      let x = laneX(k.lane)
-      let y = k.y + 0.05 + Math.sin(t * 3 + k.id) * 0.06
+      const kp = keyPos(k, k.state === 1 ? k.s : S)
+      let x = kp.x
+      let y = kp.y + 0.05 + Math.sin(t * 3 + k.id) * 0.06
       let z = -k.s
       let sc = 1
       if (k.state === 1) {
@@ -980,10 +981,10 @@ export class FrScene {
     // Over-shoulder chase — runner fills lower third, lanes readable for swipes
     const ty = 3.4 + Math.max(0, v.y) * 0.32 - (v.sliding ? 0.25 : 0)
     this.camY += (ty - this.camY) * (1 - Math.exp(-dt * 5))
-    const speedF = THREE.MathUtils.clamp((v.speed - 12) / 20, 0, 1)
+    const speedF = THREE.MathUtils.clamp((v.speed - 16) / 34, 0, 1)
     const aspect = this.camera.aspect
     const baseFov = aspect > 0.8 ? 52 : 64
-    const tf = baseFov + speedF * 9 + (v.boost - 1) * 22
+    const tf = baseFov + speedF * 13 + (v.boost - 1) * 22
     this.fov += (tf - this.fov) * (1 - Math.exp(-dt * 3))
     const sh = v.shake
     const sx = sh ? (Math.sin(v.time * 61) + Math.sin(v.time * 37)) * 0.06 * sh : 0
@@ -999,7 +1000,7 @@ export class FrScene {
     this.camera.updateMatrixWorld(true)
 
     // speed lines
-    const op = THREE.MathUtils.clamp((v.speed - 15) / 12, 0, 1) * 0.18 + (v.boost - 1) * 0.7
+    const op = THREE.MathUtils.clamp((v.speed - 20) / 18, 0, 1) * 0.26 + (v.boost - 1) * 0.7
     this.speedMat.opacity = v.idle || v.dead ? 0 : op
     this.speedLines.visible = this.speedMat.opacity > 0.01
     if (this.speedLines.visible) {

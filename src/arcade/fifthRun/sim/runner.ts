@@ -25,7 +25,7 @@ import {
   multFor,
   speedAt,
 } from './constants'
-import { obstacleS, type ObKind, type Obstacle, type PowerKind, type Track } from './track'
+import { keyPos, obstacleS, type ObKind, type Obstacle, type PowerKind, type Track } from './track'
 
 export type Action = 'left' | 'right' | 'jump' | 'slide'
 
@@ -359,7 +359,8 @@ export function step(st: RunState, track: Track, opts: StepOpts) {
     if (dz > 10.5) break
     if (k.state !== 0) continue
     let take = false
-    if (dz > -0.6 && dz < 0.6 && Math.abs(st.x - laneX(k.lane)) < 0.85 && k.y > st.y - 0.3 && k.y < bodyTop + 0.2) {
+    const kp = dz > -0.6 && dz < 0.6 ? keyPos(k, st.s) : null
+    if (kp && Math.abs(st.x - kp.x) < 0.85 && kp.y > st.y - 0.3 && kp.y < bodyTop + 0.2) {
       take = true
     }
     if (take) {
