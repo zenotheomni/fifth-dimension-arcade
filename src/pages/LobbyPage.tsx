@@ -277,14 +277,14 @@ export default function LobbyPage() {
             </div>
 
             <div className="ffa-title__sting" aria-hidden>
-              <img src={`${BASE}art/emblem-160.webp`} alt="" />
+              <img src={`${BASE}art/5d-logo-color.png`} alt="" />
               <p>Fifth Dimension presents</p>
             </div>
 
             <div className="ffa-title__brand">
               <img
                 className="ffa-title__emblem"
-                src={`${BASE}art/emblem-160.webp`}
+                src={`${BASE}art/5d-logo-color.png`}
                 alt=""
               />
               <div className="ffa-logo" aria-hidden={false}>

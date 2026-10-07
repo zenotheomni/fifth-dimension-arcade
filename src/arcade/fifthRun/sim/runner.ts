@@ -14,6 +14,8 @@ import {
   OB,
   POWER_TICKS,
   SLIDE_TICKS,
+  COYOTE_S,
+  BARRIER_FORGIVE,
   BOOST,
   CHASE,
   SLOW_TICKS,
@@ -327,9 +329,11 @@ export function step(st: RunState, track: Track, opts: StepOpts) {
     const lx = Math.abs(st.x - laneX(o.lane))
     let hit = false
     if (o.kind === 'gap') {
-      hit = !st.air && st.y <= 0 && lx < OB.gap.halfW && st.s > os + 0.2 && st.s < os + o.len - 0.2
+      // coyote time: a jump in the first COYOTE_S over the edge still clears it
+      const coy = Math.min(o.len * 0.35, 0.2 + st.v * COYOTE_S)
+      hit = !st.air && st.y <= 0 && lx < OB.gap.halfW - 0.1 && st.s > os + coy && st.s < os + o.len - 0.35
     } else if (o.kind === 'barrier') {
-      hit = lx < BODY.halfW + OB.barrier.halfW && st.y < OB.barrier.h - 0.05
+      hit = lx < BODY.halfW + OB.barrier.halfW - BARRIER_FORGIVE.x && st.y < OB.barrier.h - BARRIER_FORGIVE.y
     } else if (o.kind === 'overhead') {
       hit = lx < BODY.halfW + OB.overhead.halfW && top > OB.overhead.bottom
     } else {
@@ -398,6 +402,9 @@ export function step(st: RunState, track: Track, opts: StepOpts) {
       p.taken = true
       p.takenTick = st.tick
       st.hand = POWER_TICKS.hand
+      st.slowT = 0
+      st.threat = 0
+      st.stumble = 0
       ev?.push({ type: 'power', kind: p.kind, id: p.id })
     }
   }

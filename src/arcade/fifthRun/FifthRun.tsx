@@ -15,6 +15,7 @@ import { createFifthRun, type FifthRunHandle } from './engine'
 import { BOOST, CHASE, FR_HZ, POWER_TICKS, START_LIVES, STAR_M } from './sim/constants'
 import type { FrChallengeConfig, FrEndPayload, FrHudState } from './types'
 import './fifthRun.css'
+import BrandLockup, { BRAND_LOGO } from '../brand/BrandLockup'
 
 export type SeededRun = { ticketId: string; seed: string; rivalHandle?: string | null }
 
@@ -262,6 +263,7 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
 
       {hud.phase === 'loading' ? (
         <div className="fr-loading" aria-live="polite">
+          <BrandLockup size={96} />
           <span className="fr-loading__bar" />
           Lighting up the highway…
         </div>
@@ -356,6 +358,7 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
       {howto && !ended ? (
         <div className="fr-howto" role="dialog" aria-label="How to play Fifth Glide">
           <div className="fr-howto__card">
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}><BrandLockup size={64} /></div>
             <p className="fr-howto__eyebrow">How to play</p>
             <h2 className="fr-howto__title">Fifth Glide</h2>
             <section>
@@ -380,7 +383,7 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
               <ul>
                 <li><b>m</b>Your score is your distance, 1 point per metre</li>
                 <li><b>💫</b>Each shooting star adds +{STAR_M} m. Some bob, drift or zig-zag between lanes, and high ones need a jump</li>
-                <li><b className="fr-howto__logo">5D</b>Rare 5D logo: {Math.round(POWER_TICKS.hand / FR_HZ)} s invincible plus a {BOOST.mul}× speed surge. Nothing can catch you, you can’t fall, you blast through everything</li>
+                <li><img src={BRAND_LOGO} alt="" width={28} height={28} style={{ borderRadius: '50%', verticalAlign: 'middle', marginRight: 6, boxShadow: '0 0 10px #ffc83c' }} />Rare 5D logo: {Math.round(POWER_TICKS.hand / FR_HZ)} s invincible plus a {BOOST.mul}× speed surge. Nothing can catch you, you can’t fall, you blast through everything</li>
               </ul>
             </section>
             <button type="button" className="ffa-btn ffa-btn--primary fr-howto__start" onClick={startFromHowto} disabled={hud.phase === 'loading'}>

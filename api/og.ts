@@ -75,7 +75,7 @@ async function render(req: Request): Promise<ImageResponse> {
   const host = publicArcadeHost()
   const [inter, logo] = await Promise.all([
     loadFont('Inter:wght@600', `${bodyText} Play free at ${host}`),
-    loadImageDataUrl(`${new URL(req.url).origin}/arcade/art/fifth-floor-logo.png`),
+    loadImageDataUrl(`${new URL(req.url).origin}/arcade/art/5d-logo-color.png`),
   ])
   const fonts: { name: string; data: ArrayBuffer; weight: 600 | 400; style: 'normal' }[] = []
   if (bungee) fonts.push({ name: 'Bungee', data: bungee, weight: 400, style: 'normal' })
@@ -236,7 +236,7 @@ export async function renderStoryCard(card: ScoreCard, origin: string): Promise<
   const [bungee, inter, emblem] = await Promise.all([
     loadFont('Bungee', displayText),
     loadFont('Inter:wght@600', `Play free at ${host} PTS`),
-    loadImageDataUrl(`${origin}/arcade/art/fifth-floor-logo.png`),
+    loadImageDataUrl(`${origin}/arcade/art/5d-logo-color.png`),
   ])
   const fonts: { name: string; data: ArrayBuffer; weight: 600 | 400; style: 'normal' }[] = []
   if (bungee) fonts.push({ name: 'Bungee', data: bungee, weight: 400, style: 'normal' })

@@ -12,10 +12,10 @@ export const LANE_W = 2.0
 export const laneX = (lane: number) => (lane - 1) * LANE_W
 
 /**
- * Forward speed (m/s). Gentle on-ramp for first-timers (≈14 → 21.5 m/s over the first 30 s), then it
- * keeps climbing toward vmax (≈27 m/s at 60 s, ≈33 m/s at 2 min).
+ * Forward speed (m/s). Starts at the old surge pace (30 m/s) and ramps naturally toward vmax
+ * (≈37.5 m/s at 1 km, ≈43.6 m/s at 2.5 km, ≈48.7 m/s at 5 km).
  */
-export const SPEED = { v0: 21, vmax: 58, k: 1300 }
+export const SPEED = { v0: 30, vmax: 60, k: 3000 }
 export const speedAt = (s: number) => SPEED.v0 + (SPEED.vmax - SPEED.v0) * (s / (s + SPEED.k))
 /**
  * Warm-up distance (≈ first 40 s, easing out linearly): sparse single-car rows, slower oncoming
@@ -30,8 +30,8 @@ export const LEVEL_OFFSET = 520
 export const levelAt = (s: number) => (s <= LEVEL_OFFSET ? 0 : (s - LEVEL_OFFSET) / (s - LEVEL_OFFSET + DIFF_K))
 
 /** Jump: fixed airtime / apex (feet height). */
-export const JUMP_T = 0.62
-export const JUMP_APEX = 1.5
+export const JUMP_T = 0.74
+export const JUMP_APEX = 1.8
 export const GRAVITY = (8 * JUMP_APEX) / (JUMP_T * JUMP_T)
 export const JUMP_VY = (4 * JUMP_APEX) / JUMP_T
 export const FAST_FALL_VY = 16
@@ -39,7 +39,11 @@ export const SLIDE_TICKS = Math.round(0.58 * FR_HZ)
 /** Lateral speed: one lane in ~0.11 s — tight Surfers weave. */
 export const LANE_SPEED = LANE_W / 0.11
 /** Buffered input window. */
-export const BUFFER_TICKS = Math.round(0.22 * FR_HZ)
+export const BUFFER_TICKS = Math.round(0.32 * FR_HZ)
+/** Coyote time: grace (s) after stepping onto a gap edge where a jump still saves you. */
+export const COYOTE_S = 0.12
+/** Barrier hitbox forgiveness: feet may clip this far into the top / sides and still clear. */
+export const BARRIER_FORGIVE = { y: 0.32, x: 0.18 }
 
 /** Runner AABB (feet/ground = y0). Jump clears barriers; slide ducks overhead. */
 export const BODY = { h: 1.75, slideH: 0.85, halfD: 0.28, halfW: 0.32 }
