@@ -51,7 +51,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     ? `${handle} scored ${score} in ${gameTitle}. Can you beat it?`
     : `${gameTitle} Challenge · Fifth Floor Arcade`
   const description = fifthRun
-    ? 'Fifth Glide · same road, same stars, same traffic. Run farther. Tap to play — no download.'
+    ? 'Fifth Glide · same road, same stars, same dark energy on your heels. Run farther. Tap to play — no download.'
     : 'Same court, same conditions. 60 seconds. Tap to play — no download.'
   const image = `${origin}/api/og?id=${encodeURIComponent(id)}${score != null ? `&s=${score}` : ''}`
   const url = id ? challengePublicUrl(id) : `${origin}/arcade`
