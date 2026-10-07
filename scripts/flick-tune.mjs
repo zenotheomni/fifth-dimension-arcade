@@ -84,6 +84,8 @@ suites.push(
     Array.from({ length: 400 }, () => ({ speed: 0.78 + rnd() * 0.5, dx: (rnd() - 0.5) * 48 })),
   ),
 )
+suites.push(run('clean_flick', Array.from({ length: 200 }, () => ({ speed: 0.97 + rnd() * 0.12, dx: (rnd() - 0.5) * 12 }))))
+suites.push(run('novice_spread', Array.from({ length: 400 }, () => ({ speed: 0.7 + rnd() * 0.75, dx: (rnd() - 0.5) * 80 }))))
 // Full random sweep incl. extremes: penetration must stay 0
 suites.push(
   run(
@@ -117,13 +119,16 @@ const checks = [
   ['penetration 0 (all suites)', suites.every((s) => s.penetrate === 0)],
   ['early miss never cuts off a make', suites.every((s) => s.cutOff === 0)],
   ['straight_medium ~100%', get('straight_medium').makeRate >= 0.95],
-  ['decent_spread 60–75%', get('decent_spread').makeRate >= 0.6 && get('decent_spread').makeRate <= 0.75],
+  ['decent_spread 45–55%', get('decent_spread').makeRate >= 0.45 && get('decent_spread').makeRate <= 0.55],
+  ['novice_spread 20–35%', get('novice_spread').makeRate >= 0.2 && get('novice_spread').makeRate <= 0.35],
+  ['clean_flick ≥95%', get('clean_flick').makeRate >= 0.95],
+  ['decent swishes < plain makes', get('decent_spread').swish < get('decent_spread').rimIn + get('decent_spread').bank],
   ['weak_front misses', get('weak_front').makeRate <= 0.2],
   ['angled_wide misses', get('angled_wide').makeRate === 0],
   ['strong_bank uses glass', get('strong_bank').boardHit >= 10],
   ['strong_bank never over', get('strong_bank').over === 0],
   ['extreme mostly over', get('extreme_over').over >= 8],
-  ['over only on extreme', ['straight_medium', 'decent_spread', 'weak_front', 'strong_bank', 'angled_wide', 'seeded_decent'].every((n) => get(n).over === 0)],
+  ['over only on extreme', ['straight_medium', 'decent_spread', 'novice_spread', 'clean_flick', 'weak_front', 'strong_bank', 'angled_wide', 'seeded_decent'].every((n) => get(n).over === 0)],
 ]
 let fail = 0
 for (const [label, ok] of checks) {
