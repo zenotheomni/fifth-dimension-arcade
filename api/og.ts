@@ -72,7 +72,11 @@ async function render(req: Request): Promise<ImageResponse> {
   const bungeeText = `FIFTH FLOOR ARCADE${game.toUpperCase()}${handle.toUpperCase()}${score}CAN YOU BEAT IT?CHALLENGE VS 0123456789`
   const bungee = await loadFont('Bungee', bungeeText)
   const bodyText = `${line} Same court. 60 seconds. PTS`
-  const [inter] = await Promise.all([loadFont('Inter:wght@600', bodyText)])
+  const host = publicArcadeHost()
+  const [inter, logo] = await Promise.all([
+    loadFont('Inter:wght@600', `${bodyText} Play free at ${host}`),
+    loadImageDataUrl(`${new URL(req.url).origin}/arcade/art/fifth-floor-logo.png`),
+  ])
   const fonts: { name: string; data: ArrayBuffer; weight: 600 | 400; style: 'normal' }[] = []
   if (bungee) fonts.push({ name: 'Bungee', data: bungee, weight: 400, style: 'normal' })
   if (inter) fonts.push({ name: 'Body', data: inter, weight: 600, style: 'normal' })
@@ -143,6 +147,14 @@ async function render(req: Request): Promise<ImageResponse> {
         c ? 'CAN YOU BEAT IT?' : 'TAP TO PLAY',
       ),
       h('div', { marginTop: 8, fontSize: 26, fontFamily: body, fontWeight: 600, color: 'rgba(242,240,234,0.82)' }, `${line} Same court. 60 seconds.`),
+      h('div', { marginTop: 6, fontSize: 24, fontFamily: body, fontWeight: 600, color: '#00e5ff' }, `Play free at ${host}`),
+    ),
+    // brand badge (logo + wordmark) so shared links are recognisable
+    h(
+      'div',
+      { position: 'absolute', right: 36, bottom: 26, width: 180, flexDirection: 'column', alignItems: 'center' },
+      logo ? { type: 'img', props: { src: logo, width: 112, height: 112 } } : h('div', { height: 112 }),
+      h('div', { marginTop: 8, fontSize: 17, letterSpacing: 2, color: '#ffc83c', textShadow: '0 0 10px rgba(0,0,0,0.9)' }, 'FIFTH FLOOR ARCADE'),
     ),
   )
 
@@ -224,7 +236,7 @@ export async function renderStoryCard(card: ScoreCard, origin: string): Promise<
   const [bungee, inter, emblem] = await Promise.all([
     loadFont('Bungee', displayText),
     loadFont('Inter:wght@600', `Play free at ${host} PTS`),
-    loadImageDataUrl(`${origin}/arcade/art/emblem-story.png`),
+    loadImageDataUrl(`${origin}/arcade/art/fifth-floor-logo.png`),
   ])
   const fonts: { name: string; data: ArrayBuffer; weight: 600 | 400; style: 'normal' }[] = []
   if (bungee) fonts.push({ name: 'Bungee', data: bungee, weight: 400, style: 'normal' })
@@ -283,10 +295,10 @@ export async function renderStoryCard(card: ScoreCard, origin: string): Promise<
     h(
       'div',
       { position: 'absolute', left: 60, right: 60, top: 150, bottom: 0, flexDirection: 'column', alignItems: 'center' },
-      h('div', { fontSize: 54, letterSpacing: 10, color: '#ffc83c', textShadow: '0 0 20px rgba(255,200,60,0.6)' }, 'FIFTH FLOOR ARCADE'),
       emblem
-        ? { type: 'img', props: { src: emblem, width: 250, height: 250, style: { marginTop: 26 } } }
-        : h('div', { height: 250, marginTop: 26 }),
+        ? { type: 'img', props: { src: emblem, width: 260, height: 260 } }
+        : h('div', { height: 260 }),
+      h('div', { marginTop: 18, fontSize: 52, letterSpacing: 10, color: '#ffc83c', textShadow: '0 0 20px rgba(255,200,60,0.6)' }, 'FIFTH FLOOR ARCADE'),
       h(
         'div',
         {
