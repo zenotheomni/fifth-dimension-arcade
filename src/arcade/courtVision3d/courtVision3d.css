@@ -726,3 +726,9 @@
 }
 .cv3-root .cvp-mode,
 .cv3-root > .cvp-back { z-index: 19; }
+
+/* End: score + best combo side by side */
+.cv3-root .cv3-end__stats { display: flex; gap: 1.6rem; align-items: flex-end; justify-content: center; }
+.cv3-root .cv3-end__stat { display: flex; flex-direction: column; align-items: center; }
+.cv3-root .cv3-end__label { font-size: 0.7rem; letter-spacing: 0.24em; text-transform: uppercase; color: rgba(255,255,255,0.65); }
+.cv3-root .cv3-end__combo { color: #ffb347; }

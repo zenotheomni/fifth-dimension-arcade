@@ -395,7 +395,19 @@ export default function CourtVision3D({
         <div className="cvp-end">
           <p className="cvp-end__eyebrow">{seeded ? (seeded.rivalHandle ? `Rematch vs ${seeded.rivalHandle}` : 'Set the bar') : 'Court Vision'}</p>
           <h2>{headline}</h2>
-          <div className="cvp-end__score">{ended.score}</div>
+          <div className="cv3-end__stats">
+            <div className="cv3-end__stat">
+              <span className="cv3-end__label">Score</span>
+              <div className="cvp-end__score">{ended.score}</div>
+            </div>
+            <div className="cv3-end__stat cv3-end__stat--combo">
+              <span className="cv3-end__label">Best combo</span>
+              <div className="cvp-end__score cv3-end__combo">
+                {ended.bestStreak ?? 0}
+                {(ended.bestStreak ?? 0) >= 5 ? <span aria-hidden> 🔥</span> : null}
+              </div>
+            </div>
+          </div>
           <p className="cvp-end__pb">
             Personal best <strong>{displayPb}</strong>
             {boardLine ? (
