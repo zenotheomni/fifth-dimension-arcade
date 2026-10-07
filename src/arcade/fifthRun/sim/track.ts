@@ -114,7 +114,7 @@ export class Track {
   private prevEnd = 0
   private pathLane = 1
   private nextId = 1
-  private nextPickupS = 140
+  private nextPickupS = 520
   private pickupBag: PowerKind[] = []
 
   constructor(seed: string) {
@@ -246,7 +246,7 @@ export class Track {
       let pickupAt = -1
       if (s0 >= this.nextPickupS && keyS.length >= 3) {
         pickupAt = Math.floor(keyS.length / 2)
-        this.nextPickupS = s0 + 200 + this.r() * 140
+        this.nextPickupS = s0 + 900 + this.r() * 600
       }
       keyS.forEach((s, i) => {
         if (i === pickupAt) {
