@@ -183,6 +183,10 @@ export default function ChallengePage() {
         <div className="cvp-challenger__vignette" aria-hidden />
 
         <div className="cvp-challenger__panel">
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 10 }}>
+            <img src={`${BASE}art/fifth-floor-logo.png`} alt="Fifth Floor Arcade" width={64} height={64} style={{ display: 'block', borderRadius: '50%' }} />
+            <span style={{ marginTop: 4, fontSize: 11, letterSpacing: '0.18em', fontWeight: 700, color: '#ffc83c' }}>FIFTH FLOOR ARCADE</span>
+          </div>
           {phase === 'loading' || phase === 'starting' ? (
             <>
               <p className="cvp-challenger__badge">Challenge</p>
