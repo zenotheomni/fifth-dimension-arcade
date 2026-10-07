@@ -74,7 +74,7 @@ await shot('run')
 if (process.env.VIDEO !== '0') {
   const dir = fs.mkdtempSync('/tmp/g3v-')
   let f = 0
-  await page.evaluate(() => { globalThis.__FR.run.threat = 0.75 })
+  await page.evaluate(() => { const r = globalThis.__FR.run; r.hand = 0; r.threat = 0.75 })
   for (let i = 0; i < 240; i++) {
     await adv(1000 / 30)
     if (i === 150) await page.evaluate(() => { const r = globalThis.__FR.run; r.hand = 1200 })
