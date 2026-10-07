@@ -17,11 +17,15 @@ export const FLICK3D = {
   speedRef: 1.05,
   extremeSpeed: 2.05,
   /** metres of lateral miss at the rim per unit tan(flick angle) */
-  lateralScale: 0.62,
+  lateralScale: 0.88,
   /** Aim-assist strength (0..1) and radius (m) */
-  assistLat: 0.62,
+  assistLat: 0.28,
   assistLatR: 0.15,
-  assistDepth: 0.55,
+  assistDepth: 0.18,
+  /** metres of depth miss per unit power error in the make window */
+  depthScale: 1.0,
+  /** bank: lateral aim error is amplified off the glass */
+  bankLatGain: 1.8,
   /** Power windows */
   weakBelow: 0.85,
   bankAbove: 1.17,
@@ -127,13 +131,13 @@ export function planShot(input: FlickInput, ctx: ShotContext): ShotPlan {
     target = { x: rimC.x + lateral, y: rimC.y, z: rimC.z + dz }
     v = ballistic(p0, target, rimC.y + 0.55 + (power - 0.6) * 0.6)
   } else if (zone === 'make') {
-    let dz = (1 - power) * 0.5
+    let dz = (1 - power) * FLICK3D.depthScale
     dz = assist(dz, FLICK3D.assistDepth, 0.1)
     target = { x: rimC.x + lateral, y: rimC.y, z: rimC.z + dz }
     v = ballistic(p0, target, rimC.y + 0.95 + (power - 1) * 1.4)
   } else if (zone === 'bank') {
     const hc = 0.24 + (power - FLICK3D.bankAbove) * 1.05
-    const plan = planBank(p0, ctx.hoop, rimC.x + lateral, hc)
+    const plan = planBank(p0, ctx.hoop, rimC.x + lateral * FLICK3D.bankLatGain, hc)
     target = plan.target
     v = plan.v
   } else {
