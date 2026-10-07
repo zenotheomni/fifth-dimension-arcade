@@ -4,8 +4,8 @@
  */
 import { FIFTH_RUN_COPY } from '../copyLocks'
 import { RuleBot, SKILLS } from './sim/bot'
-import { FR_DT, FR_HZ, POWER_TICKS } from './sim/constants'
-import { newRun, queueAction, resetCursors, scoreOf, step, type Action, type RunEvent, type RunState } from './sim/runner'
+import { FR_DT, FR_HZ, POWER_TICKS, STAR_M } from './sim/constants'
+import { newRun, queueAction, resetCursors, scoreOf, speedMul, step, type Action, type RunEvent, type RunState } from './sim/runner'
 import { Track } from './sim/track'
 import { FrScene, type QualityTier, type ViewState } from './render/scene'
 import { loadTexture } from './render/textures'
@@ -18,13 +18,23 @@ import {
   sfxLane,
   sfxMult,
   sfxPower,
+  sfxRumble,
+  sfxSurge,
   sfxSlide,
   sfxStart,
   unlockSfx,
 } from './sfx'
 import type { FrBridge, FrHudState, FrMode, FrPhase } from './types'
 
-export type FifthRunHandle = { destroy: () => void; setMuted: (m: boolean) => void; pause: () => void }
+export type FifthRunHandle = {
+  destroy: () => void
+  setMuted: (m: boolean) => void
+  pause: () => void
+  /** Block input while the how-to screen is up. */
+  setLocked: (v: boolean) => void
+  /** Begin the run from the intro phase (START button). */
+  start: () => void
+}
 
 const PB_KEY = 'fd_fifth_run_pb'
 const loadPb = () => {
@@ -55,7 +65,6 @@ function detectTier(): QualityTier {
   return 'high'
 }
 
-const MULT_COPY: Record<number, string> = { 2: FIFTH_RUN_COPY.MULTIPLIER_X2, 3: 'x3 · Keep moving.', 4: 'x4 · Locked in.', 5: 'x5 · Nothing in the way.' }
 
 class Engine {
   host: HTMLElement
@@ -93,6 +102,7 @@ class Engine {
   fpsBad = 0
   startedAt = 0
   biomeCalled = 0
+  rumbleAt = 0
   private touch: { id: number; x: number; y: number; t: number; fired: boolean } | null = null
   private ro: ResizeObserver | null = null
 
@@ -113,11 +123,14 @@ class Engine {
   }
 
   async init() {
-    const emblem = await loadTexture(`${import.meta.env.BASE_URL}art/emblem-160.webp`)
+    const [emblem, logo] = await Promise.all([
+      loadTexture(`${import.meta.env.BASE_URL}art/emblem-160.webp`),
+      loadTexture(`${import.meta.env.BASE_URL}art/glide-logo-512.webp`),
+    ])
     if (this.destroyed) return
-    this.view = new FrScene(this.canvas, detectTier(), emblem)
-    // Upgrade to the rigged human runner + realistic sports-car GLTF (each falls back to procedural on failure)
-    await Promise.all([this.view.loadGltfRunner(), this.view.loadGltfCars()])
+    this.view = new FrScene(this.canvas, detectTier(), emblem, logo)
+    // Upgrade to the rigged astronaut (falls back to the procedural runner on failure)
+    await this.view.loadGltfRunner()
     this.view?.applyAnisotropy()
     if (this.destroyed) return
     this.onResize()
@@ -171,7 +184,7 @@ class Engine {
     const d = Math.hypot(dx, dy)
     const dt = performance.now() - tc.t
     if (d >= 12 && d / Math.max(dt, 1) > 0.25) this.swipe(dx, dy)
-    else if (this.phase === 'intro') this.start(null)
+    else if (this.phase === 'intro' && !this.locked) this.start(null)
   }
 
   private swipe(dx: number, dy: number) {
@@ -203,7 +216,15 @@ class Engine {
     if (document.hidden && this.phase === 'playing') this.pause()
   }
 
+  /** While true (pre-run how-to screen is up), swipes/keys/taps don't start the run. */
+  locked = false
+
+  setLocked(v: boolean) {
+    this.locked = v
+  }
+
   input(a: Action) {
+    if (this.locked) return
     if (this.phase === 'intro') {
       this.start(a)
       return
@@ -310,6 +331,10 @@ class Engine {
     }
 
     if (this.phase === 'playing') {
+      if (this.run.threat > 0.3 && this.clock - this.rumbleAt > 1.6) {
+        this.rumbleAt = this.clock
+        sfxRumble(0.35 + this.run.threat * 0.4)
+      }
       if (this.run.s >= 600 && this.biomeCalled < 1) {
         this.biomeCalled = 1
         this.say('Leaving Miami…', 'teal', 1.4)
@@ -349,6 +374,8 @@ class Engine {
       idle: this.phase === 'intro' || this.phase === 'loading',
       lives: b.lives,
       hand: b.hand / FR_HZ,
+      threat: b.threat,
+      boost: this.phase === 'playing' ? speedMul({ ...b, slowT: 0 }) : 1,
       invuln: b.invuln > 0 || b.hand > 0,
       invisible: b.hand > 0,
       stumble: b.stumble,
@@ -373,19 +400,37 @@ class Engine {
       }
       case 'mult':
         sfxMult()
-        if (MULT_COPY[e.mult]) this.say(MULT_COPY[e.mult], e.mult >= 5 ? 'coral' : 'gold', 1.3)
+        this.say(`${st.combo} star streak!`, e.mult >= 5 ? 'coral' : 'gold', 1.1)
         break
       case 'miss':
         if (e.lostCombo >= 10) this.say(`Combo lost · ${e.lostCombo}`, 'coral', 0.9)
         break
       case 'power':
         sfxPower('hand')
-        this.say(FIFTH_RUN_COPY.HAND, 'teal', 1.2)
+        sfxSurge()
+        this.say('Fifth Dimension · 10s invincible', 'teal', 1.4)
         break
-      case 'hit':
+      case 'boostEnd':
+        this.say('Back to earth', 'teal', 0.9)
+        break
+      case 'stumble':
         sfxBump()
-        this.shake = 1.0
-        this.say(e.lives === 1 ? 'Last life' : `${e.lives} lives left`, 'coral', 1.1)
+        sfxRumble(0.8)
+        this.shake = 0.8
+        this.say('Stumble! It’s gaining…', 'coral', 1.0)
+        if (navigator.vibrate) {
+          try {
+            navigator.vibrate(30)
+          } catch {
+            /* ignore */
+          }
+        }
+        break
+      case 'life':
+        sfxCrash()
+        sfxRumble(1.2)
+        this.shake = 1.2
+        this.say(`${e.cause === 'caught' ? 'Caught by the dark' : 'Fell'} · ${e.lives === 1 ? 'last life' : `${e.lives} lives left`}`, 'coral', 1.5)
         if (navigator.vibrate) {
           try {
             navigator.vibrate(40)
@@ -427,7 +472,7 @@ class Engine {
     this.deadT = 0
     this.shake = 1.4
     sfxCrash()
-    this.say(FIFTH_RUN_COPY.CRASH, 'coral', 1.6)
+    this.say(this.run.deathKind === 'caught' ? 'The dark energy got you.' : 'Lost in the void.', 'coral', 1.6)
     if (navigator.vibrate) {
       try {
         navigator.vibrate(60)
@@ -456,6 +501,8 @@ class Engine {
       keys: st.keys,
       maxCombo: st.maxCombo,
       livesLeft: st.lives,
+      ranM: Math.floor(st.s),
+      starM: st.keys * STAR_M,
       durationS: Math.round((st.tick / FR_HZ) * 10) / 10,
       deathKind: st.deathKind,
       pb: this.pb,
@@ -474,6 +521,8 @@ class Engine {
       distance: Math.floor(st.s),
       keys: st.keys,
       combo: st.combo,
+      threat: Math.round(st.threat * 20) / 20,
+      timeS: Math.floor(st.tick / FR_HZ),
       mult: st.mult,
       lives: st.lives,
       callout: this.callout,
@@ -483,7 +532,7 @@ class Engine {
       speed: Math.round(st.v * 3.6),
       target: this.bridge.challenge && !this.bridge.challenge.setTheBar ? this.bridge.challenge.targetScore : null,
     }
-    const key = `${s.phase}|${s.score}|${s.keys}|${s.combo}|${s.lives}|${s.callout?.id}|${Math.round(s.hand * 20)}|${s.distance}`
+    const key = `${s.phase}|${s.threat}|${s.score}|${s.keys}|${s.combo}|${s.lives}|${s.callout?.id}|${Math.round(s.hand * 20)}|${s.distance}`
     if (!force && key === this.lastHud) return
     this.lastHud = key
     this.bridge.onHud(s)
@@ -552,5 +601,14 @@ class Engine {
 export function createFifthRun(host: HTMLElement, bridge: FrBridge): FifthRunHandle {
   const engine = new Engine(host, bridge)
   void engine.init().catch((err) => console.error('[fifth-glide] init failed', err))
-  return { destroy: () => engine.destroy(), setMuted: (m) => engine.setMuted(m), pause: () => engine.pause() }
+  return {
+    destroy: () => engine.destroy(),
+    setMuted: (m) => engine.setMuted(m),
+    pause: () => engine.pause(),
+    setLocked: (v) => engine.setLocked(v),
+    start: () => {
+      engine.locked = false
+      engine.start(null)
+    },
+  }
 }

@@ -47,7 +47,7 @@ export const BODY = { h: 1.75, slideH: 0.85, halfD: 0.28, halfW: 0.32 }
 export const OB = {
   barrier: { h: 0.75, len: 0.4, halfW: 0.8 },
   overhead: { bottom: 1.2, len: 0.45, halfW: 0.95 },
-  car: { h: 1.45, len: 5.0, halfW: 0.9 },
+  block: { h: 2.6, len: 1.6, halfW: 0.85 },
   gap: { halfW: 1.0 },
 } as const
 
@@ -56,23 +56,32 @@ export const ONCOMING_WINDOW = 95
 
 export const START_LIVES = 3
 
+/**
+ * Dark-energy chase. `threat` 0..1 = how close the smoke is (1 = on your heels).
+ * Stumbling on an obstacle sets threat to HIT and slows you for SLOW_S; stumbling again while
+ * threat ≥ CATCH_AT = caught (−1 life). Threat bleeds off over RECOVER_S of clean running
+ * (faster during the warm-up so first-timers get a longer leash).
+ */
+export const CHASE = { hit: 0.75, catchAt: 0.3, recoverS: 7, warmRecoverCut: 0.45, slowS: 1.1, slowMul: 0.62 }
+export const SLOW_TICKS = Math.round(CHASE.slowS * FR_HZ)
+
+/** Logo pickup: 10 s invincible + speed surge. */
+export const BOOST = { mul: 1.5, easeInS: 0.4, easeOutS: 1.0 }
+
 export const POWER_TICKS = {
-  /** Fifth Dimension logo — 15s invulnerability */
-  hand: 15 * FR_HZ,
-  /** brief i-frames after losing a life */
-  hitInvuln: Math.round(1.5 * FR_HZ),
+  /** Fifth Dimension logo — 10 s invincible + 1.5× speed surge */
+  hand: 10 * FR_HZ,
+  /** grace after the surge ends (slow-down never kills instantly) */
+  afterBoost: Math.round(1.5 * FR_HZ),
+  /** grace after losing a life (respawn) */
+  respawn: Math.round(2.5 * FR_HZ),
+  /** brief i-frames after a stumble so one row can't double-hit */
+  stumble: Math.round(0.5 * FR_HZ),
 }
 
-/** Base points per star before combo. */
-export const STAR_BASE = 10
-/**
- * Flat distance-equivalent points per star (stars boost the score heavily alongside metres).
- * score = floor(distance) + floor(timeS × TIME_PTS) + stars × STAR_FLAT + starPts(STAR_BASE × combo)
- */
-export const STAR_FLAT = 25
-/** Points per second lasted (time survived). */
-export const TIME_PTS = 5
-/** combo thresholds → multiplier index+1 (x1..x5) */
+/** Bonus metres per 💫 star. score (= distance) = floor(metres run) + stars × STAR_M */
+export const STAR_M = 3
+/** Streak tiers (display callouts only). */
 export const COMBO_STEPS = [0, 10, 30, 60, 100]
 export const multFor = (combo: number) => {
   let m = 1

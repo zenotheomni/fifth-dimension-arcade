@@ -2,15 +2,13 @@
  * Fifth Glide — seeded endless track.
  *
  * Rows of lane obstacles are generated strictly in order from a single Mulberry32 stream, so the
- * layout depends only on the seed (never on the player). Cars are the main threat: they carry an
- * independent oncoming speed (`vs`) and spawn in staggered waves that densify + speed up over
- * distance. Barriers / overheads / gaps are occasional spice, not parked blockers. Power-ups are
+ * layout depends only on the seed (never on the player). Temple Run kit only (no traffic): barriers, overhead beams, gaps and crate stacks. Power-ups are
  * Fifth Dimension logo (15 s invuln) only. Collectibles are shooting stars (💫).
  */
 import { hashSeed, mulberry32 } from '../../core/seededRandom'
-import { BODY, JUMP_APEX, JUMP_T, LANE_SPEED, LANE_W, OB, START_CLEAR_M, levelAt, speedAt, warmAt } from './constants'
+import { JUMP_APEX, JUMP_T, OB, START_CLEAR_M, levelAt, speedAt, warmAt } from './constants'
 
-export type ObKind = 'barrier' | 'overhead' | 'car' | 'gap'
+export type ObKind = 'barrier' | 'overhead' | 'block' | 'gap'
 /** Rare 5D logo invuln pickup. */
 export type PowerKind = 'hand'
 
@@ -65,38 +63,30 @@ export type Pickup = {
   takenTick: number
 }
 
-type Tok = 'E' | 'B' | 'O' | 'C' | 'D' | 'G'
+type Tok = 'E' | 'B' | 'O' | 'K' | 'G'
 
 type Pattern = { p: string; min: number; w: (L: number) => number }
 
-/** Lane multisets — cars dominate; lanes permuted per row. Density ramps with L. */
+/** Lane multisets (Temple Run kit): B = low barrier (jump), O = overhead beam (slide),
+ * G = gap in the path (jump or fall), K = tall crate stack (switch lanes). E = clear.
+ * Full-width rows (BBB / OOO / GGG) are the signature "you must jump / slide" moments. */
 const PATTERNS: Pattern[] = [
-  // Single / double oncoming cars (core dodge loop)
-  { p: 'CEE', min: 0, w: (L) => 2.4 - 0.6 * L },
-  { p: 'ECE', min: 0, w: (L) => 2.2 - 0.5 * L },
-  { p: 'EEC', min: 0, w: (L) => 2.2 - 0.5 * L },
-  { p: 'CCE', min: 0, w: (L) => 1.6 + 0.7 * L },
-  { p: 'CEC', min: 0.04, w: (L) => 1.4 + 0.9 * L },
-  { p: 'ECC', min: 0.04, w: (L) => 1.4 + 0.9 * L },
-  // Packed waves (late run)
-  { p: 'CCC', min: 0.28, w: (L) => 0.2 + 1.4 * L },
-  // Staggered double-stack in a lane (D)
-  { p: 'DEE', min: 0.06, w: (L) => 1.1 + 0.3 * L },
-  { p: 'EDE', min: 0.06, w: (L) => 1.1 + 0.3 * L },
-  { p: 'EED', min: 0.06, w: (L) => 1.1 + 0.3 * L },
-  { p: 'DDE', min: 0.18, w: (L) => 0.7 + 0.9 * L },
-  { p: 'DED', min: 0.22, w: (L) => 0.55 + 0.8 * L },
-  { p: 'DCE', min: 0.2, w: (L) => 0.6 + 0.5 * L },
-  // Occasional spice — never the main threat
-  { p: 'BEE', min: 0.12, w: (L) => 0.35 - 0.15 * L },
-  { p: 'OEE', min: 0.16, w: (L) => 0.28 - 0.1 * L },
-  { p: 'GEE', min: 0.2, w: () => 0.22 },
-  { p: 'BOE', min: 0.28, w: () => 0.18 },
-  { p: 'CCB', min: 0.24, w: (L) => 0.25 + 0.35 * L },
-  { p: 'CCO', min: 0.24, w: (L) => 0.25 + 0.3 * L },
-  { p: 'CCG', min: 0.32, w: () => 0.28 },
-  { p: 'BOC', min: 0.35, w: () => 0.3 },
-  { p: 'GGE', min: 0.4, w: () => 0.18 },
+  { p: 'BEE', min: 0, w: (L) => 2.0 - 0.8 * L },
+  { p: 'OEE', min: 0, w: (L) => 1.6 - 0.6 * L },
+  { p: 'KEE', min: 0, w: (L) => 1.6 - 0.6 * L },
+  { p: 'GEE', min: 0, w: (L) => 1.0 - 0.3 * L },
+  { p: 'BBB', min: 0, w: (L) => 1.3 + 0.4 * L },
+  { p: 'OOO', min: 0.02, w: (L) => 1.1 + 0.4 * L },
+  { p: 'GGG', min: 0.05, w: (L) => 0.9 + 0.6 * L },
+  { p: 'KKE', min: 0.04, w: (L) => 1.0 + 0.6 * L },
+  { p: 'KBE', min: 0.08, w: (L) => 0.6 + 0.6 * L },
+  { p: 'KOE', min: 0.08, w: (L) => 0.6 + 0.6 * L },
+  { p: 'BOE', min: 0.14, w: (L) => 0.5 + 0.6 * L },
+  { p: 'KKB', min: 0.18, w: (L) => 0.3 + 0.9 * L },
+  { p: 'KKO', min: 0.18, w: (L) => 0.3 + 0.9 * L },
+  { p: 'KKG', min: 0.26, w: (L) => 0.2 + 0.8 * L },
+  { p: 'BOG', min: 0.3, w: (L) => 0.2 + 0.7 * L },
+  { p: 'GKG', min: 0.34, w: (L) => 0.2 + 0.6 * L },
 ]
 
 const PERMS = [
@@ -109,7 +99,7 @@ const PERMS = [
 ]
 
 const q = (x: number) => Math.round(x * 100) / 100
-const passable = (t: Tok) => t === 'E' || t === 'B' || t === 'O' || t === 'G'
+const passable = (t: Tok) => t !== 'K'
 
 export class Track {
   readonly seed: string
@@ -148,11 +138,6 @@ export class Track {
     this.obstacles.push({ id: this.nextId++, kind, lane, s: q(s), len: q(len), vs, variant, smashed: false })
   }
 
-  private carVs(L: number, W = 0) {
-    // Oncoming approach: 7–10 in the warm-up → 11–18 → 27–36 late (plus runner speed = closing)
-    return q(11 - 4 * W + L * 18 + this.r() * (7 - 4 * W))
-  }
-
   private nextPower(): PowerKind {
     if (!this.pickupBag.length) {
       // bag of 5D logos
@@ -189,7 +174,8 @@ export class Track {
     for (const p of PATTERNS) {
       let w = L >= p.min ? Math.max(0, p.w(L)) : 0
       // warm-up: multi-car rows fade in only as the warm-up ends
-      if (W > 0 && /C.*C|D/.test(p.p)) w *= W > 0.5 ? 0 : 1 - 2 * W
+      // warm-up: forced-lane combos (two crates, mixed rows) fade in only as the warm-up ends
+      if (W > 0 && /K.*K|BO|G.*G.*K|GKG/.test(p.p) && p.p !== 'GGG') w *= W > 0.5 ? 0 : 1 - 2 * W
       ws.push(w)
       total += w
     }
@@ -210,20 +196,15 @@ export class Track {
     const W = warmAt(s0)
     const v = speedAt(s0)
     const toks = this.pickPattern(L, W)
-    // first rows of the warm-up: traffic uses the outer lanes so a new player isn't met head-on
-    // in the lane they start in before they've learned to swipe
-    if (W > 0.62 && toks[1] === 'C') {
+    // first rows: never put a crate straight in the start lane before the player has learned to swipe
+    if (W > 0.62 && toks[1] === 'K') {
       const e = toks[0] === 'E' ? 0 : 2
       toks[1] = toks[e]
-      toks[e] = 'C'
+      toks[e] = 'K'
     }
     const gapLen = q(Math.min(5, Math.max(2.6, 0.3 * v)))
 
     let rowEnd = s0
-    // Per-row stagger seed so multi-lane cars arrive offset (weave, not a flat wall)
-    const waveSkew = this.r() * 2.8
-    const wall = toks[0] === 'C' && toks[1] === 'C' && toks[2] === 'C'
-    const weaveUp = waveSkew < 1.4
     for (let lane = 0; lane < 3; lane++) {
       const t = toks[lane]
       if (t === 'B') {
@@ -232,31 +213,9 @@ export class Track {
       } else if (t === 'O') {
         this.addOb('overhead', lane, s0, OB.overhead.len)
         rowEnd = Math.max(rowEnd, s0 + OB.overhead.len)
-      } else if (t === 'C' && wall) {
-        // Full-width wave (CCC): a readable weave, never a wall. Cars arrive lane-by-lane with enough
-        // room after each one passes to slip into its lane before the next car reaches yours.
-        const vs = this.carVs(L, W)
-        const k = weaveUp ? lane : 2 - lane
-        const block = (OB.car.len * v) / (v + vs) + 2 * BODY.halfD + 0.4
-        const change = (LANE_W / LANE_SPEED) * v * 1.5
-        const meet = s0 + k * (block + change + 1.2 + this.r() * 1.5)
-        this.addOb('car', lane, meet, OB.car.len, vs)
-        rowEnd = Math.max(rowEnd, meet + OB.car.len)
-      } else if (t === 'C') {
-        // Stagger meet-points across lanes + jitter — Subway Surfers wave feel
-        const stagger = lane * (1.8 + this.r() * 1.6) + waveSkew * (lane === 1 ? 0.25 : 0.7) + this.r() * 1.4
-        const meet = s0 + stagger
-        this.addOb('car', lane, meet, OB.car.len, this.carVs(L, W))
-        rowEnd = Math.max(rowEnd, meet + OB.car.len)
-      } else if (t === 'D') {
-        const vs = this.carVs(L)
-        const stagger = lane * (1.5 + this.r() * 1.4) + this.r() * 1.2
-        const meet = s0 + stagger
-        // Stacked pair in-lane with a dodge gap between them
-        const gap = 5.5 + this.r() * 3.5
-        this.addOb('car', lane, meet, OB.car.len, vs)
-        this.addOb('car', lane, meet + OB.car.len + gap, OB.car.len, this.carVs(L))
-        rowEnd = Math.max(rowEnd, meet + 2 * OB.car.len + gap)
+      } else if (t === 'K') {
+        this.addOb('block', lane, s0, OB.block.len)
+        rowEnd = Math.max(rowEnd, s0 + OB.block.len)
       } else if (t === 'G') {
         this.addOb('gap', lane, s0, gapLen)
         rowEnd = Math.max(rowEnd, s0 + gapLen)

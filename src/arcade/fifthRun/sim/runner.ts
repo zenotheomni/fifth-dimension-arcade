@@ -1,6 +1,7 @@
 /**
  * Fifth Glide — fixed-step on-foot runner sim (120 Hz).
- * Lives (3), oncoming cars, 💫 stars, Fifth Dimension logo = 15s invincible.
+ * Temple Run chase: dark energy behind you, stumbles let it close in, caught / fall = −1 life (3).
+ * 💫 stars = bonus metres; Fifth Dimension logo = 10 s invincible + 1.5× surge.
  */
 import {
   BODY,
@@ -13,11 +14,13 @@ import {
   OB,
   POWER_TICKS,
   SLIDE_TICKS,
-  STAR_BASE,
-  STAR_FLAT,
+  BOOST,
+  CHASE,
+  SLOW_TICKS,
+  STAR_M,
   START_LIVES,
-  TIME_PTS,
   FR_HZ,
+  warmAt,
   laneX,
   multFor,
   speedAt,
@@ -32,12 +35,15 @@ export type RunEvent =
   | { type: 'mult'; mult: number }
   | { type: 'power'; kind: PowerKind; id: number }
   | { type: 'hit'; ob: number; kind: ObKind; lives: number }
+  | { type: 'stumble'; ob: number; kind: ObKind }
+  | { type: 'life'; cause: 'caught' | 'fall'; lives: number }
+  | { type: 'boostEnd' }
   | { type: 'jump' }
   | { type: 'slide' }
   | { type: 'land' }
   | { type: 'lane'; dir: -1 | 1 }
   | { type: 'bump'; dir: -1 | 1 }
-  | { type: 'dead'; kind: ObKind; ob: number }
+  | { type: 'dead'; kind: string; ob: number }
 
 export type RunState = {
   tick: number
@@ -51,13 +57,20 @@ export type RunState = {
   slide: number
   slideOnLand: boolean
   dead: boolean
-  deathKind: ObKind | null
+  deathKind: string | null
   deathOb: number
   lives: number
   /** 5D logo invuln ticks remaining */
   hand: number
   /** brief post-hit i-frames */
   invuln: number
+  /** dark energy closeness 0..1 */
+  threat: number
+  /** stumble slow-down ticks */
+  slowT: number
+  stumbles: number
+  caughtN: number
+  fallN: number
   keys: number
   combo: number
   maxCombo: number
@@ -90,6 +103,11 @@ export function newRun(): RunState {
     lives: START_LIVES,
     hand: 0,
     invuln: 0,
+    threat: 0,
+    slowT: 0,
+    stumbles: 0,
+    caughtN: 0,
+    fallN: 0,
     keys: 0,
     combo: 0,
     maxCombo: 0,
@@ -105,9 +123,21 @@ export function newRun(): RunState {
   }
 }
 
-/** Distance + time lasted + flat per-star boost + combo star points. */
-export const scoreOf = (st: RunState) =>
-  Math.floor(st.s) + Math.floor((st.tick / FR_HZ) * TIME_PTS) + st.keys * STAR_FLAT + st.keyPts
+/** Score = distance: metres run + STAR_M bonus metres per star. */
+export const scoreOf = (st: RunState) => Math.floor(st.s) + st.keys * STAR_M
+
+/** Speed multiplier from stumble slow-down × logo surge (eased). */
+export function speedMul(st: RunState) {
+  let m = 1
+  if (st.slowT > 0) m *= 1 - (1 - CHASE.slowMul) * (st.slowT / SLOW_TICKS)
+  if (st.hand > 0) {
+    const el = (POWER_TICKS.hand - st.hand) / FR_HZ
+    const left = st.hand / FR_HZ
+    const k = Math.min(1, el / BOOST.easeInS, left / BOOST.easeOutS)
+    m *= 1 + (BOOST.mul - 1) * k
+  }
+  return m
+}
 
 export type StepOpts = {
   /** collect stars / pickups and apply lives (false in survival search → any hit = dead) */
@@ -120,8 +150,8 @@ function carBeside(track: Track, lane: number, s: number, from: number): boolean
   for (let i = Math.max(0, Math.min(from, obs.length) - 2); i < obs.length; i++) {
     const o = obs[i]
     if (o.s > s + ONCOMING_LEAD) break
-    if (o.kind !== 'car' || o.lane !== lane || o.smashed) continue
-    const os = obstacleS(o, s)
+    if (o.kind !== 'block' || o.lane !== lane || o.smashed) continue
+    const os = o.s
     if (os - BODY.halfD - 0.15 < s && os + o.len + BODY.halfD > s) return true
   }
   return false
@@ -176,6 +206,29 @@ export function queueAction(st: RunState, a: Action) {
   st.queuedAt = st.tick
 }
 
+function loseLife(st: RunState, o: Obstacle, cause: 'caught' | 'fall', ev: RunEvent[] | null | undefined) {
+  st.lives--
+  if (cause === 'caught') st.caughtN++
+  else st.fallN++
+  if (st.lives <= 0) {
+    st.dead = true
+    st.deathKind = cause
+    st.deathOb = o.id
+    ev?.push({ type: 'dead', kind: cause, ob: o.id })
+    return
+  }
+  // respawn on safe ground from the same distance: smoke pushed back, grace window
+  st.threat = 0
+  st.slowT = 0
+  st.invuln = POWER_TICKS.respawn
+  if (cause === 'fall') {
+    st.air = true
+    st.vy = JUMP_VY
+    st.slide = 0
+  }
+  ev?.push({ type: 'life', cause, lives: st.lives })
+}
+
 function applyHit(st: RunState, o: Obstacle, opts: StepOpts, ev: RunEvent[] | null | undefined) {
   // Survival search: any hit ends the path
   if (!opts.full) {
@@ -185,21 +238,21 @@ function applyHit(st: RunState, o: Obstacle, opts: StepOpts, ev: RunEvent[] | nu
     ev?.push({ type: 'dead', kind: o.kind, ob: o.id })
     return
   }
-  st.lives--
   o.smashed = true
   if (o.kind === 'gap') {
-    st.air = true
-    st.vy = JUMP_VY
-  }
-  if (st.lives <= 0) {
-    st.dead = true
-    st.deathKind = o.kind
-    st.deathOb = o.id
-    ev?.push({ type: 'dead', kind: o.kind, ob: o.id })
+    loseLife(st, o, 'fall', ev)
     return
   }
-  st.invuln = POWER_TICKS.hitInvuln
-  ev?.push({ type: 'hit', ob: o.id, kind: o.kind, lives: st.lives })
+  st.stumbles++
+  if (st.threat >= CHASE.catchAt) {
+    loseLife(st, o, 'caught', ev)
+    return
+  }
+  st.threat = CHASE.hit
+  st.slowT = SLOW_TICKS
+  st.stumble = Math.round(0.45 * FR_HZ)
+  st.invuln = POWER_TICKS.stumble
+  ev?.push({ type: 'stumble', ob: o.id, kind: o.kind })
 }
 
 /** Advance one fixed tick. */
@@ -239,10 +292,21 @@ export function step(st: RunState, track: Track, opts: StepOpts) {
   } else if (st.slide > 0) st.slide--
 
   st.s += st.v * FR_DT
-  st.v = speedAt(st.s)
+  st.v = speedAt(st.s) * speedMul(st)
 
   if (st.invuln > 0) st.invuln--
-  if (st.hand > 0) st.hand--
+  if (st.slowT > 0) st.slowT--
+  if (st.hand > 0) {
+    st.hand--
+    st.threat = 0
+    if (st.hand === 0) {
+      st.invuln = Math.max(st.invuln, POWER_TICKS.afterBoost)
+      ev?.push({ type: 'boostEnd' })
+    }
+  } else if (st.threat > 0) {
+    const rec = CHASE.recoverS * (1 - CHASE.warmRecoverCut * warmAt(st.s))
+    st.threat = Math.max(0, st.threat - FR_DT / rec)
+  }
   if (st.stumble > 0) st.stumble--
 
   // ── obstacles (use live oncoming positions) ──
@@ -269,12 +333,13 @@ export function step(st: RunState, track: Track, opts: StepOpts) {
     } else if (o.kind === 'overhead') {
       hit = lx < BODY.halfW + OB.overhead.halfW && top > OB.overhead.bottom
     } else {
-      hit = lx < BODY.halfW + OB.car.halfW && st.y < OB.car.h
+      hit = lx < BODY.halfW + OB.block.halfW - 0.2 && st.y < OB.block.h
     }
     if (!hit) continue
     if (protected_) {
       // Hand / post-hit: smash through without losing a life
-      if (st.hand > 0) o.smashed = true
+      // Logo: auto-pass (smash) everything, gaps included. Post-hit grace: pass through.
+      if (st.hand > 0 && o.kind !== 'gap') o.smashed = true
       continue
     }
     applyHit(st, o, opts, ev)
@@ -306,7 +371,7 @@ export function step(st: RunState, track: Track, opts: StepOpts) {
       st.combo++
       if (st.combo > st.maxCombo) st.maxCombo = st.combo
       st.mult = multFor(st.combo)
-      const pts = STAR_BASE * st.mult
+      const pts = STAR_M
       st.keyPts += pts
       ev?.push({ type: 'key', id: k.id, pts, combo: st.combo, mult: st.mult, magnet: false, first: st.keys === 1 })
       if (st.mult > prevMult) ev?.push({ type: 'mult', mult: st.mult })

@@ -12,6 +12,7 @@ import SharePanel from '../social/SharePanel'
 import StoryShareButton from '../social/StoryShareButton'
 import { requestAlertsRefresh } from '../social/alertStore'
 import { createFifthRun, type FifthRunHandle } from './engine'
+import { BOOST, CHASE, FR_HZ, POWER_TICKS, START_LIVES, STAR_M } from './sim/constants'
 import type { FrChallengeConfig, FrEndPayload, FrHudState } from './types'
 import './fifthRun.css'
 
@@ -41,6 +42,8 @@ const initialHud: FrHudState = {
   combo: 0,
   mult: 1,
   lives: 3,
+  threat: 0,
+  timeS: 0,
   callout: null,
   pb: 0,
   newPb: false,
@@ -89,6 +92,9 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
   const [remount, setRemount] = useState(0)
   const [player, setPlayer] = useState<ArcadePlayer | null>(() => getCachedPlayer())
   const [renaming, setRenaming] = useState(false)
+  const [howto, setHowto] = useState(true)
+  const howtoRef = useRef(true)
+  howtoRef.current = howto
   const runIdRef = useRef<string>(newRunId())
   const onRunResultRef = useRef(onRunResult)
   onRunResultRef.current = onRunResult
@@ -170,8 +176,15 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
         })()
       },
     })
+    gameRef.current.setLocked(howtoRef.current)
     return () => destroyGame()
   }, [remount, destroyGame, engineChallenge, challenge, seeded, onChallengeResolved])
+
+  const startFromHowto = () => {
+    setHowto(false)
+    gameRef.current?.start()
+    track('arcade_fifth_run_howto_start')
+  }
 
   const displayPb = Math.max(run?.personal_best ?? 0, ended?.pb ?? hud.pb)
 
@@ -244,7 +257,8 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
 
       <div ref={hostRef} className="fr-stage" />
       <div className="fr-vignette" aria-hidden />
-      {hud.phase === 'playing' && hud.speed > 95 ? <div className="fr-speedwash" aria-hidden /> : null}
+      <div className="fr-threat" aria-hidden style={{ opacity: playing ? Math.min(1, hud.threat * 1.25) : 0 }} />
+      {hud.phase === 'playing' && (hud.speed > 95 || hud.hand > 0) ? <div className={`fr-speedwash${hud.hand > 0 ? ' is-surge' : ''}`} aria-hidden /> : null}
 
       {hud.phase === 'loading' ? (
         <div className="fr-loading" aria-live="polite">
@@ -256,36 +270,35 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
       <div className="fr-hud" aria-live="polite">
         <div className={`fr-board${hud.phase === 'intro' ? ' is-dim' : ''}`}>
           <div className="fr-cell">
-            <span className="fr-cell__label">Score</span>
-            <span className="fr-cell__value">{hud.score.toLocaleString('en-US')}</span>
-          </div>
-          <div className="fr-cell fr-cell--center">
             <span className="fr-cell__label">Stars</span>
             <span className="fr-cell__value">
               <i className="fr-staricon" aria-hidden>💫</i>
               {hud.keys}
             </span>
           </div>
-          <div className="fr-cell fr-cell--right">
+          <div className="fr-cell fr-cell--center fr-cell--main">
             <span className="fr-cell__label">Distance</span>
             <span className="fr-cell__value">
-              {hud.distance}
+              {hud.score.toLocaleString('en-US')}
               <small>m</small>
+            </span>
+          </div>
+          <div className="fr-cell fr-cell--right">
+            <span className="fr-cell__label">Time</span>
+            <span className="fr-cell__value">
+              {hud.timeS}
+              <small>s</small>
             </span>
           </div>
         </div>
 
         <div className="fr-chips">
-          {hud.mult > 1 ? (
-            <span key={`m${hud.mult}`} className={`fr-chip fr-chip--mult fr-chip--x${hud.mult}`}>
-              x{hud.mult} · {hud.combo}
-            </span>
-          ) : hud.combo >= 3 ? (
+          {hud.combo >= 3 ? (
             <span className="fr-chip fr-chip--combo">Combo {hud.combo}</span>
           ) : null}
           {hud.target != null && playing ? (
             <span className={`fr-chip ${hud.score > hud.target ? 'fr-chip--beat' : 'fr-chip--target'}`}>
-              {hud.score > hud.target ? 'Ahead' : `Target ${hud.target.toLocaleString('en-US')}`}
+              {hud.score > hud.target ? 'Ahead' : `Target ${hud.target.toLocaleString('en-US')} m`}
             </span>
           ) : null}
         </div>
@@ -301,7 +314,7 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
         <div className="fr-powers">
           {hud.hand > 0 ? (
             <span className="fr-power fr-power--hand" style={{ ['--p' as string]: hud.hand }}>
-              <i aria-hidden>✦</i>Invincible
+              <i aria-hidden>✦</i>Invincible · {Math.ceil(hud.hand * (POWER_TICKS.hand / FR_HZ))}s
             </span>
           ) : null}
         </div>
@@ -312,10 +325,10 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
           </p>
         ) : null}
 
-        {hud.phase === 'intro' ? (
+        {hud.phase === 'intro' && !howto ? (
           <div className="fr-intro">
             <p className="fr-intro__title">Fifth Glide</p>
-            <p className="fr-intro__tag">How far can you run?</p>
+            <p className="fr-intro__tag">Outrun the dark energy.</p>
             <div className="fr-intro__controls">
               <span>
                 <b>←→</b>Lanes
@@ -339,30 +352,65 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
         ) : null}
       </div>
 
+
+      {howto && !ended ? (
+        <div className="fr-howto" role="dialog" aria-label="How to play Fifth Glide">
+          <div className="fr-howto__card">
+            <p className="fr-howto__eyebrow">How to play</p>
+            <h2 className="fr-howto__title">Fifth Glide</h2>
+            <section>
+              <h3>Controls</h3>
+              <ul className="fr-howto__controls">
+                <li><b>←&nbsp;→</b>Swipe left / right to change lanes</li>
+                <li><b>↑</b>Swipe up to jump barriers &amp; gaps</li>
+                <li><b>↓</b>Swipe down to slide under beams</li>
+              </ul>
+            </section>
+            <section>
+              <h3>Rules</h3>
+              <ul>
+                <li><b>☁</b>Dark energy is chasing you. Stay ahead of it</li>
+                <li><b>⚠</b>Hit an obstacle and you stumble: you slow down and it closes in. Stumble again before you pull away (about {Math.round((CHASE.hit - CHASE.catchAt) * CHASE.recoverS)} s of clean running) and it catches you</li>
+                <li><b>{'♥'.repeat(START_LIVES)}</b>{START_LIVES} lives. Getting caught or falling into a gap costs one, then you respawn and keep running</li>
+                <li><b>☠</b>Lose all {START_LIVES} and the run is over. It gets faster the farther you go</li>
+              </ul>
+            </section>
+            <section>
+              <h3>Scoring</h3>
+              <ul>
+                <li><b>m</b>Your score is your distance, 1 point per metre</li>
+                <li><b>💫</b>Each shooting star adds +{STAR_M} m</li>
+                <li><b className="fr-howto__logo">5D</b>Rare 5D logo: {Math.round(POWER_TICKS.hand / FR_HZ)} s invincible plus a {BOOST.mul}× speed surge. Nothing can catch you, you can’t fall, you blast through everything</li>
+              </ul>
+            </section>
+            <button type="button" className="ffa-btn ffa-btn--primary fr-howto__start" onClick={startFromHowto} disabled={hud.phase === 'loading'}>
+              {hud.phase === 'loading' ? 'Loading…' : 'START'}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {ended && !(challenge && onRunResult) ? (
         <div className="fr-end">
           <p className="fr-end__eyebrow">{seeded ? (seeded.rivalHandle ? `Rematch vs ${seeded.rivalHandle}` : 'Set the bar') : 'Fifth Glide'}</p>
           <h2>{headline}</h2>
-          <div className="fr-end__score">{ended.score.toLocaleString('en-US')}</div>
+          <div className="fr-end__score">
+            {ended.score.toLocaleString('en-US')}
+            <small> m</small>
+          </div>
           <div className="fr-end__stats">
             <span>
-              <b>{ended.distance}</b>m
+              <b>{ended.ranM.toLocaleString('en-US')}</b>m run
+            </span>
+            <span>
+              <b>{ended.keys}</b>stars (+{ended.starM} m)
             </span>
             <span>
               <b>{Math.round(ended.durationS)}s</b>lasted
             </span>
-            <span>
-              <b>{ended.keys}</b>stars
-            </span>
-            <span>
-              <b>{ended.maxCombo}</b>best streak
-            </span>
-            <span>
-              <b>{ended.livesLeft}</b>lives left
-            </span>
           </div>
           <p className="fr-end__pb">
-            Personal best <strong>{displayPb.toLocaleString('en-US')}</strong>
+            Personal best <strong>{displayPb.toLocaleString('en-US')} m</strong>
             {boardLine ? (
               <>
                 {' '}
@@ -374,7 +422,7 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
           {runState === 'error' ? <p className="fr-end__note">Couldn’t post this run — check your connection.</p> : null}
           {challenge ? (
             <p className="fr-end__target">
-              Target <strong>{challenge.targetScore}</strong> · {challenge.creatorHandle}
+              Target <strong>{challenge.targetScore} m</strong> · {challenge.creatorHandle}
             </p>
           ) : null}
 
@@ -439,7 +487,7 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
       {ended && challenge && onRunResult ? (
         <div className="fr-end">
           <p className="fr-end__eyebrow">Fifth Glide</p>
-          <h2>Final: {ended.score.toLocaleString('en-US')}</h2>
+          <h2>Final: {ended.score.toLocaleString('en-US')} m</h2>
           <p className="fr-end__pb">{runState === 'error' ? 'Couldn’t post — check your connection.' : 'Tallying the head-to-head…'}</p>
         </div>
       ) : null}
