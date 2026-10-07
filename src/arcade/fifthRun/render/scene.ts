@@ -873,10 +873,10 @@ export class FrScene {
           continue
         }
         item.group.scale.setScalar(1 + age * 4)
-        ;(item.halo.material as THREE.MeshBasicMaterial).opacity = 0.65 * (1 - age / 0.3)
+        ;(item.halo.material as THREE.MeshBasicMaterial).opacity = 0.45 * (1 - age / 0.3)
       } else {
         item.group.scale.setScalar(1)
-        ;(item.halo.material as THREE.MeshBasicMaterial).opacity = 0.65
+        ;(item.halo.material as THREE.MeshBasicMaterial).opacity = 0.45
       }
       item.group.visible = true
       item.group.position.set(laneX(p.lane), 0, -p.s)

@@ -513,7 +513,7 @@ export function buildPickup(kind: 'hand', glow: THREE.Texture, emblem: THREE.Tex
   if (emblem) {
     const disc = new THREE.Mesh(
       new THREE.CircleGeometry(0.72, 48),
-      new THREE.MeshBasicMaterial({ map: emblem, transparent: true, side: THREE.DoubleSide, depthWrite: false, toneMapped: false }),
+      new THREE.MeshBasicMaterial({ map: emblem, transparent: true, side: THREE.DoubleSide, depthWrite: true, alphaTest: 0.3, toneMapped: false }),
     )
     spin.add(disc)
     const back = disc.clone()
@@ -539,13 +539,14 @@ export function buildPickup(kind: 'hand', glow: THREE.Texture, emblem: THREE.Tex
     spin.add(five)
   }
 
-  const halo = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 3.4), glowMaterial(glow, color, 0.8))
+  const halo = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 3.4), glowMaterial(glow, color, 0.45))
   halo.position.y = 1.35
+  halo.renderOrder = -1
   group.add(halo)
   // wide far-visibility flare
   const flare = new THREE.Mesh(new THREE.PlaneGeometry(7, 7), glowMaterial(glow, '#b48cff', 0.35))
   flare.position.y = 1.35
-  flare.position.z = -0.05
+  flare.renderOrder = -2
   group.add(flare)
   const rim = new THREE.Mesh(
     new THREE.RingGeometry(0.74, 0.84, 48),
@@ -571,7 +572,7 @@ export function buildPickup(kind: 'hand', glow: THREE.Texture, emblem: THREE.Tex
       fragmentShader: 'uniform vec3 uColor; varying float vY; void main(){ gl_FragColor = vec4(uColor * pow(1.0 - vY, 1.6) * 0.6, 1.0); }',
     }),
   )
-  beam.position.y = 13
+  beam.position.y = 2.3 + 13
   group.add(beam)
   return { group, spin, halo, ring, flare, beam }
 }

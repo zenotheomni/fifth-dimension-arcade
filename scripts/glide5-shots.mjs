@@ -1,6 +1,7 @@
 /**
  * Fifth Glide screenshots + clip (390×844, deterministic manual stepping, mocked API — nothing hits prod).
- *   npx vite preview --port 4173 &   node scripts/fr-shots.mjs [idle run jump powerup crash end video]
+ *   npm run build && npx vite preview --port 4183 &   PORT=4183 VIDEO=0 node scripts/glide5-shots.mjs
+ *   Writes ${PREFIX:-glide5}-{howto,run,stars,logo,invincible,end}.png (+ -run.mp4 unless VIDEO=0) to $OUT.
  */
 import { chromium } from 'playwright'
 import fs from 'fs'
@@ -10,9 +11,6 @@ import { execFileSync } from 'child_process'
 const OUT = process.env.OUT || '/workspace/arcade-shots'
 const SEED = process.env.SEED || 'run:5d1959ca'
 const Q = process.env.Q || 'high'
-const ONLY = process.argv.slice(2)
-const P = process.env.PREFIX || 'glide2'
-const want = (n) => ONLY.length === 0 || ONLY.includes(n)
 fs.mkdirSync(OUT, { recursive: true })
 
 const PNG1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64')
@@ -75,7 +73,7 @@ await page.evaluate(() => { globalThis.__FR.run.threat = 0 })
 await adv(1500)
 await shot('stars')
 // logo pickup ~38 m ahead in the runner's lane (autopilot off so it doesn't dodge the shot)
-await page.evaluate(() => { const e = globalThis.__FR; const s = e.run.s + Number(process.env.LOGO_M || 20); const pk = e.track.pickups; const i = pk.findIndex((p) => p.s > s); pk.splice(i < 0 ? pk.length : i, 0, { id: 99999, kind: 'hand', lane: e.run.lane, s, y: 1, taken: false, takenTick: -1 }); for (const o of e.track.obstacles) if (o.lane === e.run.lane && o.s > e.run.s && o.s < s + 5) o.smashed = true })
+await page.evaluate(() => { const e = globalThis.__FR; const s = e.run.s + 20; const pk = e.track.pickups; const i = pk.findIndex((p) => p.s > s); pk.splice(i < 0 ? pk.length : i, 0, { id: 99999, kind: 'hand', lane: e.run.lane, s, y: 1, taken: false, takenTick: -1 }); for (const o of e.track.obstacles) if (o.lane === e.run.lane && o.s > e.run.s && o.s < s + 5) o.smashed = true })
 await adv(250)
 await shot('logo')
 console.log('mv', await page.evaluate(() => { const e = globalThis.__FR; const c = [0,0,0,0]; for (const k of e.track.keys) if (k.s > e.run.s && k.s < e.run.s + 150) c[k.mv]++; return c }))

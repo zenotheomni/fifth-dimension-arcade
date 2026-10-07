@@ -135,7 +135,7 @@ export function speedMul(st: RunState) {
   if (st.hand > 0) {
     const el = (POWER_TICKS.hand - st.hand) / FR_HZ
     const left = st.hand / FR_HZ
-    const k = Math.min(1, el / BOOST.easeInS, left / BOOST.easeOutS)
+    const k = Math.max(0, Math.min(1, el / BOOST.easeInS, left / BOOST.easeOutS))
     m *= 1 + (BOOST.mul - 1) * k
   }
   return m
