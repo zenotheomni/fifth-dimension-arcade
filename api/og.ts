@@ -229,7 +229,7 @@ export async function renderStoryCard(card: ScoreCard, origin: string): Promise<
   if (card.contest) chips.push({ text: `#${card.contest.rank} IN CONTEST`, color: '#ffd34d' })
   if (card.alltime_rank) chips.push({ text: `#${card.alltime_rank} ALL-TIME`, color: '#ff4fa3' })
   else if (card.weekly_rank) chips.push({ text: `#${card.weekly_rank} THIS WEEK`, color: '#ff4fa3' })
-  if (card.best_streak && card.best_streak > 1) chips.push({ text: `BEST STREAK X${card.best_streak}`, color: '#00e5ff' })
+  if (card.best_streak && card.best_streak > 1) chips.push({ text: `BEST COMBO ${card.best_streak}`, color: '#00e5ff' })
   const host = publicArcadeHost()
 
   const displayText = `FIFTH FLOOR ARCADE${game}${modeLabel}${handle}${score}${chips.map((c) => c.text).join('')}CAN YOU BEAT IT?PTS·0123456789`

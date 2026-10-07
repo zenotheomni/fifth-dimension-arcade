@@ -76,7 +76,9 @@ const suites = []
 suites.push(run('straight_medium', Array.from({ length: 16 }, (_, i) => ({ speed: 0.95 + (i % 5) * 0.05, dx: 0 }))))
 suites.push(run('angled_wide', Array.from({ length: 10 }, (_, i) => ({ speed: 1.05, dx: i % 2 ? -70 : 70 }))))
 suites.push(run('weak_front', Array.from({ length: 10 }, (_, i) => ({ speed: 0.55 + (i % 5) * 0.06, dx: 0 }))))
-suites.push(run('strong_bank', Array.from({ length: 12 }, (_, i) => ({ speed: 1.3 + (i % 3) * 0.06, dx: (i % 2) * 8 - 4 }))))
+// Well-aimed bank attempts: hard-ish flick, small aim jitter (own rng so other suites are unchanged)
+const bankRnd = mulberry32(4242)
+suites.push(run('strong_bank', Array.from({ length: 60 }, () => ({ speed: 1.3 + bankRnd() * 0.12, dx: (bankRnd() - 0.5) * 10 }))))
 suites.push(run('extreme_over', Array.from({ length: 10 }, (_, i) => ({ speed: 2.1 + (i % 5) * 0.08, dx: (i % 3) * 6 - 6 }))))
 suites.push(
   run(
@@ -119,13 +121,14 @@ const checks = [
   ['penetration 0 (all suites)', suites.every((s) => s.penetrate === 0)],
   ['early miss never cuts off a make', suites.every((s) => s.cutOff === 0)],
   ['straight_medium ~100%', get('straight_medium').makeRate >= 0.95],
-  ['decent_spread 45–55%', get('decent_spread').makeRate >= 0.45 && get('decent_spread').makeRate <= 0.55],
-  ['novice_spread 20–35%', get('novice_spread').makeRate >= 0.2 && get('novice_spread').makeRate <= 0.35],
-  ['clean_flick ≥95%', get('clean_flick').makeRate >= 0.95],
+  ['decent_spread 40–45%', get('decent_spread').makeRate >= 0.4 && get('decent_spread').makeRate <= 0.45],
+  ['novice_spread ~20% (17–25%)', get('novice_spread').makeRate >= 0.17 && get('novice_spread').makeRate <= 0.25],
+  ['clean_flick ≥90%', get('clean_flick').makeRate >= 0.9],
   ['decent swishes < plain makes', get('decent_spread').swish < get('decent_spread').rimIn + get('decent_spread').bank],
   ['weak_front misses', get('weak_front').makeRate <= 0.2],
   ['angled_wide misses', get('angled_wide').makeRate === 0],
-  ['strong_bank uses glass', get('strong_bank').boardHit >= 10],
+  ['strong_bank uses glass', get('strong_bank').boardHit >= 50],
+  ['strong_bank 75–85% (not automatic)', get('strong_bank').makeRate >= 0.75 && get('strong_bank').makeRate <= 0.85],
   ['strong_bank never over', get('strong_bank').over === 0],
   ['extreme mostly over', get('extreme_over').over >= 8],
   ['over only on extreme', ['straight_medium', 'decent_spread', 'novice_spread', 'clean_flick', 'weak_front', 'strong_bank', 'angled_wide', 'seeded_decent'].every((n) => get(n).over === 0)],

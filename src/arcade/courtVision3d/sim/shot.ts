@@ -17,15 +17,18 @@ export const FLICK3D = {
   speedRef: 1.05,
   extremeSpeed: 2.05,
   /** metres of lateral miss at the rim per unit tan(flick angle) */
-  lateralScale: 0.88,
+  lateralScale: 1.0,
   /** Aim-assist strength (0..1) and radius (m) */
-  assistLat: 0.28,
+  assistLat: 0.2,
   assistLatR: 0.15,
-  assistDepth: 0.18,
+  assistDepth: 0.12,
   /** metres of depth miss per unit power error in the make window */
-  depthScale: 1.0,
+  depthScale: 1.25,
   /** bank: lateral aim error is amplified off the glass */
-  bankLatGain: 1.8,
+  bankLatGain: 1.6,
+  /** bank: power that lands the ideal arc; off it, the arc drifts (m apex per unit power) */
+  bankSweet: 1.3,
+  bankApexGain: 0.4,
   /** Power windows */
   weakBelow: 0.85,
   bankAbove: 1.17,
@@ -137,7 +140,7 @@ export function planShot(input: FlickInput, ctx: ShotContext): ShotPlan {
     v = ballistic(p0, target, rimC.y + 0.95 + (power - 1) * 1.4)
   } else if (zone === 'bank') {
     const hc = 0.24 + (power - FLICK3D.bankAbove) * 1.05
-    const plan = planBank(p0, ctx.hoop, rimC.x + lateral * FLICK3D.bankLatGain, hc)
+    const plan = planBank(p0, ctx.hoop, rimC.x + lateral * FLICK3D.bankLatGain, hc, (power - FLICK3D.bankSweet) * FLICK3D.bankApexGain)
     target = plan.target
     v = plan.v
   } else {
@@ -163,7 +166,7 @@ export function planShot(input: FlickInput, ctx: ShotContext): ShotPlan {
  * Bank planner: search flight apex so the ball kisses the glass `hc` metres
  * above the rim and the rebound drops through. Uses the real stepper.
  */
-function planBank(p0: V3, hoop: HoopPose, x: number, hc: number) {
+function planBank(p0: V3, hoop: HoopPose, x: number, hc: number, apexErr = 0) {
   const contact: V3 = {
     x,
     y: DIM.rimY + hoop.y + hc,
@@ -189,7 +192,8 @@ function planBank(p0: V3, hoop: HoopPose, x: number, hc: number) {
     const sc = b.scored && b.rimHits === 0 ? -1 : b.scored ? bestD * 0.5 : bestD + (hitBoard ? 0 : 5)
     if (sc < best.score) best = { score: sc, v, apex }
   }
-  return { v: best.v, target: contact }
+  const v = apexErr ? ballistic(p0, contact, best.apex + apexErr) : best.v
+  return { v, target: contact }
 }
 
 export type ShotOutcome = {
