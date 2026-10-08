@@ -18,6 +18,7 @@ import {
   HANG,
   BOOST,
   CHASE,
+  DOWN_S,
   SLOW_TICKS,
   STAR_M,
   START_LIVES,
@@ -30,6 +31,8 @@ import {
 import { keyPos, obstacleS, type ObKind, type Obstacle, type PowerKind, type Track } from './track'
 
 export type Action = 'left' | 'right' | 'jump' | 'slide'
+/** fall = missed a gap · crash = boulder / oncoming car · caught = the UFO got you */
+export type LifeCause = 'caught' | 'fall' | 'crash'
 
 export type RunEvent =
   | { type: 'key'; id: number; pts: number; combo: number; mult: number; magnet: boolean; first: boolean }
@@ -38,7 +41,8 @@ export type RunEvent =
   | { type: 'power'; kind: PowerKind; id: number }
   | { type: 'hit'; ob: number; kind: ObKind; lives: number }
   | { type: 'stumble'; ob: number; kind: ObKind }
-  | { type: 'life'; cause: 'caught' | 'fall'; lives: number }
+  | { type: 'life'; cause: LifeCause; lives: number }
+  | { type: 'respawn'; cause: LifeCause }
   | { type: 'boostEnd' }
   | { type: 'jump' }
   | { type: 'slide' }
@@ -73,6 +77,7 @@ export type RunState = {
   stumbles: number
   caughtN: number
   fallN: number
+  crashN: number
   keys: number
   combo: number
   maxCombo: number
@@ -81,6 +86,12 @@ export type RunState = {
   stumble: number
   /** hang-assist ticks used this jump */
   hang: number
+  /** Temple Run continue: ticks left in the fall / crash before respawning in place (0 = running) */
+  down: number
+  downMax: number
+  downKind: LifeCause | null
+  /** where to respawn (gap far edge for a fall) */
+  downS: number
   queued: Action | null
   queuedAt: number
   latQ: Action | null
@@ -112,6 +123,7 @@ export function newRun(): RunState {
     stumbles: 0,
     caughtN: 0,
     fallN: 0,
+    crashN: 0,
     keys: 0,
     combo: 0,
     maxCombo: 0,
@@ -119,6 +131,10 @@ export function newRun(): RunState {
     keyPts: 0,
     stumble: 0,
     hang: 0,
+    down: 0,
+    downMax: 0,
+    downKind: null,
+    downS: 0,
     queued: null,
     queuedAt: 0,
     latQ: null,
@@ -171,7 +187,7 @@ function hurdleAhead(track: Track, st: RunState, ahead: number): boolean {
   for (let i = Math.max(0, st.obCur - 2); i < obs.length; i++) {
     const o = obs[i]
     if (o.s > st.s + ahead + BODY.halfD) break
-    if (o.smashed || o.kind === 'block' || o.kind === 'overhead') continue
+    if (o.smashed || o.kind === 'block' || o.kind === 'car' || o.kind === 'overhead') continue
     if (Math.abs(st.x - laneX(o.lane)) > 1.0) continue
     if (o.s + o.len < st.s - BODY.halfD) continue
     return true
@@ -227,10 +243,11 @@ export function queueAction(st: RunState, a: Action) {
   st.queuedAt = st.tick
 }
 
-function loseLife(st: RunState, o: Obstacle, cause: 'caught' | 'fall', ev: RunEvent[] | null | undefined) {
+function loseLife(st: RunState, o: Obstacle, cause: LifeCause, ev: RunEvent[] | null | undefined) {
   st.lives--
   if (cause === 'caught') st.caughtN++
-  else st.fallN++
+  else if (cause === 'fall') st.fallN++
+  else st.crashN++
   if (st.lives <= 0) {
     st.dead = true
     st.deathKind = cause
@@ -238,16 +255,42 @@ function loseLife(st: RunState, o: Obstacle, cause: 'caught' | 'fall', ev: RunEv
     ev?.push({ type: 'dead', kind: cause, ob: o.id })
     return
   }
-  // respawn on safe ground from the same distance: smoke pushed back, grace window
+  // Temple Run continue: play the fall / crash in place, then respawn on this spot (see step()).
+  st.down = Math.round(DOWN_S[cause] * FR_HZ)
+  st.downMax = st.down
+  st.downKind = cause
+  st.downS = cause === 'fall' ? Math.max(st.s, o.s + o.len + 0.6) : st.s
   st.threat = 0
   st.slowT = 0
-  st.invuln = POWER_TICKS.respawn
-  if (cause === 'fall') {
-    st.air = true
-    st.vy = JUMP_VY
-    st.slide = 0
-  }
+  st.queued = null
+  st.latQ = null
+  st.slideOnLand = false
   ev?.push({ type: 'life', cause, lives: st.lives })
+}
+
+/** End of the downed beat: back on your feet at the same spot, flashing (i-frames), still running. */
+function respawn(st: RunState, track: Track, ev: RunEvent[] | null | undefined) {
+  const cause = st.downKind ?? 'crash'
+  st.s = st.downS
+  st.x = laneX(st.lane)
+  st.y = 0
+  st.vy = 0
+  st.air = false
+  st.slide = 0
+  st.stumble = 0
+  st.invuln = POWER_TICKS.respawn
+  // ease back up to speed instead of snapping
+  st.slowT = SLOW_TICKS
+  st.downKind = null
+  st.downMax = 0
+  // whatever downed you is cleared so you never respawn inside it
+  for (let i = Math.max(0, st.obCur - 2); i < track.obstacles.length; i++) {
+    const o = track.obstacles[i]
+    if (o.s > st.s + 3) break
+    const os = obstacleS(o, st.s)
+    if (os <= st.s + 3 && os + o.len >= st.s - 1 && o.lane === st.lane && o.kind !== 'gap') o.smashed = true
+  }
+  ev?.push({ type: 'respawn', cause })
 }
 
 function applyHit(st: RunState, o: Obstacle, opts: StepOpts, ev: RunEvent[] | null | undefined) {
@@ -259,9 +302,14 @@ function applyHit(st: RunState, o: Obstacle, opts: StepOpts, ev: RunEvent[] | nu
     ev?.push({ type: 'dead', kind: o.kind, ob: o.id })
     return
   }
-  o.smashed = true
   if (o.kind === 'gap') {
     loseLife(st, o, 'fall', ev)
+    return
+  }
+  o.smashed = true
+  // walls: running into a boulder or an oncoming car costs a life outright
+  if (o.kind === 'block' || o.kind === 'car') {
+    loseLife(st, o, 'crash', ev)
     return
   }
   st.stumbles++
@@ -281,6 +329,16 @@ export function step(st: RunState, track: Track, opts: StepOpts) {
   if (st.dead) return
   const ev = opts.events
   st.tick++
+
+  if (st.down > 0) {
+    // downed: falling into the hole / knocked flat — no forward motion, inputs ignored
+    st.down--
+    st.v = 0
+    st.queued = null
+    st.latQ = null
+    if (st.down === 0) respawn(st, track, ev)
+    return
+  }
 
   if (st.latQ) {
     applyAction(st, st.latQ, track, ev)
@@ -366,6 +424,8 @@ export function step(st: RunState, track: Track, opts: StepOpts) {
     } else if (o.kind === 'pipe') {
       // chest-high bar: slide under (head below) or jump over (feet above)
       hit = lx < BODY.halfW + OB.pipe.halfW && top > OB.pipe.bottom && st.y < OB.pipe.top
+    } else if (o.kind === 'car') {
+      hit = lx < BODY.halfW + OB.car.halfW - 0.12 && st.y < OB.car.h
     } else {
       hit = lx < BODY.halfW + OB.block.halfW - 0.2 && st.y < OB.block.h
     }

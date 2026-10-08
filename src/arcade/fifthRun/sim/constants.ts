@@ -62,6 +62,8 @@ export const OB = {
   overhead: { bottom: 1.2, len: 0.45, halfW: 0.95 },
   pipe: { bottom: 0.95, top: 1.2, len: 0.3, halfW: 0.95 },
   block: { h: 2.6, len: 1.6, halfW: 0.85 },
+  /** oncoming car (dodge by changing lanes); hits cost a life like a boulder */
+  car: { h: 1.5, len: 4.3, halfW: 0.86 },
   gap: { halfW: 1.0 },
 } as const
 
@@ -69,6 +71,23 @@ export const OB = {
 export const ONCOMING_WINDOW = 95
 
 export const START_LIVES = 3
+
+/**
+ * Oncoming cars: none before CARS.startM, then the chance that an open stretch between rows gets a
+ * car ramps linearly to CARS.pMax by CARS.fullM. Each closes at vs ∈ [vsMin, vsMax] m/s on top of
+ * your own speed, and needs ≥ CARS.reactS of your travel after the previous row to switch lanes.
+ */
+export const CARS = { startM: 1100, fullM: 4200, pMax: 0.5, vsMin: 8, vsMax: 15, reactS: 0.5 }
+export const carChanceAt = (s: number) =>
+  s < CARS.startM ? 0 : s >= CARS.fullM ? CARS.pMax : 0.08 + ((CARS.pMax - 0.08) * (s - CARS.startM)) / (CARS.fullM - CARS.startM)
+
+/**
+ * Temple Run continue: a life lost plays the fall / crash for DOWN_S seconds (no forward motion),
+ * then you respawn at that spot (just past a gap) and keep running, flashing for POWER_TICKS.respawn.
+ */
+export const DOWN_S = { fall: 1.05, crash: 0.85, caught: 0.95 }
+/** Logo invincibility: the runner blinks for the last BLINK_S seconds (still invincible). */
+export const BLINK_S = 3
 
 /**
  * Dark-energy chase. `threat` 0..1 = how close the smoke is (1 = on your heels).
@@ -85,8 +104,8 @@ export const BOOST = { mul: 1.5, easeInS: 0.4, easeOutS: 1.0 }
 export const POWER_TICKS = {
   /** Fifth Dimension logo — 10 s invincible + 1.5× speed surge */
   hand: 10 * FR_HZ,
-  /** grace after the surge ends (slow-down never kills instantly) */
-  afterBoost: Math.round(1.5 * FR_HZ),
+  /** no grace after the surge: when the blinking stops you are vulnerable again */
+  afterBoost: 0,
   /** grace after losing a life (respawn) */
   respawn: Math.round(2.5 * FR_HZ),
   /** brief i-frames after a stumble so one row can't double-hit */

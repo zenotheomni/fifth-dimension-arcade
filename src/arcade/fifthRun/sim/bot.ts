@@ -56,7 +56,7 @@ export function oracle(track: Track, start: RunState, maxS: number, dtTicks = 6,
         let dead = false
         for (let k = 0; k < dtTicks; k++) {
           step(c, track, NOEV)
-          if (c.dead) {
+          if (c.dead || c.down > 0) {
             dead = true
             break
           }
@@ -200,7 +200,7 @@ export class RuleBot {
       const o = track.obstacles[i]
       if (o.s > until) break
       if (o.smashed || o.s + o.len < st.s - 0.3 || o.lane !== lane) continue
-      if (o.kind === 'block' || this.done.has(o.id)) continue
+      if (o.kind === 'block' || o.kind === 'car' || this.done.has(o.id)) continue
       const mid = o.s + o.len / 2
       const lead = o.kind === 'overhead' ? o.s - st.s - v * 0.3 : mid - st.s - (v * JUMP_T) / 2
       const tk = st.tick + Math.round((lead / v) * FR_HZ)
@@ -216,7 +216,7 @@ export class RuleBot {
     while (c.s < untilS) {
       while (qi < plan.length && plan[qi].tick <= c.tick) queueAction(c, plan[qi++].a)
       step(c, track, NOEV)
-      if (c.dead) return null
+      if (c.dead || c.down > 0) return null
     }
     while (qi < plan.length) queueAction(c, plan[qi++].a)
     return c
@@ -228,7 +228,8 @@ export class RuleBot {
     let end = -1
     for (let i = Math.max(0, st.obCur - 2); i < track.obstacles.length; i++) {
       const o = track.obstacles[i]
-      if (o.smashed || o.s + o.len < st.s - 0.3) continue
+      // oncoming cars aren't a row (they move); the rows around them decide the horizon
+      if (o.smashed || o.kind === 'car' || o.s + o.len < st.s - 0.3) continue
       if (rowS < 0) {
         if (o.s > until) return null
         rowS = o.s

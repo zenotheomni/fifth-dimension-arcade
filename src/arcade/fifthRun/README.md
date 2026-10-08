@@ -12,15 +12,29 @@ base + EVA suit/helmet/PLSS — see CREDITS.md). AnimationMixer blends mocap run
 speed), a leap pose for jumps, crouch for slides, idle on the start line; bank/lean/crash tumble on a
 parent group. Visor/metal reflect a small neon PMREM env (`render/env.ts`); a chase spot keeps the suit
 reading white. The procedural hooded `RunnerFigure` is the instant/failed-load fallback.
-No traffic: Temple Run kit only — low barriers (jump), overhead beams (slide), gaps (jump or fall),
-tall crate stacks (switch lanes); full-width BBB / OOO / GGG rows force the jump / slide.
+Temple Run kit — low barriers (jump), overhead beams (slide), gaps (jump or fall), boulders / crate stacks
+(switch lanes); full-width BBB / OOO / GGG rows force the jump / slide. Past 1.1 km, **oncoming cars**
+drive at you down a lane (switch lanes to dodge).
+
+## Oncoming cars (`CARS` / `carChanceAt` in `sim/constants.ts`, `maybeCar` in `sim/track.ts`)
+- None before 1100 m (~30 s). Each open stretch then rolls a car: 8% at 1100 m, rising linearly to 50% by 4200 m.
+- A car drives toward you at 8–15 m/s. It is placed so it meets you ≥ max(0.5 s, 10 m) after the previous row, so
+  there is always time to change lanes, and its lane is kept clear of other obstacles and star lines until it has passed.
+  Headlights + flares read from well ahead.
+- Hitting one costs a life (like a boulder) unless you're invincible (then you smash it).
 
 ## Chase (core tension)
-- A wall of dark energy (`render/darkEnergy.ts`: layered domain-warped fbm smoke slabs + violet
-  filaments) follows the runner; `threat` 0..1 pulls it in, CSS `.fr-threat` darkens the edges, rumble SFX.
-- Hit an obstacle → stumble: threat = 0.75, speed ×0.62 easing back over 1.1 s, 0.5 s i-frames.
+- A small **UFO** (`render/ufo.ts`: ~0.95 m metal saucer, glowing dome, chasing rim lights, violet
+  under-glow, tractor beam when it catches you) skims the road behind the runner; `threat` 0..1 pulls it in
+  (below the frame when clean → a small craft at the bottom of the frame after a stumble → on his heels when caught).
+  CSS `.fr-threat` darkens the edges, rumble SFX.
+- Hit a small obstacle (hurdle / beam / pipe) → stumble: threat = 0.75, speed ×0.62 easing back over 1.1 s, 0.5 s i-frames.
 - Stumble again while threat ≥ 0.3 (≈3 s of clean running to recover; recovery is up to 45% faster in the warm-up) → **caught**.
-- **3 lives.** Caught or falling into a gap costs one; respawn at the same distance with the smoke reset and 2.5 s grace. 3rd life lost = game over.
+- **3 lives.** Caught by the UFO, falling into a gap, or hitting a boulder / car costs one. Temple Run continue: the
+  fall (~1.05 s, he drops into the pit) or crash (~0.85 s) plays, then he respawns **at the same spot** (just past the
+  gap for a fall), flashing with 2.5 s grace, and keeps running (no restart). 3rd life lost = game over.
+- Gaps are lit pits cut into the road (`uHoles` in the road shader): cyan LED kerbs on all four edges, a spill glow on the
+  road ahead of them and rim light down the walls, readable ~1.5 s out.
 
 ## Controls
 - Swipe ← / → (or A/D, arrows): change lane
@@ -32,12 +46,13 @@ tall crate stacks (switch lanes); full-width BBB / OOO / GGG rows force the jump
 - Star streak (combo) is tracked for callouts / best streak only.
 - Rare Fifth Dimension logo (`public/art/glide-logo-512.webp`, from Jenks's emblem): **10 s** invincible
   (can't be caught or fall, smashes through obstacles) + **1.5× speed surge** (eased in 0.4 s / out 1 s, wider FOV,
-  speed lines, smoke fades away), then 1.5 s grace.
+  speed lines, the UFO falls away). He blinks for the last 3 s (`BLINK_S`) and is still invincible; when it ends he is
+  vulnerable straight away (no post-boost grace).
 
 ## Difficulty curve (first-timer friendly)
 - Speed `30 → 60 m/s`, `k = 3000` (≈37.5 m/s at 1 km, ≈43.6 at 2.5 km). Stars come in Temple Run coin lines: 8–15 stars 3 m apart in one lane (arcing over hurdles / gaps), then ≥ 40 m (≥ ~1.1 s) of nothing; some lines bob slowly (render only).
 - Obstacles: low rubble hurdle (jump; clear whenever feet are above 0.6 m), high beam (slide), chest-high pipe (jump or slide), boulder (change lane), gap (jump). Hits only when the body box intersects the obstacle box; a falling jump floats briefly (hang assist) over a hurdle just ahead.
-- Chaser: a compact ~0.95 × 1.05 m knot of dark smoke; off-frame when you run clean, a small patch at the bottom of the frame after a stumble.
+- Chaser: a ~0.95 m UFO; off-frame when you run clean, a small craft at the bottom of the frame after a stumble.
 - Warm-up `WARM_M = 750 m` (≈ first 40 s): no double-crate / mixed rows until mid-warm-up, up to ~2.9× row spacing,
   no crate in the start lane early, 110 m empty runway. Level held at 0 for 460 m, then `(s−460)/(s−460+950)`.
 - Harness: `node scripts/fr-tune.mjs` (full) / `node scripts/fr-quick.mjs` (bots only). The `rookie`

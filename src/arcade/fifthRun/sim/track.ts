@@ -6,9 +6,9 @@
  * Fifth Dimension logo (15 s invuln) only. Collectibles are shooting stars (💫).
  */
 import { hashSeed, mulberry32 } from '../../core/seededRandom'
-import { JUMP_APEX, JUMP_T, OB, laneX, START_CLEAR_M, levelAt, speedAt, warmAt } from './constants'
+import { CARS, JUMP_APEX, JUMP_T, OB, carChanceAt, laneX, START_CLEAR_M, levelAt, speedAt, warmAt } from './constants'
 
-export type ObKind = 'barrier' | 'overhead' | 'pipe' | 'block' | 'gap'
+export type ObKind = 'barrier' | 'overhead' | 'pipe' | 'block' | 'gap' | 'car'
 /** Rare 5D logo invuln pickup. */
 export type PowerKind = 'hand'
 
@@ -149,6 +149,11 @@ export class Track {
   private lineBob = false
   /** first s a new star may use (after the previous row's jump arc) */
   private starFloor = 0
+  /** lane an oncoming car is driving down (kept clear of obstacles until carUntil) */
+  private carLane = -1
+  private carUntil = 0
+  private carMeet = 0
+  cars = 0
 
   constructor(seed: string) {
     this.seed = seed
@@ -170,6 +175,32 @@ export class Track {
   private addOb(kind: ObKind, lane: number, s: number, len: number, vs = 0) {
     const variant = Math.floor(this.r() * 1000)
     this.obstacles.push({ id: this.nextId++, kind, lane, s: q(s), len: q(len), vs, variant, smashed: false })
+  }
+
+  /**
+   * Oncoming car in the open stretch after this row. It meets you mid-stretch, at least CARS.reactS
+   * of travel after the row so you can switch lanes, preferring a lane this row blocks anyway.
+   */
+  private maybeCar(toks: Tok[], rowEnd: number, v: number, path: number) {
+    const p = carChanceAt(rowEnd)
+    if (p <= 0) return
+    const roll = this.r()
+    if (roll >= p || rowEnd < this.carUntil) return
+    // meets you ≥ reactS after this row; if that lands in the next row, the next rows keep the
+    // car's lane open (see genRow), so there is always somewhere to dodge to
+    const meet = q(rowEnd + Math.max(v * CARS.reactS, 10))
+    const blocked = [0, 1, 2].filter((l) => toks[l] === 'K' && l !== path)
+    const open = [0, 1, 2].filter((l) => toks[l] !== 'K' && l !== path)
+    const pool = blocked.length ? blocked : open
+    if (!pool.length) return
+    const lane = pool[Math.floor(this.r() * pool.length)]
+    const vs = q(CARS.vsMin + this.r() * (CARS.vsMax - CARS.vsMin))
+    this.addOb('car', lane, meet, OB.car.len, vs)
+    this.cars++
+    this.carLane = lane
+    this.carMeet = meet
+    // the car is visible from ~VIEW_AHEAD away; it sweeps this much lane ahead of its meet point
+    this.carUntil = q(meet + (190 * vs) / (v + vs) + 8)
   }
 
   private startLine() {
@@ -258,6 +289,14 @@ export class Track {
       toks[1] = toks[e]
       toks[e] = 'K'
     }
+    if (this.carLane >= 0 && s0 < this.carUntil) {
+      // an oncoming car drives down this lane: keep it open, and keep another lane open too
+      toks[this.carLane] = 'E'
+      const others = [0, 1, 2].filter((l) => l !== this.carLane)
+      if (others.every((l) => toks[l] === 'K')) toks[others[0]] = 'E'
+      // around the meet point the dodge lanes must not force you back into the car's lane
+      if (s0 < this.carMeet + OB.car.len + v * 0.6 && others.every((l) => toks[l] !== 'E')) toks[others[Math.floor(this.r() * 2)]] = 'E'
+    }
     const gapLen = q(Math.min(5, Math.max(2.6, 0.3 * v)))
     if (W > 0.62 && toks.includes('P')) {
       // warm-up: teach jump and slide separately first
@@ -299,8 +338,13 @@ export class Track {
         }
       }
     }
+    // stars never lead you into an oncoming car's lane
+    if (this.carLane >= 0 && s0 < this.carUntil + 10 && path === this.carLane) {
+      const alt = options.filter((l) => l !== this.carLane)
+      if (alt.length) path = alt[0]
+    }
     // a running coin line stays in its lane whenever that lane is open
-    if (this.lineLeft > 0 && passable(toks[this.pathLane])) path = this.pathLane
+    if (this.lineLeft > 0 && passable(toks[this.pathLane]) && !(this.carLane === this.pathLane && s0 < this.carUntil + 10)) path = this.pathLane
     const changed = path !== this.pathLane
     const tok = toks[path]
     // ── stars: short coin lines in the path lane, then a real gap (never a continuous river) ──
@@ -350,6 +394,7 @@ export class Track {
     // extra breathing room while the level is still low (fades out as L → 1)
     const T = Math.max(0.32, base * (0.7 + 0.35 * this.r()) * (1 + 1.6 * W + 0.3 * (1 - L)))
     this.cursor = q(rowEnd + Math.max(5.2, v * T))
+    this.maybeCar(toks, rowEnd, v, path)
     this.rows++
   }
 }
