@@ -4,7 +4,7 @@
  */
 import { FIFTH_RUN_COPY } from '../copyLocks'
 import { RuleBot, SKILLS } from './sim/bot'
-import { FR_DT, FR_HZ, POWER_TICKS, STAR_M } from './sim/constants'
+import { BLINK_S, FR_DT, FR_HZ, POWER_TICKS, STAR_M } from './sim/constants'
 import { newRun, queueAction, resetCursors, scoreOf, speedMul, step, type Action, type RunEvent, type RunState } from './sim/runner'
 import { Track } from './sim/track'
 import { FrScene, type QualityTier, type ViewState } from './render/scene'
@@ -359,6 +359,9 @@ class Engine {
     const a = this.prev
     const b = this.run
     const l = (p: number, q: number) => p + (q - p) * alpha
+    // a lost life (not the last) plays like a death for DOWN_S, then the runner respawns in place
+    const downed = b.down > 0
+    const kind = downed ? b.downKind : b.deathKind
     return {
       time: this.clock,
       s: l(a.s, b.s),
@@ -368,9 +371,10 @@ class Engine {
       air: b.air,
       sliding: b.slide > 0 && !b.air,
       speed: this.phase === 'playing' ? b.v : this.phase === 'intro' ? 0 : 0,
-      dead: b.dead,
-      deadT: this.deadT,
-      deathKind: b.deathKind,
+      dead: b.dead || downed,
+      deadT: downed ? (b.downMax - b.down) / FR_HZ : this.deadT,
+      deathKind: kind === 'fall' ? 'gap' : kind,
+      downed,
       idle: this.phase === 'intro' || this.phase === 'loading',
       lives: b.lives,
       hand: b.hand / FR_HZ,
@@ -378,6 +382,7 @@ class Engine {
       boost: this.phase === 'playing' ? speedMul({ ...b, slowT: 0 }) : 1,
       invuln: b.invuln > 0 || b.hand > 0,
       invisible: b.hand > 0,
+      blink: b.hand > 0 && b.hand <= BLINK_S * FR_HZ,
       stumble: b.stumble,
       obstacles: this.track.obstacles,
       keys: this.track.keys,
@@ -430,7 +435,7 @@ class Engine {
         sfxCrash()
         sfxRumble(1.2)
         this.shake = 1.2
-        this.say(`${e.cause === 'caught' ? 'Caught by the dark' : 'Fell'} · ${e.lives === 1 ? 'last life' : `${e.lives} lives left`}`, 'coral', 1.5)
+        this.say(`${e.cause === 'caught' ? 'The UFO got you' : e.cause === 'fall' ? 'Fell' : 'Crashed'} · ${e.lives === 1 ? 'last life' : `${e.lives} lives left`}`, 'coral', 1.5)
         if (navigator.vibrate) {
           try {
             navigator.vibrate(40)
@@ -438,6 +443,10 @@ class Engine {
             /* ignore */
           }
         }
+        break
+      case 'respawn':
+        sfxStart()
+        this.say('Keep running!', 'teal', 0.9)
         break
       case 'jump':
         sfxJump()
@@ -472,7 +481,7 @@ class Engine {
     this.deadT = 0
     this.shake = 1.4
     sfxCrash()
-    this.say(this.run.deathKind === 'caught' ? 'The dark energy got you.' : 'Lost in the void.', 'coral', 1.6)
+    this.say(this.run.deathKind === 'caught' ? 'The UFO got you.' : this.run.deathKind === 'fall' ? 'Lost in the void.' : 'Wiped out.', 'coral', 1.6)
     if (navigator.vibrate) {
       try {
         navigator.vibrate(60)

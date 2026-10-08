@@ -83,6 +83,9 @@ export function skyMaterial() {
   })
 }
 
+/** Max road holes cut at once (gap pool size). */
+export const MAX_HOLES = 18
+
 export function roadMaterial(reflTex: THREE.Texture | null) {
   return new THREE.ShaderMaterial({
     uniforms: {
@@ -94,6 +97,9 @@ export function roadMaterial(reflTex: THREE.Texture | null) {
       uCam: { value: new THREE.Vector3() },
       uFog: { value: PALETTE.fog.clone() },
       uBoost: { value: 0 },
+      /** open road holes (gaps) in scene coords: (x0, x1, z0, z1); the road is cut away so the pit below shows */
+      uHoles: { value: Array.from({ length: MAX_HOLES }, () => new THREE.Vector4(0, 0, 0, 0)) },
+      uHoleN: { value: 0 },
     },
     vertexShader: /* glsl */ `
       uniform mat4 uTexMat;
@@ -108,10 +114,16 @@ export function roadMaterial(reflTex: THREE.Texture | null) {
     fragmentShader: /* glsl */ `
       uniform float uScroll; uniform float uTime; uniform sampler2D uRefl; uniform float uReflOn;
       uniform vec3 uCam; uniform vec3 uFog; uniform float uBoost;
+      uniform vec4 uHoles[${MAX_HOLES}]; uniform int uHoleN;
       varying vec4 vReflUv; varying vec3 vWorld;
       ${NOISE}
       float band(float x, float c, float w, float aa){ return 1.0 - smoothstep(w, w + aa, abs(x - c)); }
       void main(){
+        for (int i = 0; i < ${MAX_HOLES}; i++) {
+          if (i >= uHoleN) break;
+          vec4 hr = uHoles[i];
+          if (vWorld.x > hr.x && vWorld.x < hr.y && vWorld.z > hr.z && vWorld.z < hr.w) discard;
+        }
         float x = vWorld.x;
         float s = uScroll - vWorld.z;
         float ax = abs(x);

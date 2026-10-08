@@ -12,6 +12,7 @@ import { keyPos, obstacleS, type KeyItem, type Obstacle, type Pickup, type Power
 import {
   buildBarrier,
   buildBlock,
+  buildCar,
   buildGantry,
   buildGap,
   buildGate,
@@ -21,7 +22,7 @@ import {
   palmGeometry,
   palmMaterial,
 } from './props'
-import { DarkEnergy } from './darkEnergy'
+import { UfoChaser } from './ufo'
 import { RunnerFigure, type PoseInput, type RunnerView } from './runnerFigure'
 import { loadHumanRunner } from './humanRunner'
 import { neonEnvironment } from './env'
@@ -42,6 +43,8 @@ export type ViewState = {
   dead: boolean
   deadT: number
   deathKind: string | null
+  /** lost a life (not the last): playing the fall / crash before respawning in place */
+  downed: boolean
   idle: boolean
   lives: number
   hand: number
@@ -52,6 +55,8 @@ export type ViewState = {
   invuln: boolean
   /** Fifth Dimension logo power — invincible (violet shell + rim) */
   invisible: boolean
+  /** last BLINK_S seconds of the logo invincibility (still invincible) */
+  blink: boolean
   stumble: number
   obstacles: Obstacle[]
   keys: KeyItem[]
@@ -139,8 +144,9 @@ export class FrScene {
     pipe: { group: THREE.Group; lamp: THREE.MeshStandardMaterial }[]
     block: { group: THREE.Group; lamp: THREE.MeshStandardMaterial }[]
     gap: ReturnType<typeof buildGap>[]
-  } = { barrier: [], overhead: [], pipe: [], block: [], gap: [] }
-  dark: DarkEnergy
+    car: (ReturnType<typeof buildCar> & { headGlows: THREE.Mesh[] })[]
+  } = { barrier: [], overhead: [], pipe: [], block: [], gap: [], car: [] }
+  dark: UfoChaser
   private pickupPools: Record<PowerKind, ReturnType<typeof buildPickup>[]> = { hand: [] }
   private smashT = new Map<number, number>()
   private blob: THREE.Mesh
@@ -222,7 +228,8 @@ export class FrScene {
     this.buildPalms()
     this.buildLampsAndGates(emblem)
     this.buildPools(logo ?? emblem)
-    this.dark = new DarkEnergy(tier === 'high' ? 4 : 3)
+    this.dark = new UfoChaser()
+    this.dark.group.traverse((o) => o.layers.enable(REFL))
     this.scene.add(this.dark.group)
     this.buildKeys()
 
@@ -528,6 +535,55 @@ export class FrScene {
       this.world.add(c.group)
       this.pools.block.push(c)
     }
+    // oncoming cars (headlights toward the runner)
+    const shared = {
+      chrome: new THREE.MeshStandardMaterial({ color: '#eef2f8', metalness: 1, roughness: 0.12, envMapIntensity: 1.5 }),
+      glass: new THREE.MeshStandardMaterial({ color: '#0a121a', metalness: 0.3, roughness: 0.08 }),
+      tire: new THREE.MeshStandardMaterial({ color: '#111114', roughness: 0.9 }),
+      white: new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.4 }),
+      glow: this.glow,
+    }
+    const headPoolMat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      uniforms: {},
+      vertexShader: /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+      fragmentShader: /* glsl */ `varying vec2 vUv;
+        void main(){ float side = smoothstep(0.0, 0.3, vUv.x) * smoothstep(1.0, 0.7, vUv.x);
+          float along = pow(1.0 - vUv.y, 1.4);
+          gl_FragColor = vec4(vec3(1.0, 0.93, 0.75) * side * along * 0.9, 1.0); }`,
+    })
+    const paints = ['#e11d48', '#f4f4f6', '#1d4ed8', '#f59e0b', '#16161c', '#7c3aed']
+    for (let i = 0; i < 8; i++) {
+      const c = buildCar(shared)
+      c.paint.color.set(paints[i % paints.length])
+      c.head.emissiveIntensity = 4.5
+      // big headlight flares so an oncoming car reads from ~1.5 s out
+      const headGlows: THREE.Mesh[] = []
+      for (const side of [-1, 1]) {
+        const f = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.4), glowMaterial(this.glow, '#fff2cc', 0.9))
+        f.position.set(side * 0.44, 0.6, -2.3)
+        f.rotation.y = Math.PI
+        c.group.add(f)
+        headGlows.push(f)
+      }
+      // headlight pool on the asphalt in front of it: a bright lane-wide strip pointing at you
+      const pool = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 10), headPoolMat)
+      pool.rotation.x = -Math.PI / 2
+      pool.position.set(0, 0.03, -2.3 - 5)
+      c.group.add(pool)
+      // no transmission (it forces an extra full-scene render pass per frame)
+      c.group.traverse((o) => {
+        const m = (o as THREE.Mesh).material as THREE.MeshPhysicalMaterial | undefined
+        if (m && m.isMeshPhysicalMaterial && m.transmission > 0) m.transmission = 0
+      })
+      c.group.rotation.y = Math.PI // front (−Z in the model) faces the runner
+      c.group.visible = false
+      c.group.traverse((o) => o.layers.enable(REFL))
+      this.world.add(c.group)
+      this.pools.car.push({ ...c, headGlows })
+    }
     for (let i = 0; i < 18; i++) {
       const g = buildGap(this.glow)
       g.group.visible = false
@@ -696,7 +752,16 @@ export class FrScene {
     }
     if (v.dead && v.deathKind === 'gap') this.runner.group.position.y = -Math.min(6, v.deadT * v.deadT * 9)
     // post-hit i-frames flicker; the 5D invincibility keeps the runner solid (shell + rim show it)
-    const flick = v.invuln && !v.invisible ? (Math.floor(t * 18) % 2 ? 0.35 : 1) : 1
+    // last BLINK_S of the logo: blink (still invincible) so it's obvious time is almost up
+    const flick = v.blink
+      ? Math.floor(t * 9) % 2
+        ? 0.35
+        : 1
+      : v.invuln && !v.invisible
+        ? Math.floor(t * 18) % 2
+          ? 0.35
+          : 1
+        : 1
     this.runner.group.visible = flick > 0.5
     this.blob.position.set(v.x, 0.012, 0.05)
     // contact shadow: shrinks and fades as the feet leave the ground (reads as a real jump)
@@ -706,11 +771,11 @@ export class FrScene {
     this.blob.visible = !(v.dead && v.deathKind === 'gap')
 
     // power-up fx — 5D logo = faint violet fresnel shell + violet rim while invincible (subtle)
-    this.shieldMesh.visible = v.invisible && !v.dead
+    this.shieldMesh.visible = v.invisible && !v.dead && flick > 0.5
     this.shieldMesh.position.set(v.x, v.y + 0.92 - (v.sliding ? 0.4 : 0), 0)
     this.shieldMat.uniforms.uTime.value = t
     // last 2 s: pulse faster so the player knows it is about to end
-    const ending = v.hand > 0 && v.hand < 2
+    const ending = v.blink
     this.shieldMat.uniforms.uAlpha.value = ending ? 0.08 + 0.12 * Math.max(0, Math.sin(t * 14)) : 0.17 + 0.05 * Math.sin(t * 5)
     this.fiveRing.visible = false
     this.magnetRing.visible = false
@@ -796,7 +861,9 @@ export class FrScene {
 
   private updateObstacles(v: ViewState) {
     const S = v.s
-    const idx = { barrier: 0, overhead: 0, pipe: 0, block: 0, gap: 0 }
+    const idx = { barrier: 0, overhead: 0, pipe: 0, block: 0, gap: 0, car: 0 }
+    let holes = 0
+    const holeU = this.roadMat.uniforms.uHoles.value as THREE.Vector4[]
     const now = v.time
     for (const o of v.obstacles) {
       // Oncoming cars sit ahead of their meet-point — look further by o.s before breaking
@@ -809,7 +876,7 @@ export class FrScene {
       if (liveS > S + VIEW_AHEAD + 25) continue
       let scale = 1
       let lift = 0
-      if (o.smashed) {
+      if (o.smashed && o.kind !== 'gap') {
         if (!this.smashT.has(o.id)) {
           this.smashT.set(o.id, now)
           this.burst(o.lane, liveS, 0.8, 18)
@@ -848,22 +915,56 @@ export class FrScene {
         c.group.rotation.y = ((o.variant % 7) - 3) * 0.02
         c.group.scale.setScalar(scale)
         c.lamp.emissiveIntensity = Math.floor(now * 2 + o.id) % 2 ? 3.5 : 0.6
+      } else if (o.kind === 'car') {
+        const c = this.pools.car[idx.car++]
+        if (!c) continue
+        c.group.visible = true
+        c.group.position.set(x, lift, -(liveS + o.len / 2))
+        c.group.scale.setScalar(scale)
       } else {
         const g = this.pools.gap[idx.gap++]
         if (!g) continue
+        const W = 1.98
+        const zc = -(liveS + o.len / 2)
         g.group.visible = true
         g.group.position.set(x, 0, 0)
-        g.hole.scale.set(1.98, o.len, 1)
-        g.hole.position.z = -(liveS + o.len / 2)
-        g.near.scale.x = 1.98
-        g.near.position.set(0, 0.02, -liveS)
-        g.far.scale.x = 1.98
-        g.far.position.set(0, 0.02, -(liveS + o.len))
-        g.nearGlow.scale.x = 1.6
-        g.nearGlow.position.z = -liveS + 0.3
+        g.pit.scale.set(W, 1, o.len)
+        g.pit.position.z = zc
+        g.near.scale.x = W + 0.16
+        g.near.position.set(0, 0.06, -liveS + 0.1)
+        g.far.scale.x = W + 0.16
+        g.far.position.set(0, 0.06, -(liveS + o.len) - 0.1)
+        g.left.scale.z = o.len
+        g.left.position.set(-W / 2 - 0.08, 0.06, zc)
+        g.right.scale.z = o.len
+        g.right.position.set(W / 2 + 0.08, 0.06, zc)
+        g.spill.scale.set(W + 1.2, 2.6, 1)
+        g.spill.position.z = -liveS + 1.1
+        g.spillFar.scale.set(W + 1.0, 1.8, 1)
+        g.spillFar.position.z = -(liveS + o.len) - 0.7
+        g.curtain.scale.set(W + 0.16, 0.75, 1)
+        g.curtain.position.set(0, 0.1, -liveS + 0.1)
+        g.curtainFar.scale.set(W + 0.16, 0.6, 1)
+        g.curtainFar.position.set(0, 0.1, -(liveS + o.len) - 0.1)
+        const pulse = Math.sin(now * 6 + o.id)
+        g.edgeMat.emissiveIntensity = 3.8 + 0.7 * pulse
+        g.curtainMat.uniforms.uAmp.value = 0.42 + 0.1 * pulse
+        // far-off beacon: a soft cyan halo over the hole, gone by the time it is close
+        const dAhead = liveS - S
+        const bOp = 0.85 * THREE.MathUtils.smoothstep(dAhead, 14, 34)
+        g.beacon.visible = bOp > 0.01
+        g.beacon.quaternion.copy(this.camera.quaternion)
+        g.beacon.scale.set(W + 4, 2.6, 1)
+        g.beacon.position.set(0, 0.45, zc)
+        g.beaconMat.opacity = bOp * (0.85 + 0.15 * pulse)
+        // cut the road away above the pit (scene coords: world group is shifted by +S)
+        if (holes < holeU.length) {
+          holeU[holes++].set(x - W / 2, x + W / 2, S - (liveS + o.len), S - liveS)
+        }
       }
     }
-    for (const k of ['barrier', 'overhead', 'pipe', 'block', 'gap'] as const) {
+    this.roadMat.uniforms.uHoleN.value = holes
+    for (const k of ['barrier', 'overhead', 'pipe', 'block', 'gap', 'car'] as const) {
       const pool = this.pools[k] as { group: THREE.Group }[]
       for (let i = idx[k]; i < pool.length; i++) pool[i].group.visible = false
     }
@@ -1044,6 +1145,7 @@ export class FrScene {
     }
   }
 
+  private camPush = 0
   private updateCamera(v: ViewState, dt: number) {
     const k = 1 - Math.exp(-dt * 7)
     this.camX += (v.x * 0.62 - this.camX) * k
@@ -1060,7 +1162,10 @@ export class FrScene {
     const sx = sh ? (Math.sin(v.time * 61) + Math.sin(v.time * 37)) * 0.06 * sh : 0
     const sy = sh ? Math.sin(v.time * 53) * 0.05 * sh : 0
     let dz = 6.8 - speedF * 0.55
-    if (v.dead) dz -= Math.min(1.2, v.deadT * 1.5)
+    // push in on a fall/hit; ease back out after a respawn (no camera pop)
+    const push = v.dead ? Math.min(1.2, v.deadT * 1.5) : 0
+    this.camPush += (push - this.camPush) * (v.dead ? 1 : 1 - Math.exp(-dt * 4))
+    dz -= this.camPush
     this.camera.position.set(this.camX + sx, this.camY + sy, dz)
     this.lookT.set(v.x * 0.5, 1.15, -14)
     this.camera.lookAt(this.lookT)
