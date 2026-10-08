@@ -22,6 +22,9 @@
   color: #f6f4ef;
   -webkit-user-select: none;
   user-select: none;
+  /* iOS draws a grey tap-highlight box over the touched element on every swipe — hide it */
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
   -webkit-touch-callout: none;
 }
 

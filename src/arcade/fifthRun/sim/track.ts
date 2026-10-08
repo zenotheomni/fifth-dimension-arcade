@@ -6,9 +6,9 @@
  * Fifth Dimension logo (15 s invuln) only. Collectibles are shooting stars (💫).
  */
 import { hashSeed, mulberry32 } from '../../core/seededRandom'
-import { JUMP_APEX, JUMP_T, LANE_W, OB, laneX, START_CLEAR_M, levelAt, speedAt, warmAt } from './constants'
+import { JUMP_APEX, JUMP_T, OB, laneX, START_CLEAR_M, levelAt, speedAt, warmAt } from './constants'
 
-export type ObKind = 'barrier' | 'overhead' | 'block' | 'gap'
+export type ObKind = 'barrier' | 'overhead' | 'pipe' | 'block' | 'gap'
 /** Rare 5D logo invuln pickup. */
 export type PowerKind = 'hand'
 
@@ -59,27 +59,12 @@ export type KeyItem = {
   lane0: number
 }
 
-/** Exact-op triangle wave 0..1..0 (period 1) — deterministic on every engine. */
-const tri = (u: number) => {
-  const f = u - Math.floor(u)
-  return f < 0.5 ? 2 * f : 2 - 2 * f
-}
-const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x)
-
-/** Live position of a star (depends only on star params + runner distance → deterministic). */
+/**
+ * Star position. Stars sit still in their lane (Temple Run coin lines) — the old drift / zig-zag
+ * motion made them hard to catch. `mv === 1` lines get a slow visual bob in the renderer only.
+ */
 export function keyPos(k: KeyItem, runnerS: number): { x: number; y: number } {
-  const dz = k.s - runnerS
-  if (k.mv === 1) return { x: laneX(k.lane), y: k.y + 1.2 * tri(dz / 8 + k.a) }
-  if (k.mv === 2) {
-    // slides from lane0 to its lane as you approach (30 m → 9 m out)
-    const f = clamp01((30 - dz) / 21)
-    const x0 = laneX(k.lane0)
-    return { x: x0 + (laneX(k.lane) - x0) * f, y: k.y }
-  }
-  if (k.mv === 3) {
-    // snakes across all three lanes; lands on its lane at the pickup point
-    return { x: (tri(dz / 14 + k.a) * 2 - 1) * LANE_W, y: k.y }
-  }
+  void runnerS
   return { x: laneX(k.lane), y: k.y }
 }
 
@@ -93,7 +78,7 @@ export type Pickup = {
   takenTick: number
 }
 
-type Tok = 'E' | 'B' | 'O' | 'K' | 'G'
+type Tok = 'E' | 'B' | 'O' | 'P' | 'K' | 'G'
 
 type Pattern = { p: string; min: number; w: (L: number) => number }
 
@@ -112,6 +97,10 @@ const PATTERNS: Pattern[] = [
   { p: 'KBE', min: 0.08, w: (L) => 0.6 + 0.6 * L },
   { p: 'KOE', min: 0.08, w: (L) => 0.6 + 0.6 * L },
   { p: 'BOE', min: 0.14, w: (L) => 0.5 + 0.6 * L },
+  // P = chest-high pipe: jump over OR slide under (Temple Run "either" gate)
+  { p: 'PEE', min: 0, w: (L) => 0.9 - 0.2 * L },
+  { p: 'PPP', min: 0.06, w: (L) => 0.7 + 0.3 * L },
+  { p: 'KPE', min: 0.12, w: (L) => 0.4 + 0.5 * L },
   { p: 'KKB', min: 0.18, w: (L) => 0.3 + 0.9 * L },
   { p: 'KKO', min: 0.18, w: (L) => 0.3 + 0.9 * L },
   { p: 'KKG', min: 0.26, w: (L) => 0.2 + 0.8 * L },
@@ -131,6 +120,13 @@ const PERMS = [
 const q = (x: number) => Math.round(x * 100) / 100
 const passable = (t: Tok) => t !== 'K'
 
+/** Star coin lines (Temple Run): LINE_MIN..LINE_MAX stars STAR_SPACING m apart, then ≥ LINE_GAP_MIN m (and ≥ ~1.1 s) of nothing. */
+export const STAR_SPACING = 3
+export const LINE_MIN = 8
+/** base line length max; a jump arc / slide trio can add ≤ 2 more, so a line never exceeds 15 */
+export const LINE_MAX = 13
+export const LINE_GAP_MIN = 40
+
 export class Track {
   readonly seed: string
   obstacles: Obstacle[] = []
@@ -146,12 +142,20 @@ export class Track {
   private nextId = 1
   private nextPickupS = 520
   private pickupBag: PowerKind[] = []
+  /** star coin-line state: stars left in the current line, where the next line may start, bob flag */
+  private lineLeft = 0
+  private lineLen = 0
+  private lineGapTo = 0
+  private lineBob = false
+  /** first s a new star may use (after the previous row's jump arc) */
+  private starFloor = 0
 
   constructor(seed: string) {
     this.seed = seed
     this.rng = mulberry32(hashSeed(`fifth-run|${seed}`))
-    // opening runway: a short star line straight ahead
-    for (let s = 14; s <= 58; s += 3) this.addKey(1, s, 0.9)
+    // opening runway: one 12-star line straight ahead, then a real gap
+    for (let s = 14; s <= 47; s += STAR_SPACING) this.addKey(1, s, 0.9)
+    this.lineGapTo = 47 + LINE_GAP_MIN
     this.prevEnd = 60
   }
 
@@ -166,6 +170,28 @@ export class Track {
   private addOb(kind: ObKind, lane: number, s: number, len: number, vs = 0) {
     const variant = Math.floor(this.r() * 1000)
     this.obstacles.push({ id: this.nextId++, kind, lane, s: q(s), len: q(len), vs, variant, smashed: false })
+  }
+
+  private startLine() {
+    this.lineLen = LINE_MIN + Math.floor(this.r() * (LINE_MAX - LINE_MIN + 1))
+    this.lineLeft = this.lineLen
+    this.lineBob = this.r() < 0.35
+  }
+
+  private endLine(at: number, v: number) {
+    this.lineLeft = 0
+    this.lineGapTo = q(at + Math.max(LINE_GAP_MIN, v * 1.1) + this.r() * 30)
+  }
+
+  /** One star of the running line (or the rare 5D logo in its middle when one is due). */
+  private placeLineStar(lane: number, s: number, y: number, rowS: number) {
+    const i = this.lineLen - this.lineLeft
+    if (rowS >= this.nextPickupS && i === Math.floor(this.lineLen / 2)) {
+      this.pickups.push({ id: this.nextId++, kind: this.nextPower(), lane, s: q(s), y: 1.0, taken: false, takenTick: -1 })
+      this.nextPickupS = rowS + 900 + this.r() * 600
+    } else this.addKey(lane, s, y, this.lineBob ? 1 : 0, i * 0.12)
+    this.lineLeft--
+    if (this.lineLeft <= 0) this.endLine(s, speedAt(s))
   }
 
   private nextPower(): PowerKind {
@@ -233,6 +259,10 @@ export class Track {
       toks[e] = 'K'
     }
     const gapLen = q(Math.min(5, Math.max(2.6, 0.3 * v)))
+    if (W > 0.62 && toks.includes('P')) {
+      // warm-up: teach jump and slide separately first
+      for (let i = 0; i < 3; i++) if (toks[i] === 'P') toks[i] = 'O'
+    }
 
     let rowEnd = s0
     for (let lane = 0; lane < 3; lane++) {
@@ -243,6 +273,9 @@ export class Track {
       } else if (t === 'O') {
         this.addOb('overhead', lane, s0, OB.overhead.len)
         rowEnd = Math.max(rowEnd, s0 + OB.overhead.len)
+      } else if (t === 'P') {
+        this.addOb('pipe', lane, s0, OB.pipe.len)
+        rowEnd = Math.max(rowEnd, s0 + OB.pipe.len)
       } else if (t === 'K') {
         this.addOb('block', lane, s0, OB.block.len)
         rowEnd = Math.max(rowEnd, s0 + OB.block.len)
@@ -266,57 +299,42 @@ export class Track {
         }
       }
     }
+    // a running coin line stays in its lane whenever that lane is open
+    if (this.lineLeft > 0 && passable(toks[this.pathLane])) path = this.pathLane
     const changed = path !== this.pathLane
-    if (this.r() < 0.84) {
-      const start = this.prevEnd + (changed ? Math.max(4, v * 0.4) : 2.2)
-      const tok = toks[path]
-      const end = tok === 'E' ? rowEnd + 1 : s0 - (tok === 'O' ? 2.2 : v * 0.22 + 1.4)
-      const keyS: number[] = []
-      for (let s = start; s <= end; s += 2.8) keyS.push(s)
-      let pickupAt = -1
-      if (s0 >= this.nextPickupS && keyS.length >= 3) {
-        pickupAt = Math.floor(keyS.length / 2)
-        this.nextPickupS = s0 + 900 + this.r() * 600
+    const tok = toks[path]
+    // ── stars: short coin lines in the path lane, then a real gap (never a continuous river) ──
+    // lane change inside a running line: the stars swerve right after the previous row (no hole in the line)
+    const start = this.prevEnd + (changed && this.lineLeft > 0 ? Math.max(3, v * 0.12) : 2.2)
+    const end = tok === 'E' ? rowEnd + 1 : s0 - (tok === 'O' ? 3.5 : v * 0.22 + 1.4)
+    for (let s = Math.max(start, this.starFloor); s <= end; s += STAR_SPACING) {
+      if (this.lineLeft <= 0) {
+        if (s < this.lineGapTo) continue
+        this.startLine()
       }
-      // Star motion style for this line (seeded): static / bobbing wave / drift-in / zig-zag snake
-      const W2 = warmAt(s0)
-      const r = this.r()
-      const style = r < 0.3 + 0.3 * W2 ? 0 : r < 0.55 + 0.15 * W2 ? 1 : r < 0.8 ? 2 : 3
-      const side = path === 0 ? 1 : path === 2 ? -1 : this.r() < 0.5 ? -1 : 1
-      const zz = [0, 0.25, 0.5, 0.75]
-      keyS.forEach((s, i) => {
-        if (i === pickupAt) {
-          this.pickups.push({ id: this.nextId++, kind: this.nextPower(), lane: path, s: q(s), y: 1.0, taken: false, takenTick: -1 })
-        } else if (style === 1) this.addKey(path, s, 0.5, 1, i * 0.12)
-        else if (style === 2) this.addKey(path, s, 0.9, 2, 0, path + side)
-        else if (style === 3) {
-          // zig-zag: phase picks which lane each star lands on (+W, 0, −W, 0 …)
-          const a = zz[i % 4]
-          const lane = a === 0 ? 2 : a === 0.5 ? 0 : 1
-          this.addKey(lane, s, 0.9, 3, a)
-        } else this.addKey(path, s, 0.9)
-      })
-      if (tok === 'B' || tok === 'G') {
-        const mid = tok === 'B' ? s0 + OB.barrier.len / 2 : s0 + gapLen / 2
+      this.placeLineStar(path, s, 0.9, s0)
+    }
+    // finish the move over / under this row's obstacle when a line is running through it
+    if (this.lineLeft > 0) {
+      let lastS = rowEnd
+      if (tok === 'B' || tok === 'G' || tok === 'P') {
+        const len = tok === 'B' ? OB.barrier.len : tok === 'P' ? OB.pipe.len : gapLen
+        const mid = s0 + len / 2
         const half = (v * JUMP_T) / 2
-        for (const f of [-0.6, -0.3, 0, 0.3, 0.6]) {
-          const tau = f
-          const feet = JUMP_APEX * (1 - tau * tau)
+        for (const f of this.lineLeft >= 5 ? [-0.5, -0.25, 0, 0.25, 0.5] : [-0.35, 0, 0.35]) {
+          const feet = JUMP_APEX * (1 - f * f)
           this.addKey(path, mid + f * half, feet + 0.85)
+          this.lineLeft--
+          lastS = Math.max(lastS, mid + f * half)
         }
       } else if (tok === 'O') {
-        for (const d of [-1.5, 0.2, 1.9]) this.addKey(path, s0 + d, 0.45)
+        for (const d of [-1.5, 0.2, 1.9]) {
+          this.addKey(path, s0 + d, 0.45)
+          this.lineLeft--
+        }
       }
-    }
-    // risky bait: 3 stars in a crate's lane right up to it — grab them and swerve late
-    const kl = toks.indexOf('K')
-    if (kl >= 0 && L > 0.05 && this.r() < 0.35) {
-      for (const d of [-9, -6.5, -4]) this.addKey(kl, s0 + d, 0.9)
-    }
-    // floating singles high over the clear lane (jump to grab)
-    if (this.r() < 0.18) {
-      const el = toks.indexOf('E')
-      if (el >= 0) this.addKey(el, rowEnd + 3 + this.r() * 3, 2.2)
+      this.starFloor = lastS + STAR_SPACING
+      if (this.lineLeft <= 0) this.endLine(lastS, v)
     }
     // keep keys sorted by s (bait / floaters can land out of order); only the freshly generated
     // tail (far ahead of the runner) is touched

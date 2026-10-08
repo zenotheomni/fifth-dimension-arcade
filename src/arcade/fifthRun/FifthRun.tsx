@@ -365,14 +365,14 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
               <h3>Controls</h3>
               <ul className="fr-howto__controls">
                 <li><b>←&nbsp;→</b>Swipe left / right to change lanes</li>
-                <li><b>↑</b>Swipe up to jump barriers &amp; gaps</li>
-                <li><b>↓</b>Swipe down to slide under beams</li>
+                <li><b>↑</b>Swipe up to jump low rubble &amp; gaps</li>
+                <li><b>↓</b>Swipe down to slide under high beams. Steel pipes: jump or slide</li>
               </ul>
             </section>
             <section>
               <h3>Rules</h3>
               <ul>
-                <li><b>☁</b>Dark energy is chasing you. Stay ahead of it</li>
+                <li><b>☁</b>A knot of dark energy is chasing you. Stay ahead of it</li>
                 <li><b>⚠</b>Hit an obstacle and you stumble: you slow down and it closes in. Stumble again before you pull away (about {Math.round((CHASE.hit - CHASE.catchAt) * CHASE.recoverS)} s of clean running) and it catches you</li>
                 <li><b>{'♥'.repeat(START_LIVES)}</b>{START_LIVES} lives. Getting caught or falling into a gap costs one, then you respawn and keep running</li>
                 <li><b>☠</b>Lose all {START_LIVES} and the run is over. It gets faster the farther you go</li>
@@ -382,7 +382,7 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
               <h3>Scoring</h3>
               <ul>
                 <li><b>m</b>Your score is your distance, 1 point per metre</li>
-                <li><b>💫</b>Each shooting star adds +{STAR_M} m. Some bob, drift or zig-zag between lanes, and high ones need a jump</li>
+                <li><b>💫</b>Each shooting star adds +{STAR_M} m. They come in short lines; the ones arcing over rubble need a jump</li>
                 <li><img src={BRAND_LOGO} alt="" width={28} height={28} style={{ borderRadius: '50%', verticalAlign: 'middle', marginRight: 6, boxShadow: '0 0 10px #ffc83c' }} />Rare 5D logo: {Math.round(POWER_TICKS.hand / FR_HZ)} s invincible plus a {BOOST.mul}× speed surge. Nothing can catch you, you can’t fall, you blast through everything</li>
               </ul>
             </section>
