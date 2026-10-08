@@ -6,7 +6,7 @@
  * group is translated by +runnerS each frame. Sky, planet, stars and skyline are camera-locked.
  */
 import * as THREE from 'three'
-import { BloomEffect, EffectComposer, EffectPass, RenderPass, SMAAEffect, SMAAPreset, ToneMappingEffect, ToneMappingMode } from 'postprocessing'
+import { BloomEffect, Effect, EffectComposer, EffectPass, RenderPass, SMAAEffect, SMAAPreset, ToneMappingEffect, ToneMappingMode } from 'postprocessing'
 import { laneX } from '../sim/constants'
 import { keyPos, obstacleS, type KeyItem, type Obstacle, type Pickup, type PowerKind } from '../sim/track'
 import {
@@ -17,6 +17,7 @@ import {
   buildGate,
   buildLamp,
   buildPickup,
+  buildPipe,
   palmGeometry,
   palmMaterial,
 } from './props'
@@ -61,6 +62,24 @@ export type ViewState = {
 }
 
 const REFL = 1
+
+/**
+ * Scrubs NaN / Inf / negative pixels out of the HDR buffer before bloom. On Apple GPUs a single bad
+ * pixel (e.g. pow() of a value nudged past 1 by float error in a fresnel term) gets smeared by the
+ * mip-chain bloom into a flashing black square.
+ */
+class SanitizeEffect extends Effect {
+  constructor() {
+    super(
+      'SanitizeEffect',
+      `void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor){
+        vec3 c = inputColor.rgb;
+        bool bad = any(isnan(c)) || any(isinf(c));
+        outputColor = vec4(bad ? vec3(0.0) : clamp(c, 0.0, 512.0), 1.0);
+      }`,
+    )
+  }
+}
 const VIEW_AHEAD = 175
 const rnd = (() => {
   let t = 12345
@@ -117,9 +136,10 @@ export class FrScene {
   private pools: {
     barrier: { group: THREE.Group; lamp: THREE.MeshStandardMaterial }[]
     overhead: { group: THREE.Group }[]
+    pipe: { group: THREE.Group; lamp: THREE.MeshStandardMaterial }[]
     block: { group: THREE.Group; lamp: THREE.MeshStandardMaterial }[]
     gap: ReturnType<typeof buildGap>[]
-  } = { barrier: [], overhead: [], block: [], gap: [] }
+  } = { barrier: [], overhead: [], pipe: [], block: [], gap: [] }
   dark: DarkEnergy
   private pickupPools: Record<PowerKind, ReturnType<typeof buildPickup>[]> = { hand: [] }
   private smashT = new Map<number, number>()
@@ -220,7 +240,7 @@ export class FrScene {
       uniforms: { uTime: { value: 0 }, uAlpha: { value: 1 } },
       vertexShader: 'varying vec3 vN; varying vec3 vV; void main(){ vec4 mv = modelViewMatrix*vec4(position,1.0); vN = normalize(normalMatrix*normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix*mv; }',
       fragmentShader:
-        'uniform float uTime; uniform float uAlpha; varying vec3 vN; varying vec3 vV; void main(){ float f = pow(1.0 - abs(dot(vN, vV)), 4.2); float band = 0.5 + 0.5*sin(vN.y*18.0 - uTime*2.5); gl_FragColor = vec4(vec3(0.7,0.5,1.0) * (f*(1.1 + band*0.35)) * uAlpha, 1.0); }',
+        'uniform float uTime; uniform float uAlpha; varying vec3 vN; varying vec3 vV; void main(){ float f = pow(clamp(1.0 - abs(dot(vN, vV)), 0.0, 1.0), 4.2); float band = 0.5 + 0.5*sin(vN.y*18.0 - uTime*2.5); gl_FragColor = vec4(vec3(0.7,0.5,1.0) * (f*(1.1 + band*0.35)) * uAlpha, 1.0); }',
     })
     this.shieldMesh = new THREE.Mesh(new THREE.SphereGeometry(0.95, 28, 18), this.shieldMat)
     this.shieldMesh.scale.set(0.92, 1.2, 0.85)
@@ -476,7 +496,17 @@ export class FrScene {
   private buildPools(emblem: THREE.Texture | null) {
     const chev = chevronTexture()
     const metal = new THREE.MeshStandardMaterial({ color: '#3a3448', metalness: 0.8, roughness: 0.3 })
-    for (let i = 0; i < 12; i++) {
+    // Pools sized for the densest rows inside VIEW_AHEAD at top speed (full-width rows of 3) — an
+    // exhausted pool used to make far obstacles pop in late.
+    for (let i = 0; i < 30; i++) {
+      const pp = buildPipe(metal)
+      mergeStatic(pp.group)
+      pp.group.visible = false
+      pp.group.traverse((o) => o.layers.enable(REFL))
+      this.world.add(pp.group)
+      this.pools.pipe.push(pp)
+    }
+    for (let i = 0; i < 36; i++) {
       const b = buildBarrier(chev, metal)
       mergeStatic(b.group)
       b.group.visible = false
@@ -490,7 +520,7 @@ export class FrScene {
       this.world.add(o.group)
       this.pools.overhead.push(o)
     }
-    for (let i = 0; i < 16; i++) {
+    for (let i = 0; i < 30; i++) {
       const c = buildBlock(chev, metal)
       mergeStatic(c.group)
       c.group.visible = false
@@ -498,7 +528,7 @@ export class FrScene {
       this.world.add(c.group)
       this.pools.block.push(c)
     }
-    for (let i = 0; i < 9; i++) {
+    for (let i = 0; i < 18; i++) {
       const g = buildGap(this.glow)
       g.group.visible = false
       this.world.add(g.group)
@@ -604,6 +634,7 @@ export class FrScene {
     const samples = Math.min(4, this.renderer.capabilities.maxSamples || 0)
     const composer = new EffectComposer(this.renderer, { frameBufferType: THREE.HalfFloatType, multisampling: samples })
     composer.addPass(new RenderPass(this.scene, this.camera))
+    composer.addPass(new EffectPass(this.camera, new SanitizeEffect()))
     // High threshold: only emissive sources (lamps, tail lights, rails, stars) bloom; the lit scene stays crisp.
     this.bloom = new BloomEffect({ intensity: FrScene.BLOOM, luminanceThreshold: 0.86, luminanceSmoothing: 0.12, mipmapBlur: true, radius: 0.55, levels: 5 })
     composer.addPass(new EffectPass(this.camera, this.bloom, new ToneMappingEffect({ mode: ToneMappingMode.ACES_FILMIC })))
@@ -668,8 +699,10 @@ export class FrScene {
     const flick = v.invuln && !v.invisible ? (Math.floor(t * 18) % 2 ? 0.35 : 1) : 1
     this.runner.group.visible = flick > 0.5
     this.blob.position.set(v.x, 0.012, 0.05)
-    const bs = Math.max(0.35, 1 - v.y * 0.35)
+    // contact shadow: shrinks and fades as the feet leave the ground (reads as a real jump)
+    const bs = Math.max(0.45, 1 - v.y * 0.3)
     this.blob.scale.set(bs, bs, bs)
+    ;(this.blob.material as THREE.MeshBasicMaterial).opacity = 0.5 * Math.max(0.25, 1 - v.y * 0.4)
     this.blob.visible = !(v.dead && v.deathKind === 'gap')
 
     // power-up fx — 5D logo = faint violet fresnel shell + violet rim while invincible (subtle)
@@ -703,13 +736,33 @@ export class FrScene {
     this.updateSky(v, dt)
     this.updateCamera(v, dt)
     this.darkFade += ((v.invisible || v.idle ? 0 : 1) - this.darkFade) * (1 - Math.exp(-dt * (v.invisible ? 1.5 : 2.5)))
-    this.dark.update(t, dt, v.dead && v.deathKind === 'caught' ? 1.25 : v.threat, v.x, v.idle ? 0.55 : Math.max(0.0, this.darkFade))
+    this.dark.update(t, dt, v.dead && v.deathKind === 'caught' ? 1.5 : v.threat, v.x, v.idle ? 0 : Math.max(0.0, this.darkFade), this.camera.quaternion)
 
     this.roadMat.uniforms.uScroll.value = S
     this.roadMat.uniforms.uTime.value = t
     this.roadMat.uniforms.uCam.value.copy(this.camera.position)
     this.roadMat.uniforms.uBoost.value = v.invisible ? 0.2 : 0
     this.towerMat.uniforms.uTime.value = t
+  }
+
+  /**
+   * Compile every material up front (pooled obstacles, pickup, shield, chaser are hidden at load), so
+   * the first jump / pickup / new obstacle type never stalls a frame on a shader compile.
+   */
+  warmup() {
+    const hidden: THREE.Object3D[] = []
+    this.scene.traverse((o) => {
+      if (!o.visible) {
+        hidden.push(o)
+        o.visible = true
+      }
+    })
+    try {
+      this.renderer.compile(this.scene, this.camera)
+    } catch {
+      /* best effort */
+    }
+    for (const o of hidden) o.visible = false
   }
 
   /** Swap the procedural fallback for the rigged GLB human (keeps the fallback if the load fails). */
@@ -733,6 +786,7 @@ export class FrScene {
       this.runnerLight = chase
       this.scene.add(chase)
       this.scene.add(chase.target)
+      this.warmup()
       return true
     } catch (e) {
       console.warn('[fifth-glide] runner GLB failed, keeping procedural fallback', e)
@@ -742,14 +796,15 @@ export class FrScene {
 
   private updateObstacles(v: ViewState) {
     const S = v.s
-    const idx = { barrier: 0, overhead: 0, block: 0, gap: 0 }
+    const idx = { barrier: 0, overhead: 0, pipe: 0, block: 0, gap: 0 }
     const now = v.time
     for (const o of v.obstacles) {
       // Oncoming cars sit ahead of their meet-point — look further by o.s before breaking
       if (o.s > S + VIEW_AHEAD + 90) break
       const liveS = obstacleS(o, S)
       // passed props would otherwise fill the foreground between camera and runner
-      const behind = o.kind === 'gap' || v.dead ? 12 : o.kind === 'block' ? 3.5 : 2.6
+      // (a passed gap used to linger 12 m behind and slide under the camera as a black slab)
+      const behind = v.dead ? 12 : o.kind === 'gap' ? 1.5 : o.kind === 'block' ? 3.5 : 2.6
       if (liveS + o.len < S - behind) continue
       if (liveS > S + VIEW_AHEAD + 25) continue
       let scale = 1
@@ -771,13 +826,20 @@ export class FrScene {
         b.group.visible = true
         b.group.position.set(x, lift, -(liveS + o.len / 2))
         b.group.scale.setScalar(scale)
-        b.lamp.emissiveIntensity = Math.floor(now * 3 + o.id) % 2 ? 3.2 : 0.5
+        b.lamp.emissiveIntensity = Math.floor(now * 3 + o.id) % 2 ? 3.4 : 1.8
       } else if (o.kind === 'overhead') {
         const g = this.pools.overhead[idx.overhead++]
         if (!g) continue
         g.group.visible = true
         g.group.position.set(x, lift, -(liveS + o.len / 2))
         g.group.scale.setScalar(scale)
+      } else if (o.kind === 'pipe') {
+        const g = this.pools.pipe[idx.pipe++]
+        if (!g) continue
+        g.group.visible = true
+        g.group.position.set(x, lift, -(liveS + o.len / 2))
+        g.group.scale.setScalar(scale)
+        g.lamp.emissiveIntensity = Math.floor(now * 2.5 + o.id) % 2 ? 2.6 : 0.9
       } else if (o.kind === 'block') {
         const c = this.pools.block[idx.block++]
         if (!c) continue
@@ -801,7 +863,7 @@ export class FrScene {
         g.nearGlow.position.z = -liveS + 0.3
       }
     }
-    for (const k of ['barrier', 'overhead', 'block', 'gap'] as const) {
+    for (const k of ['barrier', 'overhead', 'pipe', 'block', 'gap'] as const) {
       const pool = this.pools[k] as { group: THREE.Group }[]
       for (let i = idx[k]; i < pool.length; i++) pool[i].group.visible = false
     }
@@ -820,7 +882,8 @@ export class FrScene {
       if (k.state === 2) continue
       const kp = keyPos(k, k.state === 1 ? k.s : S)
       let x = kp.x
-      let y = kp.y + 0.05 + Math.sin(t * 3 + k.id) * 0.06
+      // slow bob only (period ≈ 2.6 s) — the sim position never moves
+      let y = kp.y + 0.05 + (k.mv === 1 ? Math.sin(t * 2.4 + k.a * 6) * 0.16 : Math.sin(t * 2 + k.id * 0.3) * 0.04)
       let z = -k.s
       let sc = 1
       if (k.state === 1) {
@@ -841,7 +904,7 @@ export class FrScene {
       }
       if (n >= 160) break
       // Face +Z (toward camera) with a gentle Z wobble so the 💫 trail stays readable
-      this.tmpE.set(0, 0, Math.sin(t * 2.2 + k.id) * 0.12)
+      this.tmpE.set(0, 0, Math.sin(t * 1.6 + k.id) * 0.05)
       this.tmpQ.setFromEuler(this.tmpE)
       const s = sc * fiveBoost
       this.tmpM.compose(this.tmpV.set(x, y, z), this.tmpQ, this.tmpS.set(s, s, 1))
@@ -984,9 +1047,10 @@ export class FrScene {
   private updateCamera(v: ViewState, dt: number) {
     const k = 1 - Math.exp(-dt * 7)
     this.camX += (v.x * 0.62 - this.camX) * k
-    // Over-shoulder chase — runner fills lower third, lanes readable for swipes
-    const ty = 3.4 + Math.max(0, v.y) * 0.32 - (v.sliding ? 0.25 : 0)
-    this.camY += (ty - this.camY) * (1 - Math.exp(-dt * 5))
+    // Locked over-shoulder chase: the camera barely follows a jump (so the astronaut visibly leaves
+    // the ground) and never dips for a slide — no pops.
+    const ty = 3.4 + Math.max(0, v.y) * 0.08
+    this.camY += (ty - this.camY) * (1 - Math.exp(-dt * 6))
     const speedF = THREE.MathUtils.clamp((v.speed - 16) / 34, 0, 1)
     const aspect = this.camera.aspect
     const baseFov = aspect > 0.8 ? 52 : 64

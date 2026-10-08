@@ -396,37 +396,94 @@ function rockGeometry(seed: number, sx: number, sy: number, sz: number, detail =
 }
 
 let _rockSeed = 1
-/** Low debris line (jump it): broken asteroid chunks + a bent steel rail, faint ember cracks. */
+/**
+ * Low hurdle (jump only): a short line of broken asteroid rubble with a bent, rusted guard rail.
+ * Built to the sim box exactly — top ≤ OB.barrier.h (0.6 m), half-width ≤ OB.barrier.halfW (0.82 m) —
+ * so "feet above the rocks" is always a clear.
+ */
 export function buildBarrier(chev: THREE.Texture, metal: THREE.Material) {
   void chev
+  void metal
   const seed = _rockSeed++
   const group = new THREE.Group()
   const mat = rockMaterial()
+  // [x, half-width, half-height, half-depth] — rock radius noise is ≤ 1.34× so tops stay < 0.58 m
   const chunks: [number, number, number, number][] = [
-    [-0.55, 0.42, 0.36, 0.3],
-    [0.05, 0.5, 0.42, 0.34],
-    [0.6, 0.38, 0.34, 0.3],
+    [-0.52, 0.22, 0.2, 0.17],
+    [0.0, 0.27, 0.215, 0.18],
+    [0.5, 0.22, 0.19, 0.16],
+    [-0.25, 0.14, 0.12, 0.12],
+    [0.27, 0.13, 0.11, 0.12],
   ]
   chunks.forEach(([x, w, hgt, d], i) => {
     const m = new THREE.Mesh(rockGeometry(seed * 7 + i, w, hgt, d), mat)
-    m.position.set(x, hgt * 0.78, 0)
-    m.rotation.set(0.2 * i, seed * 0.7 + i, 0.1)
+    m.position.set(x, hgt * 0.8, i > 2 ? 0.12 : 0)
+    m.rotation.set(0.15 * i, seed * 0.7 + i, 0.08)
     group.add(m)
   })
-  const rust = new THREE.MeshStandardMaterial({ color: '#4a3a33', metalness: 0.85, roughness: 0.62 })
-  const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 1.7, 8), rust)
-  rail.rotation.z = Math.PI / 2 + 0.08
-  rail.position.set(0, 0.6, 0.1)
+  const rust = new THREE.MeshStandardMaterial({ color: '#5a463c', metalness: 0.7, roughness: 0.66 })
+  // bent guard rail: a gently sagging tube between two stubby posts
+  const curve = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(-0.78, 0.5, 0.05),
+    new THREE.Vector3(-0.2, 0.44, 0.08),
+    new THREE.Vector3(0.3, 0.47, 0.04),
+    new THREE.Vector3(0.78, 0.52, 0.06),
+  ])
+  const rail = new THREE.Mesh(new THREE.TubeGeometry(curve, 24, 0.035, 8, false), rust)
   group.add(rail)
-  void metal
-  // dim ember glow in the cracks (blinks slowly; keeps it readable on the dark track)
-  const lamp = new THREE.MeshStandardMaterial({ color: '#2a0d06', emissive: new THREE.Color('#ff5a1f'), emissiveIntensity: 1.2 })
-  for (const x of [-0.5, 0.15, 0.62]) {
-    const e = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 6), lamp)
-    e.position.set(x, 0.32, 0.3)
+  for (const x of [-0.74, 0.74]) {
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.035, 0.52, 8), rust)
+    post.position.set(x, 0.26, 0.05)
+    post.rotation.z = x * 0.08
+    group.add(post)
+  }
+  // hazard LED strip clamped along the rail + ember cracks: the bloom makes the hurdle readable
+  // ~1.5 s (50+ m) out on the dark road
+  const lamp = new THREE.MeshStandardMaterial({ color: '#2a0d06', emissive: new THREE.Color('#ff5a1f'), emissiveIntensity: 2.4 })
+  const strip = new THREE.CatmullRomCurve3(curve.points.map((p) => new THREE.Vector3(p.x * 0.96, p.y + 0.04, p.z + 0.03)))
+  group.add(new THREE.Mesh(new THREE.TubeGeometry(strip, 24, 0.016, 6, false), lamp))
+  for (const x of [-0.45, 0.1, 0.55]) {
+    const e = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), lamp)
+    e.position.set(x, 0.2, 0.2)
     group.add(e)
   }
   return { group, lamp }
+}
+
+/**
+ * Chest-high bar (jump over OR slide under): a scorched steel conduit pipe on two braced stanchions.
+ * Pipe spans y ∈ [OB.pipe.bottom, OB.pipe.top] = [0.95, 1.2] m across the lane.
+ */
+export function buildPipe(metal: THREE.Material) {
+  void metal
+  const group = new THREE.Group()
+  const steel = new THREE.MeshStandardMaterial({ color: '#6c707a', metalness: 0.85, roughness: 0.42 })
+  const dark = new THREE.MeshStandardMaterial({ color: '#2b2a31', metalness: 0.7, roughness: 0.55 })
+  const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.115, 0.115, 1.9, 24), steel)
+  pipe.rotation.z = Math.PI / 2
+  pipe.position.y = 1.075
+  group.add(pipe)
+  for (const x of [-0.62, 0.62]) {
+    const flange = new THREE.Mesh(new THREE.TorusGeometry(0.125, 0.022, 8, 24), dark)
+    flange.rotation.y = Math.PI / 2
+    flange.position.set(x, 1.075, 0)
+    group.add(flange)
+  }
+  for (const x of [-0.92, 0.92]) {
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, 1.2, 10), dark)
+    post.position.set(x, 0.6, 0)
+    group.add(post)
+    const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 0.05, 12), dark)
+    foot.position.set(x, 0.025, 0)
+    group.add(foot)
+  }
+  // hazard band + a blinking amber warning lamp so it reads 1.5 s out
+  const lampMat = new THREE.MeshStandardMaterial({ color: '#3a2004', emissive: new THREE.Color('#ffb020'), emissiveIntensity: 2.4 })
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(0.118, 0.118, 0.22, 24), lampMat)
+  band.rotation.z = Math.PI / 2
+  band.position.y = 1.075
+  group.add(band)
+  return { group, lamp: lampMat }
 }
 
 export function buildGantry(chev: THREE.Texture, metal: THREE.Material, glow: THREE.Texture) {
@@ -569,7 +626,7 @@ export function buildPickup(kind: 'hand', glow: THREE.Texture, emblem: THREE.Tex
       side: THREE.DoubleSide,
       uniforms: { uColor: { value: new THREE.Color(color) } },
       vertexShader: 'varying float vY; void main(){ vY = uv.y; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-      fragmentShader: 'uniform vec3 uColor; varying float vY; void main(){ gl_FragColor = vec4(uColor * pow(1.0 - vY, 1.6) * 0.6, 1.0); }',
+      fragmentShader: 'uniform vec3 uColor; varying float vY; void main(){ gl_FragColor = vec4(uColor * pow(clamp(1.0 - vY, 0.0, 1.0), 1.6) * 0.6, 1.0); }',
     }),
   )
   beam.position.y = 2.3 + 13

@@ -42,15 +42,25 @@ export const LANE_SPEED = LANE_W / 0.11
 export const BUFFER_TICKS = Math.round(0.32 * FR_HZ)
 /** Coyote time: grace (s) after stepping onto a gap edge where a jump still saves you. */
 export const COYOTE_S = 0.12
-/** Barrier hitbox forgiveness: feet may clip this far into the top / sides and still clear. */
-export const BARRIER_FORGIVE = { y: 0.32, x: 0.18 }
+/**
+ * Hang assist (Temple Run-style forgiving jump): while airborne and falling, if a low hurdle or a gap
+ * in your lane starts within HANG.leadS seconds of travel, gravity drops to HANG.g so a slightly early
+ * jump still carries you over it. At most HANG.maxS seconds of float per jump.
+ */
+export const HANG = { leadS: 0.16, g: 0.3, maxS: 0.22 }
 
-/** Runner AABB (feet/ground = y0). Jump clears barriers; slide ducks overhead. */
+/** Runner AABB (feet/ground = y0). Jump clears hurdles; slide ducks overhead. */
 export const BODY = { h: 1.75, slideH: 0.85, halfD: 0.28, halfW: 0.32 }
 
+/**
+ * Obstacle hit boxes — exactly the visible mesh bounds (render/props.ts builds to these numbers).
+ * barrier = low hurdle, jump only: a hit needs feet below `h` while the body overlaps it.
+ * pipe = chest-high bar: slide under it OR jump over it (body must miss the [bottom, top] band).
+ */
 export const OB = {
-  barrier: { h: 0.75, len: 0.4, halfW: 0.8 },
+  barrier: { h: 0.6, len: 0.4, halfW: 0.82 },
   overhead: { bottom: 1.2, len: 0.45, halfW: 0.95 },
+  pipe: { bottom: 0.95, top: 1.2, len: 0.3, halfW: 0.95 },
   block: { h: 2.6, len: 1.6, halfW: 0.85 },
   gap: { halfW: 1.0 },
 } as const

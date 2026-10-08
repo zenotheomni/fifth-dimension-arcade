@@ -15,7 +15,7 @@ import {
   POWER_TICKS,
   SLIDE_TICKS,
   COYOTE_S,
-  BARRIER_FORGIVE,
+  HANG,
   BOOST,
   CHASE,
   SLOW_TICKS,
@@ -79,6 +79,8 @@ export type RunState = {
   mult: number
   keyPts: number
   stumble: number
+  /** hang-assist ticks used this jump */
+  hang: number
   queued: Action | null
   queuedAt: number
   latQ: Action | null
@@ -116,6 +118,7 @@ export function newRun(): RunState {
     mult: 1,
     keyPts: 0,
     stumble: 0,
+    hang: 0,
     queued: null,
     queuedAt: 0,
     latQ: null,
@@ -160,6 +163,21 @@ function carBeside(track: Track, lane: number, s: number, from: number): boolean
 }
 
 const ONCOMING_LEAD = 45
+const HANG_TICKS = Math.round(HANG.maxS * FR_HZ)
+
+/** A jumpable (hurdle / pipe / gap) in the runner's lane starting within `ahead` metres of the feet. */
+function hurdleAhead(track: Track, st: RunState, ahead: number): boolean {
+  const obs = track.obstacles
+  for (let i = Math.max(0, st.obCur - 2); i < obs.length; i++) {
+    const o = obs[i]
+    if (o.s > st.s + ahead + BODY.halfD) break
+    if (o.smashed || o.kind === 'block' || o.kind === 'overhead') continue
+    if (Math.abs(st.x - laneX(o.lane)) > 1.0) continue
+    if (o.s + o.len < st.s - BODY.halfD) continue
+    return true
+  }
+  return false
+}
 
 /** Try to apply an action now. Returns false if it should stay buffered. */
 function applyAction(st: RunState, a: Action, track: Track, ev: RunEvent[] | null | undefined): boolean {
@@ -184,6 +202,7 @@ function applyAction(st: RunState, a: Action, track: Track, ev: RunEvent[] | nul
     if (st.air) return false
     st.air = true
     st.vy = JUMP_VY
+    st.hang = 0
     st.slide = 0
     st.slideOnLand = false
     ev?.push({ type: 'jump' })
@@ -278,7 +297,13 @@ export function step(st: RunState, track: Track, opts: StepOpts) {
   st.x = Math.abs(dx) <= maxStep ? tx : st.x + (dx > 0 ? maxStep : -maxStep)
 
   if (st.air) {
-    st.vy -= GRAVITY * FR_DT
+    let g = GRAVITY
+    // hang assist: falling with a hurdle / gap just ahead in this lane → float a little longer
+    if (st.vy < 0 && st.hang < HANG_TICKS && hurdleAhead(track, st, st.v * HANG.leadS)) {
+      g = GRAVITY * HANG.g
+      st.hang++
+    }
+    st.vy -= g * FR_DT
     st.y += st.vy * FR_DT
     if (st.y <= 0) {
       st.y = 0
@@ -328,14 +353,19 @@ export function step(st: RunState, track: Track, opts: StepOpts) {
     if (os + o.len < sB) continue
     const lx = Math.abs(st.x - laneX(o.lane))
     let hit = false
+    // Hits only when the body box really intersects the obstacle box (the meshes are built to these sizes).
     if (o.kind === 'gap') {
-      // coyote time: a jump in the first COYOTE_S over the edge still clears it
+      // you fall only with both feet on the ground over the hole; coyote time at the near edge
       const coy = Math.min(o.len * 0.35, 0.2 + st.v * COYOTE_S)
       hit = !st.air && st.y <= 0 && lx < OB.gap.halfW - 0.1 && st.s > os + coy && st.s < os + o.len - 0.35
     } else if (o.kind === 'barrier') {
-      hit = lx < BODY.halfW + OB.barrier.halfW - BARRIER_FORGIVE.x && st.y < OB.barrier.h - BARRIER_FORGIVE.y
+      // low hurdle: feet above the top = clear, always
+      hit = lx < BODY.halfW + OB.barrier.halfW && st.y < OB.barrier.h
     } else if (o.kind === 'overhead') {
       hit = lx < BODY.halfW + OB.overhead.halfW && top > OB.overhead.bottom
+    } else if (o.kind === 'pipe') {
+      // chest-high bar: slide under (head below) or jump over (feet above)
+      hit = lx < BODY.halfW + OB.pipe.halfW && top > OB.pipe.bottom && st.y < OB.pipe.top
     } else {
       hit = lx < BODY.halfW + OB.block.halfW - 0.2 && st.y < OB.block.h
     }

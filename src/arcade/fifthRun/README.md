@@ -35,7 +35,9 @@ tall crate stacks (switch lanes); full-width BBB / OOO / GGG rows force the jump
   speed lines, smoke fades away), then 1.5 s grace.
 
 ## Difficulty curve (first-timer friendly)
-- Speed `21 → 58 m/s`, `k = 1300` (≈29 m/s at 15 s, ≈36 at 30 s, ≈44 at 60 s). Stars move: bob (some need a jump), drift-in, zig-zag snake, bait lines before crates, high floaters.
+- Speed `30 → 60 m/s`, `k = 3000` (≈37.5 m/s at 1 km, ≈43.6 at 2.5 km). Stars come in Temple Run coin lines: 8–15 stars 3 m apart in one lane (arcing over hurdles / gaps), then ≥ 40 m (≥ ~1.1 s) of nothing; some lines bob slowly (render only).
+- Obstacles: low rubble hurdle (jump; clear whenever feet are above 0.6 m), high beam (slide), chest-high pipe (jump or slide), boulder (change lane), gap (jump). Hits only when the body box intersects the obstacle box; a falling jump floats briefly (hang assist) over a hurdle just ahead.
+- Chaser: a compact ~0.95 × 1.05 m knot of dark smoke; off-frame when you run clean, a small patch at the bottom of the frame after a stumble.
 - Warm-up `WARM_M = 750 m` (≈ first 40 s): no double-crate / mixed rows until mid-warm-up, up to ~2.9× row spacing,
   no crate in the start lane early, 110 m empty runway. Level held at 0 for 460 m, then `(s−460)/(s−460+950)`.
 - Harness: `node scripts/fr-tune.mjs` (full) / `node scripts/fr-quick.mjs` (bots only). The `rookie`
