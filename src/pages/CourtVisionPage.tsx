@@ -88,7 +88,7 @@ export default function CourtVisionPage() {
         <p>
           {rival
             ? 'New court, new wind. Put up a score — your rival gets an alert that it’s their turn.'
-            : 'Play one 60-second run on a fresh court. Then send it — your friend gets the exact same sway and wind.'}
+            : 'Play one 60-second run on a fresh court. Then send it — your friend gets the exact same court and wind.'}
         </p>
         {stage === 'error' ? <p style={{ color: '#ff7a9e', fontWeight: 700 }}>{err}</p> : null}
         <button type="button" className="ffa-btn ffa-btn--primary" disabled={stage === 'issuing'} onClick={() => void start()}>

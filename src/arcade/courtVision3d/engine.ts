@@ -162,7 +162,7 @@ class Engine {
     this.mode = bridge.challenge ? 'challenge' : mode
     this.challengeCfg = bridge.challenge ?? null
     // 'still:*' seeds = the normal static court (challenge sent from a plain 60s run, so both
-    // players get identical conditions). Any other seed drives deterministic sway + wind.
+    // players get identical conditions). Any other seed drives deterministic wind + ball spot (hoop sway is disabled — see sim/hoop.ts).
     this.seedCfg =
       bridge.challenge && !(bridge.challenge.seed ?? '').startsWith('still:')
         ? courtVisionSeedConfig(bridge.challenge.seed)

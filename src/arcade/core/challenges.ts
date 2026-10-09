@@ -14,8 +14,8 @@ export function sameSeedCopy(game: string | null | undefined, rivalHandle?: stri
       : 'Your friend runs the exact same track — same stars, same traffic.'
   }
   return rivalHandle
-    ? `${rivalHandle} gets an alert. Same court, same sway, same wind.`
-    : 'Your friend plays the exact same court — same sway, same wind.'
+    ? `${rivalHandle} gets an alert. Same court, same wind.`
+    : 'Your friend plays the exact same court — same spot, same wind.'
 }
 
 export function challengeShareText(handle: string, score: number, game = 'court-vision'): string {
