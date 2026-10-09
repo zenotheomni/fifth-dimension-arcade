@@ -170,7 +170,7 @@ export class FrScene {
   private sparkGeo!: THREE.BufferGeometry
   private darkFade = 1
   private camX = 0
-  private camY = 3.35
+  private camY = 4.2
   private fov = 62
   private tmpM = new THREE.Matrix4()
   private tmpQ = new THREE.Quaternion()
@@ -812,6 +812,15 @@ export class FrScene {
     this.updateCamera(v, dt)
     this.darkFade += ((v.invisible || v.idle ? 0 : 1) - this.darkFade) * (1 - Math.exp(-dt * (v.invisible ? 1.5 : 2.5)))
     this.dark.update(t, dt, v.dead && v.deathKind === 'caught' ? 1.5 : v.threat, v.x, v.idle ? 0 : Math.max(0.0, this.darkFade), this.camera.quaternion)
+    // keep the whole saucer inside the frame (any lane, any FOV)
+    {
+      const g = this.dark.group
+      const d = Math.max(1, this.camera.position.z - g.position.z)
+      const halfW = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)) * d * this.camera.aspect
+      const lim = Math.max(0, halfW - UfoChaser.SIZE.w * 0.5 - 0.12)
+      const cx = this.camera.position.x
+      g.position.x = THREE.MathUtils.clamp(g.position.x, cx - lim, cx + lim)
+    }
 
     this.roadMat.uniforms.uScroll.value = S
     this.roadMat.uniforms.uTime.value = t
@@ -1161,7 +1170,8 @@ export class FrScene {
     this.camX += (v.x * 0.62 - this.camX) * k
     // Locked over-shoulder chase: the camera barely follows a jump (so the astronaut visibly leaves
     // the ground) and never dips for a slide — no pops.
-    const ty = 3.4 + Math.max(0, v.y) * 0.08
+    // raised, tilted-down chase cam: more road ahead + the UFO riding above / behind him
+    const ty = 4.2 + Math.max(0, v.y) * 0.08
     this.camY += (ty - this.camY) * (1 - Math.exp(-dt * 6))
     const speedF = THREE.MathUtils.clamp((v.speed - 16) / 34, 0, 1)
     const aspect = this.camera.aspect
@@ -1171,13 +1181,13 @@ export class FrScene {
     const sh = v.shake
     const sx = sh ? (Math.sin(v.time * 61) + Math.sin(v.time * 37)) * 0.06 * sh : 0
     const sy = sh ? Math.sin(v.time * 53) * 0.05 * sh : 0
-    let dz = 6.8 - speedF * 0.55
+    let dz = 7.0 - speedF * 0.5
     // push in on a fall/hit; ease back out after a respawn (no camera pop)
     const push = v.dead ? Math.min(1.2, v.deadT * 1.5) : 0
     this.camPush += (push - this.camPush) * (v.dead ? 1 : 1 - Math.exp(-dt * 4))
     dz -= this.camPush
     this.camera.position.set(this.camX + sx, this.camY + sy, dz)
-    this.lookT.set(v.x * 0.5, 1.15, -14)
+    this.lookT.set(v.x * 0.5, 0.55, -14)
     this.camera.lookAt(this.lookT)
     this.camera.rotation.z += (this.runner.group.rotation.z || 0) * 0.15
     this.camera.fov = this.fov
