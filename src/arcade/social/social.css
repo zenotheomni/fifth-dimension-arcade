@@ -817,7 +817,10 @@
   line-height: 1.05;
   font-weight: 800;
   letter-spacing: 0.08em;
+  /* offset the trailing letter-space so the wordmark sits dead-centre under the logo */
+  padding-left: 0.08em;
   text-align: center;
+  white-space: nowrap;
   text-transform: uppercase;
   color: var(--soc-gold);
   text-shadow: 0 1px 2px #000;
