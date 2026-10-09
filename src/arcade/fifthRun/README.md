@@ -24,11 +24,12 @@ drive at you down a lane (switch lanes to dodge).
 - Hitting one costs a life (like a boulder) unless you're invincible (then you smash it).
 
 ## Chase (core tension)
-- A small **UFO** (`render/ufo.ts`: ~0.72 m metal saucer, glowing dome, chasing rim lights, violet under-glow,
-  tractor beam when it catches you) is **always on screen** like Temple Run's monsters: a little behind and above the
-  runner, beside his head toward the middle of the road (never over him), clamped inside the frame for any lane / FOV.
-  `threat` 0..1 pulls it in: clean = higher, further back, out over the next lane; stumble = swoops down over his
-  shoulder; caught = right above him, beam on. CSS `.fr-threat` darkens the edges, rumble SFX.
+- A small **UFO** (`render/ufo.ts`: ~0.64 m metal saucer, glowing dome, chasing rim lights, violet under-glow,
+  tractor beam when it catches you) is **always on screen** and TRAILS him like Temple Run's monsters: between the camera and the
+  runner, low in the frame behind his feet and off to one side toward the middle of the road (never over him or the
+  hazards in his lane), clamped inside the frame in NDC for any lane / FOV. `threat` 0..1 pulls it in: clean = hangs
+  back near the bottom edge; stumble = surges up to his heels; caught = overtakes him and beams him from just ahead.
+  CSS `.fr-threat` darkens the edges, rumble SFX.
 - Camera: raised chase cam (y 4.2, z 7.0, looking at y 0.55 14 m ahead, ~10° down): more road ahead + the UFO in view.
 - Hit a small obstacle (hurdle / beam / pipe) → stumble: threat = 0.75, speed ×0.62 easing back over 1.1 s, 0.5 s i-frames.
 - Stumble again while threat ≥ 0.3 (≈3 s of clean running to recover; recovery is up to 45% faster in the warm-up) → **caught**.
