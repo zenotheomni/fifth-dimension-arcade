@@ -153,24 +153,33 @@ function buildDebris(sd: number, hw: number, hl: number): THREE.BufferGeometry {
     return new THREE.Vector3(Math.cos(th) * R * hw, 0, Math.sin(th) * R * hl)
   }
   // broken asphalt slabs on / hanging over the rim (tilted down into the hole)
-  const nSlab = 9 + Math.floor(rnd() * 4)
+  const nSlab = 10 + Math.floor(rnd() * 5)
   for (let i = 0; i < nSlab; i++) {
     const th = rnd() * Math.PI * 2
     const k = 0.97 + rnd() * 0.16
     const p = edge(th, k)
-    const g = new THREE.DodecahedronGeometry(1, 0).toNonIndexed()
-    const w = 0.13 + rnd() * 0.2
-    s.set(w, 0.05 + rnd() * 0.05, w * (0.6 + rnd() * 0.7))
+    // irregular slab: a jittered, subdivided box (no faceted gem look)
+    const g0 = new THREE.BoxGeometry(1, 1, 1, 2, 1, 2)
+    const pa = g0.getAttribute('position')
+    for (let vi = 0; vi < pa.count; vi++) {
+      pa.setX(vi, pa.getX(vi) * (0.75 + rnd() * 0.5))
+      pa.setZ(vi, pa.getZ(vi) * (0.75 + rnd() * 0.5))
+      pa.setY(vi, pa.getY(vi) + (pa.getY(vi) > 0 ? (rnd() - 0.5) * 0.35 : 0))
+    }
+    const g = g0.toNonIndexed()
+    g0.dispose()
+    const w = 0.09 + rnd() * 0.16
+    s.set(w, 0.035 + rnd() * 0.035, w * (0.6 + rnd() * 0.8))
     // tilt toward the hole centre (a slab cracked off the edge)
-    const tilt = k < 1.02 ? 0.25 + rnd() * 0.45 : rnd() * 0.25
+    const tilt = k < 1.02 ? 0.25 + rnd() * 0.45 : rnd() * 0.2
     e.set(Math.sin(th) * tilt, rnd() * Math.PI, -Math.cos(th) * tilt)
     q.setFromEuler(e)
-    v.set(p.x, 0.03 + rnd() * 0.04 - (k < 1.0 ? 0.06 : 0), p.z)
+    v.set(p.x, 0.018 + rnd() * 0.02 - (k < 1.0 ? 0.05 : 0), p.z)
     m.compose(v, q, s)
     g.applyMatrix4(m)
     g.computeVertexNormals()
-    const tone = 0.07 + rnd() * 0.05
-    parts.push(colorize(g, new THREE.Color(tone * 1.5, tone * 1.45, tone * 1.5), new THREE.Color(0.11, 0.095, 0.08)))
+    const tone = 0.032 + rnd() * 0.025
+    parts.push(colorize(g, new THREE.Color(tone, tone * 0.97, tone * 1.02), new THREE.Color(0.07, 0.06, 0.05)))
   }
   // bent rebar sticking out of the broken edge over the hole
   const nBar = 3 + Math.floor(rnd() * 3)
@@ -205,7 +214,7 @@ function buildDebris(sd: number, hw: number, hl: number): THREE.BufferGeometry {
     m.compose(v.set(p.x, 0.015, p.z), q.setFromEuler(e), s.set(1, 0.6, 1))
     g.applyMatrix4(m)
     g.computeVertexNormals()
-    const t = 0.09 + rnd() * 0.06
+    const t = 0.05 + rnd() * 0.04
     parts.push(colorize(g, new THREE.Color(t, t * 0.95, t * 0.9), new THREE.Color(t * 0.7, t * 0.65, t * 0.6)))
   }
   const merged = mergeGeometries(parts.map((g) => (g.index ? g.toNonIndexed() : g)))

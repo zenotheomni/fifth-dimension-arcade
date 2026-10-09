@@ -220,7 +220,9 @@ export function roadMaterial(reflTex: THREE.Texture | null) {
           col *= 1.0 - crack * 0.85;
           // subtle warm glow seeping up from below (edge + cracks): reads on the dark road from ~1.5 s
           vec3 warm = vec3(1.0, 0.42, 0.12);
-          emis += warm * (exp(-e * 10.0) * 0.34 + crack * nearE * 0.09);
+          // subtle up close; a little stronger far off so the hole reads ~1.5 s ahead on the dark road
+          float farB = 1.0 + 3.0 * smoothstep(14.0, 50.0, dist);
+          emis += warm * (exp(-e * (10.0 / farB)) * 0.34 * farB + crack * nearE * 0.09);
           wet *= 0.35 + 0.65 * smoothstep(0.0, 0.5, e);
         }
         vec3 V = normalize(uCam - vWorld);

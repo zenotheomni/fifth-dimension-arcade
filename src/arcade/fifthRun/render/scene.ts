@@ -959,11 +959,11 @@ export class FrScene {
         }
         // faint warm haze over the hole: helps it read from ~1.5 s out, gone up close
         const dAhead = liveS - S
-        const hOp = 0.3 * THREE.MathUtils.smoothstep(dAhead, 16, 40)
+        const hOp = 0.6 * THREE.MathUtils.smoothstep(dAhead, 16, 42)
         g.haze.visible = hOp > 0.01
         g.haze.quaternion.copy(this.camera.quaternion)
-        g.haze.scale.set(W + 1.6, 1.4, 1)
-        g.haze.position.set(0, 0.3, 0)
+        g.haze.scale.set(W + 2.4, 1.6, 1)
+        g.haze.position.set(0, 0.25, 0)
         g.hazeMat.opacity = hOp
         // cut the road away above the pit (scene coords: world group is shifted by +S)
         if (holes < holeU.length) {
