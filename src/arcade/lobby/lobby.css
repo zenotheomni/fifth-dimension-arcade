@@ -467,6 +467,36 @@
   color: rgba(242, 240, 234, 0.55);
 }
 
+.ffa-switch {
+  display: flex;
+  gap: 0.4rem;
+  justify-content: center;
+  margin: 0.55rem 1.1rem 0;
+}
+
+.ffa-switch__btn {
+  flex: 1 1 0;
+  min-height: 36px;
+  padding: 0.4rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--soft);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.ffa-switch__btn.is-active {
+  border-color: var(--card-accent, var(--coral));
+  background: rgba(255, 200, 60, 0.1);
+  color: #fff;
+}
+
 .ffa-select__play {
   /* visuals from .ffa-btn / .ffa-btn--primary */
   width: calc(100% - 2.2rem);
