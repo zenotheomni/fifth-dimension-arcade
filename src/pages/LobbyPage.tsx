@@ -187,11 +187,24 @@ export default function LobbyPage() {
     window.setTimeout(() => setExiting(false), 600)
   }
 
-  const onSelectCard = (index: number, g: ArcadeGame) => {
+  const focusGame = (index: number, g: ArcadeGame) => {
     setSelected(index)
     if (g.id !== game.id) setBoardWin(contestFor(g.id) && boardWin === 'contest' ? 'contest' : 'alltime')
     playSelect()
     track('arcade_game_focus', { game: g.id })
+  }
+
+  // Tapping a playable cabinet opens it straight away (a tap that only highlighted the card read as
+  // "the game won't open" on phones). Locked cabinets just get focus so the "Coming Up" state shows.
+  const onSelectCard = (index: number, g: ArcadeGame) => {
+    if (!g.route) {
+      focusGame(index, g)
+      return
+    }
+    setSelected(index)
+    playUiConfirm()
+    track('arcade_game_launch', { game: g.id, via: 'card' })
+    navigate(g.route)
   }
 
   const onPlay = () => {
@@ -401,7 +414,24 @@ export default function LobbyPage() {
               })}
             </div>
 
-            <p className="ffa-select__hint">Swipe · tap a cabinet · press play</p>
+            <p className="ffa-select__hint">Swipe · tap a cabinet to play</p>
+            <div className="ffa-switch" role="tablist" aria-label="Leaderboard and challenges for">
+              {games.map((g, i) =>
+                g.route ? (
+                  <button
+                    key={g.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={i === selected}
+                    className={`ffa-switch__btn${i === selected ? ' is-active' : ''}`}
+                    style={{ ['--card-accent' as string]: g.accent }}
+                    onClick={() => focusGame(i, g)}
+                  >
+                    {g.title}
+                  </button>
+                ) : null,
+              )}
+            </div>
             <button
               type="button"
               className="ffa-btn ffa-btn--primary ffa-select__play"

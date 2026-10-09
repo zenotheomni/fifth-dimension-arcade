@@ -130,6 +130,8 @@
 .fr-back {
   left: 0.7rem;
   padding: 0.42rem 0.75rem;
+  /* stay tappable above the how-to / end overlays (z 30) so you can always get back to the floor */
+  z-index: 35;
 }
 
 .fr-top-right {
