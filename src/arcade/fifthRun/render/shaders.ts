@@ -1,5 +1,6 @@
 /** Fifth Glide — custom materials: sky dome, wet neon road (planar reflection), instanced towers. */
 import * as THREE from 'three'
+import { POT_GLSL } from './pothole'
 
 export const PALETTE = {
   teal: new THREE.Color('#00e0d0'),
@@ -100,6 +101,7 @@ export function roadMaterial(reflTex: THREE.Texture | null) {
       /** open road holes (gaps) in scene coords: (x0, x1, z0, z1); the road is cut away so the pit below shows */
       uHoles: { value: Array.from({ length: MAX_HOLES }, () => new THREE.Vector4(0, 0, 0, 0)) },
       uHoleN: { value: 0 },
+      uHoleSeed: { value: new Array(MAX_HOLES).fill(0) },
     },
     vertexShader: /* glsl */ `
       uniform mat4 uTexMat;
@@ -114,15 +116,25 @@ export function roadMaterial(reflTex: THREE.Texture | null) {
     fragmentShader: /* glsl */ `
       uniform float uScroll; uniform float uTime; uniform sampler2D uRefl; uniform float uReflOn;
       uniform vec3 uCam; uniform vec3 uFog; uniform float uBoost;
-      uniform vec4 uHoles[${MAX_HOLES}]; uniform int uHoleN;
+      uniform vec4 uHoles[${MAX_HOLES}]; uniform int uHoleN; uniform float uHoleSeed[${MAX_HOLES}];
       varying vec4 vReflUv; varying vec3 vWorld;
       ${NOISE}
+      ${POT_GLSL}
       float band(float x, float c, float w, float aa){ return 1.0 - smoothstep(w, w + aa, abs(x - c)); }
       void main(){
+        // potholes: jagged opening (same potR() as the pit mesh) + broken-asphalt rim
+        float rq = 99.0; vec2 rp = vec2(0.0); float rsd = 0.0; float rth = 0.0;
         for (int i = 0; i < ${MAX_HOLES}; i++) {
           if (i >= uHoleN) break;
           vec4 hr = uHoles[i];
-          if (vWorld.x > hr.x && vWorld.x < hr.y && vWorld.z > hr.z && vWorld.z < hr.w) discard;
+          vec2 hc = vec2(hr.x + hr.y, hr.z + hr.w) * 0.5;
+          vec2 hh = vec2(hr.y - hr.x, hr.w - hr.z) * 0.5;
+          vec2 p = (vWorld.xz - hc) / hh;
+          if (abs(p.x) > 2.1 || abs(p.y) > 1.8) continue;
+          float th = atan(p.y, p.x);
+          float q = length(p) / potR(th, uHoleSeed[i]);
+          if (q < 1.0) discard;
+          if (q < rq) { rq = q; rp = p; rsd = uHoleSeed[i]; rth = th; }
         }
         float x = vWorld.x;
         float s = uScroll - vWorld.z;
@@ -189,6 +201,27 @@ export function roadMaterial(reflTex: THREE.Texture | null) {
           refl = min(refl, vec3(24.0));
         } else {
           refl = mix(vec3(0.5,0.15,0.4), vec3(0.08,0.03,0.15), smoothstep(40.0, 4.0, dist));
+        }
+        if (rq < 1.9) {
+          float e = rq - 1.0; // 0 at the broken edge
+          float nearE = 1.0 - smoothstep(0.0, 0.8, e);
+          float fadeD = 1.0 - smoothstep(16.0, 70.0, dist);
+          // chipped, broken asphalt band around the edge
+          float chip = vnoise(rp * 7.0 + rsd * 13.0);
+          float brk = 1.0 - smoothstep(0.06, 0.26, e + (chip - 0.5) * 0.14);
+          col = mix(col, vec3(0.06, 0.055, 0.052) * (0.5 + 1.0 * chip), brk * 0.85);
+          // raised broken lip catching the light right at the edge
+          col += vec3(0.05, 0.045, 0.04) * (1.0 - smoothstep(0.0, 0.045, e));
+          // cracks: radial spokes + a web, fading out from the hole
+          float rad = abs(sin(rth * 6.0 + rsd * 3.7 + (vnoise(rp * 2.5 + rsd) - 0.5) * 3.0));
+          float crackR = (1.0 - smoothstep(0.0, 0.05 + 0.05 * (1.0 - nearE), rad)) * step(0.42, vnoise(vec2(rth * 3.0, e * 4.0) + rsd)) * (1.0 - smoothstep(0.25, 0.9, e));
+          float web = (1.0 - smoothstep(0.0, 0.03, abs(vnoise(rp * 4.5 + rsd * 7.0) - 0.5))) * nearE;
+          float crack = max(crackR, web * 0.9) * fadeD;
+          col *= 1.0 - crack * 0.85;
+          // subtle warm glow seeping up from below (edge + cracks): reads on the dark road from ~1.5 s
+          vec3 warm = vec3(1.0, 0.42, 0.12);
+          emis += warm * (exp(-e * 10.0) * 0.34 + crack * nearE * 0.09);
+          wet *= 0.35 + 0.65 * smoothstep(0.0, 0.5, e);
         }
         vec3 V = normalize(uCam - vWorld);
         float fres = 0.05 + 0.95 * pow(1.0 - clamp(V.y, 0.0, 1.0), 5.0);

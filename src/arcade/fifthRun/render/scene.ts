@@ -14,7 +14,6 @@ import {
   buildBlock,
   buildCar,
   buildGantry,
-  buildGap,
   buildGate,
   buildLamp,
   buildPickup,
@@ -23,6 +22,7 @@ import {
   palmMaterial,
 } from './props'
 import { UfoChaser } from './ufo'
+import { buildPothole, potholeMaterials, PotholeCache, potSeed, POT_W, type PotholeParts } from './pothole'
 import { RunnerFigure, type PoseInput, type RunnerView } from './runnerFigure'
 import { loadHumanRunner } from './humanRunner'
 import { neonEnvironment } from './env'
@@ -151,7 +151,7 @@ export class FrScene {
     overhead: { group: THREE.Group }[]
     pipe: { group: THREE.Group; lamp: THREE.MeshStandardMaterial }[]
     block: { group: THREE.Group; lamp: THREE.MeshStandardMaterial }[]
-    gap: ReturnType<typeof buildGap>[]
+    gap: PotholeParts[]
     car: (ReturnType<typeof buildCar> & { headGlows: THREE.Mesh[] })[]
   } = { barrier: [], overhead: [], pipe: [], block: [], gap: [], car: [] }
   dark: UfoChaser
@@ -592,9 +592,12 @@ export class FrScene {
       this.world.add(c.group)
       this.pools.car.push({ ...c, headGlows })
     }
+    const potMats = potholeMaterials()
+    this.potMats = potMats
     for (let i = 0; i < 18; i++) {
-      const g = buildGap(this.glow)
+      const g = buildPothole(glowMaterial(this.glow, '#ff8a3c', 0), potMats.pit, potMats.debris)
       g.group.visible = false
+      g.group.traverse((o) => o.layers.enable(REFL))
       this.world.add(g.group)
       this.pools.gap.push(g)
     }
@@ -824,6 +827,7 @@ export class FrScene {
 
     this.roadMat.uniforms.uScroll.value = S
     this.roadMat.uniforms.uTime.value = t
+    if (this.potMats) this.potMats.pit.uniforms.uTime.value = t
     this.roadMat.uniforms.uCam.value.copy(this.camera.position)
     this.roadMat.uniforms.uBoost.value = v.invisible ? 0.2 : 0
     this.towerMat.uniforms.uTime.value = t
@@ -943,41 +947,27 @@ export class FrScene {
       } else {
         const g = this.pools.gap[idx.gap++]
         if (!g) continue
-        const W = 1.98
+        const W = POT_W
         const zc = -(liveS + o.len / 2)
         g.group.visible = true
-        g.group.position.set(x, 0, 0)
-        g.pit.scale.set(W, 1, o.len)
-        g.pit.position.z = zc
-        g.near.scale.x = W + 0.16
-        g.near.position.set(0, 0.06, -liveS + 0.1)
-        g.far.scale.x = W + 0.16
-        g.far.position.set(0, 0.06, -(liveS + o.len) - 0.1)
-        g.left.scale.z = o.len
-        g.left.position.set(-W / 2 - 0.08, 0.06, zc)
-        g.right.scale.z = o.len
-        g.right.position.set(W / 2 + 0.08, 0.06, zc)
-        g.spill.scale.set(W + 1.2, 2.6, 1)
-        g.spill.position.z = -liveS + 1.1
-        g.spillFar.scale.set(W + 1.0, 1.8, 1)
-        g.spillFar.position.z = -(liveS + o.len) - 0.7
-        g.curtain.scale.set(W + 0.16, 0.75, 1)
-        g.curtain.position.set(0, 0.1, -liveS + 0.1)
-        g.curtainFar.scale.set(W + 0.16, 0.6, 1)
-        g.curtainFar.position.set(0, 0.1, -(liveS + o.len) - 0.1)
-        const pulse = Math.sin(now * 6 + o.id)
-        g.edgeMat.emissiveIntensity = 3.8 + 0.7 * pulse
-        g.curtainMat.uniforms.uAmp.value = 0.42 + 0.1 * pulse
-        // far-off beacon: a soft cyan halo over the hole, gone by the time it is close
+        g.group.position.set(x, 0, zc)
+        if (g.id !== o.id) {
+          const geo = this.potCache.get(o.id, o.len)
+          g.pit.geometry = geo.pit
+          g.debris.geometry = geo.debris
+          g.id = o.id
+        }
+        // faint warm haze over the hole: helps it read from ~1.5 s out, gone up close
         const dAhead = liveS - S
-        const bOp = 0.85 * THREE.MathUtils.smoothstep(dAhead, 14, 34)
-        g.beacon.visible = bOp > 0.01
-        g.beacon.quaternion.copy(this.camera.quaternion)
-        g.beacon.scale.set(W + 4, 2.6, 1)
-        g.beacon.position.set(0, 0.45, zc)
-        g.beaconMat.opacity = bOp * (0.85 + 0.15 * pulse)
+        const hOp = 0.3 * THREE.MathUtils.smoothstep(dAhead, 16, 40)
+        g.haze.visible = hOp > 0.01
+        g.haze.quaternion.copy(this.camera.quaternion)
+        g.haze.scale.set(W + 1.6, 1.4, 1)
+        g.haze.position.set(0, 0.3, 0)
+        g.hazeMat.opacity = hOp
         // cut the road away above the pit (scene coords: world group is shifted by +S)
         if (holes < holeU.length) {
+          ;(this.roadMat.uniforms.uHoleSeed.value as number[])[holes] = potSeed(o.id)
           holeU[holes++].set(x - W / 2, x + W / 2, S - (liveS + o.len), S - liveS)
         }
       }
@@ -1165,6 +1155,8 @@ export class FrScene {
   }
 
   private camPush = 0
+  private potCache = new PotholeCache()
+  private potMats: ReturnType<typeof potholeMaterials> | null = null
   private updateCamera(v: ViewState, dt: number) {
     const k = 1 - Math.exp(-dt * 7)
     this.camX += (v.x * 0.62 - this.camX) * k
