@@ -19,7 +19,7 @@ export default function BrandLockup({ size = 64, label = true, className }: { si
         style={{ display: 'block', width: size, height: size, ...BRAND_GLOW }}
       />
       {label ? (
-        <span style={{ fontSize: Math.max(9, Math.round(size * 0.17)), letterSpacing: '0.18em', fontWeight: 800, color: '#ffc83c', whiteSpace: 'nowrap', lineHeight: 1 }}>
+        <span style={{ fontSize: Math.max(9, Math.round(size * 0.17)), letterSpacing: '0.18em', paddingLeft: '0.18em', textAlign: 'center', fontWeight: 800, color: '#ffc83c', whiteSpace: 'nowrap', lineHeight: 1 }}>
           FIFTH FLOOR ARCADE
         </span>
       ) : null}
