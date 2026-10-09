@@ -515,99 +515,6 @@ export function buildGantry(chev: THREE.Texture, metal: THREE.Material, glow: TH
   return { group }
 }
 
-/**
- * Road gap: a real pit (the road shader cuts the hole away) with lit walls and a glowing grid floor
- * 7 m down, ringed by bright cyan LED kerbs and a soft cyan spill on the asphalt so it reads ~1.5 s
- * (50+ m) out. The pit is a unit footprint scaled per gap (x = width, z = length); kerbs are placed
- * per frame by the scene.
- */
-export const GAP_DEPTH = 7
-export function buildGap(glow: THREE.Texture) {
-  const group = new THREE.Group()
-  const pitMat = new THREE.ShaderMaterial({
-    side: THREE.DoubleSide,
-    uniforms: { uTime: { value: 0 } },
-    vertexShader: /* glsl */ `
-      varying vec3 vL; varying vec3 vW;
-      void main(){ vL = position; vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
-    fragmentShader: /* glsl */ `
-      varying vec3 vL; varying vec3 vW; uniform float uTime;
-      void main(){
-        float depth = clamp(-vW.y / ${GAP_DEPTH.toFixed(1)}, 0.0, 1.0); // world y: road surface = 0
-        // walls: rim light spilling down from the cyan kerb, fading into the dark
-        float dm = max(0.0, -vW.y);
-        vec3 col = vec3(0.004, 0.01, 0.02) + vec3(0.1, 0.75, 0.9) * exp(-dm * 2.6) * 0.85;
-        // faint light bands down the shaft: depth cue while he falls
-        float band = 1.0 - smoothstep(0.0, 0.05, abs(fract(dm / 1.2) - 0.5));
-        col += vec3(0.1, 0.6, 0.8) * band * 0.22 * exp(-dm * 0.3);
-        // floor: synthwave grid far below
-        if (depth > 0.98) {
-          vec2 g = abs(fract(vW.xz * vec2(0.9, 0.6)) - 0.5);
-          float grid = 1.0 - smoothstep(0.0, 0.06, min(g.x, g.y));
-          col = vec3(0.01, 0.006, 0.03) + vec3(0.0, 0.7, 0.8) * grid * 0.6;
-        }
-        gl_FragColor = vec4(col, 1.0);
-        #include <tonemapping_fragment>
-        #include <colorspace_fragment>
-      }`,
-  })
-  const pit = new THREE.Group()
-  const D = GAP_DEPTH
-  const wall = (w: number, x: number, z: number, ry: number) => {
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, D), pitMat)
-    m.position.set(x, -D / 2, z)
-    m.rotation.y = ry
-    pit.add(m)
-  }
-  wall(1, 0, -0.5, 0) // far
-  wall(1, 0, 0.5, 0) // near
-  wall(1, -0.5, 0, Math.PI / 2)
-  wall(1, 0.5, 0, Math.PI / 2)
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), pitMat)
-  floor.rotation.x = -Math.PI / 2
-  floor.position.y = -D
-  pit.add(floor)
-  group.add(pit)
-
-  // bright raised LED kerbs on all four edges (unit length, scaled per frame)
-  const edgeMat = new THREE.MeshStandardMaterial({ color: '#dff', emissive: new THREE.Color('#39f3ff'), emissiveIntensity: 4, roughness: 0.4 })
-  const near = new THREE.Mesh(box(1, 0.12, 0.2), edgeMat)
-  const far = new THREE.Mesh(box(1, 0.12, 0.2), edgeMat)
-  const left = new THREE.Mesh(box(0.16, 0.12, 1), edgeMat)
-  const right = new THREE.Mesh(box(0.16, 0.12, 1), edgeMat)
-  for (const m of [near, far, left, right]) group.add(m)
-  // cyan spill on the asphalt just before / after the hole (never over it, so the pit stays dark)
-  const spill = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), glowMaterial(glow, '#39e8ff', 0.5))
-  spill.rotation.x = -Math.PI / 2
-  spill.position.y = 0.012
-  group.add(spill)
-  const spillFar = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), glowMaterial(glow, '#39e8ff', 0.35))
-  spillFar.rotation.x = -Math.PI / 2
-  spillFar.position.y = 0.012
-  group.add(spillFar)
-  // low light curtain rising off the near + far kerbs: reads from ~1.5 s out on a dark road
-  const curtainMat = new THREE.ShaderMaterial({
-    transparent: true,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-    side: THREE.DoubleSide,
-    uniforms: { uAmp: { value: 0.5 } },
-    vertexShader: /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
-    fragmentShader: /* glsl */ `varying vec2 vUv; uniform float uAmp;
-      void main(){ float side = smoothstep(0.0, 0.12, vUv.x) * smoothstep(1.0, 0.88, vUv.x);
-        float up = pow(1.0 - vUv.y, 2.2);
-        gl_FragColor = vec4(vec3(0.22, 0.95, 1.0) * up * side * uAmp, 1.0); }`,
-  })
-  const curtain = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0), curtainMat)
-  const curtainFar = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0), curtainMat)
-  group.add(curtain, curtainFar)
-  // soft beacon over the hole while it is still far off (fades out as you get close)
-  const beaconMat = glowMaterial(glow, '#39f3ff', 0.0)
-  const beacon = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), beaconMat)
-  group.add(beacon)
-  return { group, pit, near, far, left, right, spill, spillFar, curtain, curtainFar, curtainMat, beacon, beaconMat, mat: pitMat, edgeMat }
-}
-
 export function buildPickup(kind: 'hand', glow: THREE.Texture, emblem: THREE.Texture | null) {
   void kind
   const group = new THREE.Group()
@@ -775,7 +682,8 @@ export function buildGate(glow: THREE.Texture, emblem: THREE.Texture | null, met
   if (emblem) {
     const e = new THREE.Mesh(
       new THREE.PlaneGeometry(1.7, 1.7),
-      new THREE.MeshBasicMaterial({ map: emblem, transparent: true, color: new THREE.Color(1.6, 1.5, 1.3), fog: false }),
+      // no depth write from the transparent corners (they used to punch a dark square into glows behind)
+      new THREE.MeshBasicMaterial({ map: emblem, transparent: true, depthWrite: false, alphaTest: 0.04, color: new THREE.Color(1.6, 1.5, 1.3), fog: false }),
     )
     e.position.set(0, H + 1.2, 0.05)
     group.add(e)

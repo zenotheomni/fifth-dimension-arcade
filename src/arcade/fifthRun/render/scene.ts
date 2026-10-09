@@ -14,7 +14,6 @@ import {
   buildBlock,
   buildCar,
   buildGantry,
-  buildGap,
   buildGate,
   buildLamp,
   buildPickup,
@@ -23,6 +22,7 @@ import {
   palmMaterial,
 } from './props'
 import { UfoChaser } from './ufo'
+import { buildPothole, potholeMaterials, PotholeCache, potSeed, POT_W, type PotholeParts } from './pothole'
 import { RunnerFigure, type PoseInput, type RunnerView } from './runnerFigure'
 import { loadHumanRunner } from './humanRunner'
 import { neonEnvironment } from './env'
@@ -77,10 +77,18 @@ class SanitizeEffect extends Effect {
   constructor() {
     super(
       'SanitizeEffect',
-      `void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor){
+      // isnan()/isinf() can be compiled away under fast-math on Apple GPUs (Metal), which let NaNs
+      // through to the bloom mip chain → black squares. Test the exponent bits instead (not foldable).
+      `#if __VERSION__ >= 300
+      bool frBad(float x){ return (floatBitsToUint(x) & 0x7f800000u) == 0x7f800000u; }
+      #else
+      bool frBad(float x){ return !(x < 1e30 && x > -1e30); }
+      #endif
+      void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor){
         vec3 c = inputColor.rgb;
-        bool bad = any(isnan(c)) || any(isinf(c));
-        outputColor = vec4(bad ? vec3(0.0) : clamp(c, 0.0, 512.0), 1.0);
+        bool bad = frBad(c.r) || frBad(c.g) || frBad(c.b);
+        // NaN pixel → borrow the scene background tone rather than pure black (no visible hole)
+        outputColor = vec4(bad ? vec3(0.004, 0.005, 0.009) : clamp(c, 0.0, 512.0), 1.0);
       }`,
     )
   }
@@ -143,7 +151,7 @@ export class FrScene {
     overhead: { group: THREE.Group }[]
     pipe: { group: THREE.Group; lamp: THREE.MeshStandardMaterial }[]
     block: { group: THREE.Group; lamp: THREE.MeshStandardMaterial }[]
-    gap: ReturnType<typeof buildGap>[]
+    gap: PotholeParts[]
     car: (ReturnType<typeof buildCar> & { headGlows: THREE.Mesh[] })[]
   } = { barrier: [], overhead: [], pipe: [], block: [], gap: [], car: [] }
   dark: UfoChaser
@@ -162,7 +170,7 @@ export class FrScene {
   private sparkGeo!: THREE.BufferGeometry
   private darkFade = 1
   private camX = 0
-  private camY = 3.35
+  private camY = 4.2
   private fov = 62
   private tmpM = new THREE.Matrix4()
   private tmpQ = new THREE.Quaternion()
@@ -584,9 +592,12 @@ export class FrScene {
       this.world.add(c.group)
       this.pools.car.push({ ...c, headGlows })
     }
+    const potMats = potholeMaterials()
+    this.potMats = potMats
     for (let i = 0; i < 18; i++) {
-      const g = buildGap(this.glow)
+      const g = buildPothole(glowMaterial(this.glow, '#ff8a3c', 0), potMats.pit, potMats.debris)
       g.group.visible = false
+      g.group.traverse((o) => o.layers.enable(REFL))
       this.world.add(g.group)
       this.pools.gap.push(g)
     }
@@ -720,6 +731,8 @@ export class FrScene {
     const pr = this.renderer.getPixelRatio()
     if (this.reflRT) this.reflRT.setSize(Math.max(64, Math.round((w * pr) / 2)), Math.max(64, Math.round((h * pr) / 2)))
     this.starMat.uniforms.uPx.value = pr
+    // the resized reflection target is undefined until redrawn: redraw it on the very next frame
+    this.frameNo = 0
     ;(this.sparks.material as THREE.ShaderMaterial).uniforms.uPx.value = pr * (h / 844) * 1.4
   }
 
@@ -802,9 +815,19 @@ export class FrScene {
     this.updateCamera(v, dt)
     this.darkFade += ((v.invisible || v.idle ? 0 : 1) - this.darkFade) * (1 - Math.exp(-dt * (v.invisible ? 1.5 : 2.5)))
     this.dark.update(t, dt, v.dead && v.deathKind === 'caught' ? 1.5 : v.threat, v.x, v.idle ? 0 : Math.max(0.0, this.darkFade), this.camera.quaternion)
+    // keep the whole saucer inside the frame (any lane, any FOV)
+    {
+      const g = this.dark.group
+      const d = Math.max(1, this.camera.position.z - g.position.z)
+      const halfW = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)) * d * this.camera.aspect
+      const lim = Math.max(0, halfW - UfoChaser.SIZE.w * 0.5 - 0.12)
+      const cx = this.camera.position.x
+      g.position.x = THREE.MathUtils.clamp(g.position.x, cx - lim, cx + lim)
+    }
 
     this.roadMat.uniforms.uScroll.value = S
     this.roadMat.uniforms.uTime.value = t
+    if (this.potMats) this.potMats.pit.uniforms.uTime.value = t
     this.roadMat.uniforms.uCam.value.copy(this.camera.position)
     this.roadMat.uniforms.uBoost.value = v.invisible ? 0.2 : 0
     this.towerMat.uniforms.uTime.value = t
@@ -924,41 +947,27 @@ export class FrScene {
       } else {
         const g = this.pools.gap[idx.gap++]
         if (!g) continue
-        const W = 1.98
+        const W = POT_W
         const zc = -(liveS + o.len / 2)
         g.group.visible = true
-        g.group.position.set(x, 0, 0)
-        g.pit.scale.set(W, 1, o.len)
-        g.pit.position.z = zc
-        g.near.scale.x = W + 0.16
-        g.near.position.set(0, 0.06, -liveS + 0.1)
-        g.far.scale.x = W + 0.16
-        g.far.position.set(0, 0.06, -(liveS + o.len) - 0.1)
-        g.left.scale.z = o.len
-        g.left.position.set(-W / 2 - 0.08, 0.06, zc)
-        g.right.scale.z = o.len
-        g.right.position.set(W / 2 + 0.08, 0.06, zc)
-        g.spill.scale.set(W + 1.2, 2.6, 1)
-        g.spill.position.z = -liveS + 1.1
-        g.spillFar.scale.set(W + 1.0, 1.8, 1)
-        g.spillFar.position.z = -(liveS + o.len) - 0.7
-        g.curtain.scale.set(W + 0.16, 0.75, 1)
-        g.curtain.position.set(0, 0.1, -liveS + 0.1)
-        g.curtainFar.scale.set(W + 0.16, 0.6, 1)
-        g.curtainFar.position.set(0, 0.1, -(liveS + o.len) - 0.1)
-        const pulse = Math.sin(now * 6 + o.id)
-        g.edgeMat.emissiveIntensity = 3.8 + 0.7 * pulse
-        g.curtainMat.uniforms.uAmp.value = 0.42 + 0.1 * pulse
-        // far-off beacon: a soft cyan halo over the hole, gone by the time it is close
+        g.group.position.set(x, 0, zc)
+        if (g.id !== o.id) {
+          const geo = this.potCache.get(o.id, o.len)
+          g.pit.geometry = geo.pit
+          g.debris.geometry = geo.debris
+          g.id = o.id
+        }
+        // faint warm haze over the hole: helps it read from ~1.5 s out, gone up close
         const dAhead = liveS - S
-        const bOp = 0.85 * THREE.MathUtils.smoothstep(dAhead, 14, 34)
-        g.beacon.visible = bOp > 0.01
-        g.beacon.quaternion.copy(this.camera.quaternion)
-        g.beacon.scale.set(W + 4, 2.6, 1)
-        g.beacon.position.set(0, 0.45, zc)
-        g.beaconMat.opacity = bOp * (0.85 + 0.15 * pulse)
+        const hOp = 0.6 * THREE.MathUtils.smoothstep(dAhead, 16, 42)
+        g.haze.visible = hOp > 0.01
+        g.haze.quaternion.copy(this.camera.quaternion)
+        g.haze.scale.set(W + 2.4, 1.6, 1)
+        g.haze.position.set(0, 0.25, 0)
+        g.hazeMat.opacity = hOp
         // cut the road away above the pit (scene coords: world group is shifted by +S)
         if (holes < holeU.length) {
+          ;(this.roadMat.uniforms.uHoleSeed.value as number[])[holes] = potSeed(o.id)
           holeU[holes++].set(x - W / 2, x + W / 2, S - (liveS + o.len), S - liveS)
         }
       }
@@ -1146,12 +1155,15 @@ export class FrScene {
   }
 
   private camPush = 0
+  private potCache = new PotholeCache()
+  private potMats: ReturnType<typeof potholeMaterials> | null = null
   private updateCamera(v: ViewState, dt: number) {
     const k = 1 - Math.exp(-dt * 7)
     this.camX += (v.x * 0.62 - this.camX) * k
     // Locked over-shoulder chase: the camera barely follows a jump (so the astronaut visibly leaves
     // the ground) and never dips for a slide — no pops.
-    const ty = 3.4 + Math.max(0, v.y) * 0.08
+    // raised, tilted-down chase cam: more road ahead + the UFO riding above / behind him
+    const ty = 4.2 + Math.max(0, v.y) * 0.08
     this.camY += (ty - this.camY) * (1 - Math.exp(-dt * 6))
     const speedF = THREE.MathUtils.clamp((v.speed - 16) / 34, 0, 1)
     const aspect = this.camera.aspect
@@ -1161,13 +1173,13 @@ export class FrScene {
     const sh = v.shake
     const sx = sh ? (Math.sin(v.time * 61) + Math.sin(v.time * 37)) * 0.06 * sh : 0
     const sy = sh ? Math.sin(v.time * 53) * 0.05 * sh : 0
-    let dz = 6.8 - speedF * 0.55
+    let dz = 7.0 - speedF * 0.5
     // push in on a fall/hit; ease back out after a respawn (no camera pop)
     const push = v.dead ? Math.min(1.2, v.deadT * 1.5) : 0
     this.camPush += (push - this.camPush) * (v.dead ? 1 : 1 - Math.exp(-dt * 4))
     dz -= this.camPush
     this.camera.position.set(this.camX + sx, this.camY + sy, dz)
-    this.lookT.set(v.x * 0.5, 1.15, -14)
+    this.lookT.set(v.x * 0.5, 0.55, -14)
     this.camera.lookAt(this.lookT)
     this.camera.rotation.z += (this.runner.group.rotation.z || 0) * 0.15
     this.camera.fov = this.fov
@@ -1234,7 +1246,59 @@ export class FrScene {
     else this.renderer.render(this.scene, this.camera)
   }
 
+  /** After a WebGL context restore: rebuild the post chain (its render targets died with the context). */
+  onContextRestored() {
+    const had = !!this.composer
+    this.disableComposer()
+    if (had) this.enableComposer()
+    this.frameNo = 0
+    this.warmup()
+  }
+
+  private probeRT: THREE.WebGLRenderTarget | null = null
+  private probeBuf: Uint16Array | null = null
+  /**
+   * Debug only: render the scene into a small HDR target and count NaN / Inf pixels (also samples the
+   * planar-reflection target). Returns [scene, reflection] bad-pixel counts.
+   */
+  probeNaN(): [number, number] {
+    const W = 72
+    const H = 156
+    if (!this.probeRT) {
+      this.probeRT = new THREE.WebGLRenderTarget(W, H, { type: THREE.HalfFloatType })
+      this.probeBuf = new Uint16Array(W * H * 4)
+    }
+    const r = this.renderer
+    const prev = r.getRenderTarget()
+    r.setRenderTarget(this.probeRT)
+    r.clear()
+    r.render(this.scene, this.camera)
+    r.setRenderTarget(prev)
+    const bad = (buf: Uint16Array, n: number) => {
+      let c = 0
+      for (let i = 0; i < n; i++) if ((buf[i] & 0x7c00) === 0x7c00) c++
+      return c
+    }
+    let a = 0
+    let b = 0
+    try {
+      r.readRenderTargetPixels(this.probeRT, 0, 0, W, H, this.probeBuf!)
+      a = bad(this.probeBuf!, W * H * 4)
+      if (this.reflRT) {
+        const rw = Math.min(64, this.reflRT.width)
+        const rh = Math.min(64, this.reflRT.height)
+        const buf = new Uint16Array(rw * rh * 4)
+        r.readRenderTargetPixels(this.reflRT, Math.max(0, (this.reflRT.width - rw) >> 1), Math.max(0, (this.reflRT.height - rh) >> 1), rw, rh, buf)
+        b = bad(buf, rw * rh * 4)
+      }
+    } catch {
+      /* readback unsupported for this format on this device */
+    }
+    return [a, b]
+  }
+
   dispose() {
+    this.probeRT?.dispose()
     this.composer?.dispose()
     this.reflRT?.dispose()
     this.scene.traverse((o) => {

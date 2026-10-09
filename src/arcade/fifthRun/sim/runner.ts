@@ -293,7 +293,17 @@ function respawn(st: RunState, track: Track, ev: RunEvent[] | null | undefined) 
   ev?.push({ type: 'respawn', cause })
 }
 
+/** Streak over: a missed star while vulnerable, or a real hit. */
+function breakCombo(st: RunState, id: number, ev: RunEvent[] | null | undefined) {
+  const lost = st.combo
+  st.combo = 0
+  st.mult = 1
+  ev?.push({ type: 'miss', id, lostCombo: lost })
+}
+
 function applyHit(st: RunState, o: Obstacle, opts: StepOpts, ev: RunEvent[] | null | undefined) {
+  // a real hit (only reached when vulnerable) ends the star streak
+  if (st.combo > 0) breakCombo(st, -1, ev)
   // Survival search: any hit ends the path
   if (!opts.full) {
     st.dead = true
@@ -472,10 +482,10 @@ export function step(st: RunState, track: Track, opts: StepOpts) {
       if (st.mult > prevMult) ev?.push({ type: 'mult', mult: st.mult })
     } else if (dz < -0.8) {
       k.state = 2
-      const lost = st.combo
-      st.combo = 0
-      st.mult = 1
-      ev?.push({ type: 'miss', id: k.id, lostCombo: lost })
+      // invincible (5D logo, incl. its blinking tail) or respawn grace: smashing / passing through
+      // things skips their star arcs without breaking the streak
+      if (st.invuln > 0 || st.hand > 0) continue
+      breakCombo(st, k.id, ev)
     }
   }
 

@@ -7,7 +7,7 @@
  */
 import * as THREE from 'three'
 
-const R = 0.48 // disc radius (m)
+const R = 0.36 // disc radius (m)
 
 const GLOW_VERT = /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`
 const GLOW_FRAG = /* glsl */ `uniform vec3 uColor; uniform float uAmp; varying vec2 vUv;
@@ -35,7 +35,10 @@ export class UfoChaser {
   private under: THREE.ShaderMaterial
   private beam: THREE.Mesh
   private beamMat: THREE.ShaderMaterial
-  private z = 4.8
+  private z = 2.3
+  private y = 3.3
+  private side = 1
+  private sideT = 1
   private x = 0
   private threatS = 0
   /** world size (QA): diameter × height */
@@ -99,27 +102,36 @@ export class UfoChaser {
     void _camQ
     this.threatS += (threat - this.threatS) * (1 - Math.exp(-dt * 3))
     const k = Math.min(1.5, this.threatS)
-    // metres behind the runner: clean ≈ 5 (below the frame) → stumble (0.75) ≈ 2.0 → caught ≈ 0.9
-    const target = Math.max(0.9, 5 - k * 4) + (1 - fade) * 4
-    this.z += (target - this.z) * (1 - Math.exp(-dt * 4))
-    this.x += (runnerX - this.x) * (1 - Math.exp(-dt * 4.5))
-    // skims the road low behind him so it never sits on top of the astronaut in frame; rises to
-    // beam him up when it catches him
-    const hover = 0.8 + Math.max(0, k - 1) * 2.8 + 0.07 * Math.sin(time * 3.3)
-    // weaves a little off his line so it never hides his feet
-    const side = (runnerX <= 0 ? 1 : -1) * 0.55 * Math.min(1, Math.max(0, 1.1 - k) * 2)
-    this.group.position.set(this.x + side + 0.18 * Math.sin(time * 1.3), hover, this.z)
-    this.craft.rotation.set(-0.18 + 0.05 * Math.sin(time * 2.1), time * 1.6, 0.06 * Math.sin(time * 1.7))
-    this.group.visible = fade > 0.01
+    const near = Math.min(1, k) // 0 clean … 1 on his heels
+    const back = 1 - fade // logo surge / intro: hangs back a little (but stays in frame)
+    // Temple Run monster framing: always on screen, a little behind and ABOVE him, beside his head
+    // (never over him). Clean: higher, further back, out over the next lane. Stumble: drops in close
+    // over his shoulder. Caught (k > 1): right above him, beam on.
+    const zT = 2.3 - 1.8 * near - Math.max(0, k - 1) * 0.5 + back * 0.6
+    const yT = 3.3 - 0.85 * near + back * 0.25
+    // side: toward the middle of the road so it never leaves the frame; flips smoothly
+    if (runnerX > 0.3) this.sideT = -1
+    else if (runnerX < -0.3) this.sideT = 1
+    this.side += (this.sideT - this.side) * (1 - Math.exp(-dt * 3))
+    const off = (1.0 - 0.5 * near - Math.max(0, k - 1) * 1.0) * this.side
+    this.z += (zT - this.z) * (1 - Math.exp(-dt * 3.5))
+    this.y += (yT - this.y) * (1 - Math.exp(-dt * 3.5))
+    this.x += (runnerX + off - this.x) * (1 - Math.exp(-dt * 4))
+    const bob = 0.07 * Math.sin(time * 3.3)
+    this.group.position.set(this.x + 0.1 * Math.sin(time * 1.3), this.y + bob, this.z)
+    this.craft.rotation.set(0.22 + 0.05 * Math.sin(time * 2.1), time * 1.6, -0.12 * this.side + 0.06 * Math.sin(time * 1.7))
+    this.group.visible = true
     for (let i = 0; i < this.lights.length; i++) {
-      this.lights[i].emissiveIntensity = (i + Math.floor(time * 10)) % 4 === 0 ? 5 : 1.6
+      this.lights[i].emissiveIntensity = (i + Math.floor(time * (10 + 8 * near))) % 4 === 0 ? 5 : 1.6
     }
-    this.under.uniforms.uAmp.value = 0.8 + 0.4 * Math.min(1, k)
+    this.under.uniforms.uAmp.value = 0.8 + 0.5 * near
     const beamOn = Math.max(0, Math.min(1, (k - 0.85) * 2.5))
+    const hover = this.y + bob
     this.beam.visible = beamOn > 0.01
-    this.beam.scale.set(1, 0.6 + hover, 1)
-    this.beam.position.y = -0.13 - (0.6 + hover) / 2
+    this.beam.scale.set(1, hover, 1)
+    this.beam.position.y = -0.13 - hover / 2
     this.beamMat.uniforms.uAmp.value = beamOn * 0.8
     this.beamMat.uniforms.uTime.value = time
   }
+
 }

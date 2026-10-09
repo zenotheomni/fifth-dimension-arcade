@@ -24,17 +24,28 @@ drive at you down a lane (switch lanes to dodge).
 - Hitting one costs a life (like a boulder) unless you're invincible (then you smash it).
 
 ## Chase (core tension)
-- A small **UFO** (`render/ufo.ts`: ~0.95 m metal saucer, glowing dome, chasing rim lights, violet
-  under-glow, tractor beam when it catches you) skims the road behind the runner; `threat` 0..1 pulls it in
-  (below the frame when clean → a small craft at the bottom of the frame after a stumble → on his heels when caught).
-  CSS `.fr-threat` darkens the edges, rumble SFX.
+- A small **UFO** (`render/ufo.ts`: ~0.72 m metal saucer, glowing dome, chasing rim lights, violet under-glow,
+  tractor beam when it catches you) is **always on screen** like Temple Run's monsters: a little behind and above the
+  runner, beside his head toward the middle of the road (never over him), clamped inside the frame for any lane / FOV.
+  `threat` 0..1 pulls it in: clean = higher, further back, out over the next lane; stumble = swoops down over his
+  shoulder; caught = right above him, beam on. CSS `.fr-threat` darkens the edges, rumble SFX.
+- Camera: raised chase cam (y 4.2, z 7.0, looking at y 0.55 14 m ahead, ~10° down): more road ahead + the UFO in view.
 - Hit a small obstacle (hurdle / beam / pipe) → stumble: threat = 0.75, speed ×0.62 easing back over 1.1 s, 0.5 s i-frames.
 - Stumble again while threat ≥ 0.3 (≈3 s of clean running to recover; recovery is up to 45% faster in the warm-up) → **caught**.
 - **3 lives.** Caught by the UFO, falling into a gap, or hitting a boulder / car costs one. Temple Run continue: the
   fall (~1.05 s, he drops into the pit) or crash (~0.85 s) plays, then he respawns **at the same spot** (just past the
   gap for a fall), flashing with 2.5 s grace, and keeps running (no restart). 3rd life lost = game over.
-- Gaps are lit pits cut into the road (`uHoles` in the road shader): cyan LED kerbs on all four edges, a spill glow on the
-  road ahead of them and rim light down the walls, readable ~1.5 s out.
+- Gaps are **potholes** (`render/pothole.ts`): a jagged, irregular opening cut in the road shader (`uHoles` +
+  `uHoleSeed`, `potR()` shared with the pit mesh), broken/chipped asphalt band, radial + web cracks, dark earth/gravel
+  walls 7 m deep, faint warm glow from below (a touch stronger at distance, plus a faint warm haze, so it reads ~1.5 s
+  out), broken asphalt slabs, bent rebar and gravel on the rim. Shapes are seeded per obstacle id and cached.
+- Star streak: while invincible (logo, incl. the blinking last 3 s) or in respawn grace, smashing / passing through
+  things never breaks the streak or shows "Combo lost"; a real hit while vulnerable does.
+
+## Debug
+`?debug=1` shows an overlay logging WebGL context loss/restore, canvas resizes (applied / ignored + reason), DPR and
+post-processing changes, NaN/Inf pixels (small HDR probe render every 30 frames + reflection target sample), long frames
+and visibility changes.
 
 ## Controls
 - Swipe ← / → (or A/D, arrows): change lane

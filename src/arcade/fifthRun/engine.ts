@@ -7,6 +7,7 @@ import { RuleBot, SKILLS } from './sim/bot'
 import { BLINK_S, FR_DT, FR_HZ, POWER_TICKS, STAR_M } from './sim/constants'
 import { newRun, queueAction, resetCursors, scoreOf, speedMul, step, type Action, type RunEvent, type RunState } from './sim/runner'
 import { Track } from './sim/track'
+import { DebugOverlay } from './debugOverlay'
 import { FrScene, type QualityTier, type ViewState } from './render/scene'
 import { loadTexture } from './render/textures'
 import {
@@ -105,6 +106,14 @@ class Engine {
   rumbleAt = 0
   private touch: { id: number; x: number; y: number; t: number; fired: boolean } | null = null
   private ro: ResizeObserver | null = null
+  /** pending canvas resize (applied at the start of the next rendered frame, never between frames) */
+  private resizeReq = ''
+  private sized = { w: 0, h: 0 }
+  private lastDprChange = -1e9
+  private ctxLost = false
+  private dbg: DebugOverlay | null = null
+  private dbgFrame = 0
+  private prevOverscroll = ''
 
   constructor(host: HTMLElement, bridge: FrBridge) {
     this.host = host
@@ -117,6 +126,13 @@ class Engine {
     this.canvas = document.createElement('canvas')
     this.canvas.className = 'fr-canvas'
     host.appendChild(this.canvas)
+    if (DebugOverlay.enabled()) this.dbg = new DebugOverlay(host)
+    // no page scroll / rubber-band while playing: those resize the viewport (URL bar) on iOS
+    this.prevOverscroll = document.documentElement.style.overscrollBehavior
+    document.documentElement.style.overscrollBehavior = 'none'
+    this.canvas.addEventListener('touchmove', this.onTouchMove, { passive: false })
+    this.canvas.addEventListener('webglcontextlost', this.onCtxLost, false)
+    this.canvas.addEventListener('webglcontextrestored', this.onCtxRestored, false)
     setSfxMuted(bridge.muted)
     const g = globalThis as unknown as { __FR?: Engine }
     g.__FR = this
@@ -133,9 +149,10 @@ class Engine {
     await this.view.loadGltfRunner()
     this.view?.applyAnisotropy()
     if (this.destroyed) return
-    this.onResize()
-    this.ro = new ResizeObserver(() => this.onResize())
-    this.ro.observe(this.host)
+    this.applyResize('init')
+    this.ro = new ResizeObserver(() => this.requestResize('observer'))
+    this.ro.observe(this.canvas)
+    window.addEventListener('orientationchange', this.onOrient)
     this.canvas.addEventListener('pointerdown', this.onDown)
     window.addEventListener('pointermove', this.onMove)
     window.addEventListener('pointerup', this.onUp)
@@ -213,7 +230,36 @@ class Engine {
   }
 
   private onVis = () => {
+    this.dbg?.log(`visibility ${document.hidden ? 'hidden' : 'visible'}`)
     if (document.hidden && this.phase === 'playing') this.pause()
+  }
+
+  private onTouchMove = (e: TouchEvent) => {
+    if (e.cancelable) e.preventDefault()
+  }
+
+  private onOrient = () => {
+    this.dbg?.log('orientationchange')
+    this.requestResize('orientation')
+    // iOS reports the new size late
+    setTimeout(() => this.requestResize('orientation+300ms'), 300)
+  }
+
+  private onCtxLost = (e: Event) => {
+    e.preventDefault() // allow the browser to restore it
+    this.ctxLost = true
+    if (this.dbg) {
+      this.dbg.counts.lost++
+      this.dbg.log('WEBGL CONTEXT LOST')
+    }
+    if (this.phase === 'playing') this.pause()
+  }
+
+  private onCtxRestored = () => {
+    this.ctxLost = false
+    this.dbg?.log('webgl context restored')
+    this.view?.onContextRestored()
+    this.requestResize('context-restored')
   }
 
   /** While true (pre-run how-to screen is up), swipes/keys/taps don't start the run. */
@@ -349,10 +395,38 @@ class Engine {
       this.hudAcc = 0
       this.emitHud(false)
     }
-    if (!this.view) return
+    if (!this.view || this.ctxLost) return
+    // resizes clear the drawing buffer: apply them only right before drawing a frame, so the cleared
+    // (black) canvas is never composited
+    if (this.resizeReq && !skipRender) this.applyResize(this.resizeReq)
     const alpha = this.phase === 'playing' ? this.accum / FR_DT : 1
     this.view.update(this.viewState(alpha), dt)
-    if (!skipRender) this.view.render()
+    if (!skipRender) {
+      this.view.render()
+      if (this.dbg) this.debugFrame(dt)
+    }
+  }
+
+  private debugFrame(dt: number) {
+    const d = this.dbg!
+    const v = this.view!
+    if (dt > 0.12) {
+      d.counts.longFrames++
+      d.log(`long frame ${(dt * 1000).toFixed(0)} ms`)
+    }
+    if (++this.dbgFrame % 30 === 0) {
+      const [a, b] = v.probeNaN()
+      if (a || b) {
+        d.counts.nanFrames++
+        d.log(`NaN/Inf px · scene ${a} · reflection ${b}`)
+      }
+      const r = v.renderer
+      const c = d.counts
+      d.setLive(
+        `${this.sized.w}x${this.sized.h} @${r.getPixelRatio().toFixed(2)} · refl/${v.reflEvery} · post ${v.composer ? 'on' : 'off'}\n` +
+          `resizes ${c.resize} (ignored ${c.ignored}) · ctx lost ${c.lost} · NaN frames ${c.nanFrames} · long ${c.longFrames}`,
+      )
+    }
   }
 
   private viewState(alpha: number): ViewState {
@@ -563,27 +637,68 @@ class Engine {
       if (++this.fpsBad < 2) return
       this.fpsBad = 0
       if (v.reflEvery < 3) v.reflEvery++
-      else if (v.dprScale > 0.7) {
+      else if (v.dprScale > 0.7 && this.clock - this.lastDprChange > 6) {
         v.dprScale = Math.max(0.7, v.dprScale - 0.1)
-        this.onResize()
-      } else if (v.composer && fps < 40) v.disableComposer()
+        this.lastDprChange = this.clock
+        this.requestResize('dpr-down')
+      } else if (v.composer && fps < 40) {
+        v.disableComposer()
+        this.dbg?.log('post-processing off (fps)')
+      }
     } else if (fps > 58) {
       this.fpsBad = 0
       this.fpsGood++
       if (this.fpsGood >= 3) {
         this.fpsGood = 0
-        if (v.dprScale < 1) {
+        if (v.dprScale < 1 && this.clock - this.lastDprChange > 10) {
           v.dprScale = Math.min(1, v.dprScale + 0.1)
-          this.onResize()
+          this.lastDprChange = this.clock
+          this.requestResize('dpr-up')
         } else if (v.reflEvery > 1) v.reflEvery--
       }
     } else this.fpsBad = 0
   }
 
+  /** Kept for callers / QA: queue a resize for the next frame. */
   onResize() {
+    this.requestResize('external')
+  }
+
+  requestResize(reason: string) {
+    if (!this.resizeReq) this.resizeReq = reason
+    // manual (QA) mode has no rAF render: apply now
+    if (this.manual) this.applyResize(this.resizeReq)
+  }
+
+  /**
+   * The canvas is a fixed 100lvh box, so the iOS URL bar never changes it; still, only an orientation
+   * flip, a width change, a big height change (desktop window) or a DPR step reallocates the buffer.
+   */
+  private applyResize(reason: string) {
+    this.resizeReq = ''
     if (!this.view) return
-    const r = this.host.getBoundingClientRect()
-    this.view.resize(Math.max(1, Math.round(r.width)), Math.max(1, Math.round(r.height)))
+    const r = this.canvas.getBoundingClientRect()
+    const w = Math.max(1, Math.round(r.width))
+    const h = Math.max(1, Math.round(r.height))
+    const p = this.sized
+    const first = p.w === 0
+    const orient = h >= w !== p.h >= p.w
+    const widthChanged = Math.abs(w - p.w) > 2
+    const bigH = Math.abs(h - p.h) > Math.max(160, p.h * 0.22)
+    const dpr = reason.startsWith('dpr') || reason === 'context-restored'
+    // desktop windows resize freely; phones (coarse pointer) ignore URL-bar-sized height changes
+    const desktop = typeof matchMedia === 'function' && !matchMedia('(pointer: coarse)').matches
+    if (first || orient || widthChanged || bigH || dpr || (desktop && h !== p.h)) {
+      this.sized = { w, h }
+      this.view.resize(w, h)
+      if (this.dbg) {
+        this.dbg.counts.resize++
+        this.dbg.log(`resize ${w}x${h} @${this.view.renderer.getPixelRatio().toFixed(2)} (${reason})`)
+      }
+    } else if (this.dbg && (w !== p.w || h !== p.h)) {
+      this.dbg.counts.ignored++
+      this.dbg.log(`ignored resize ${w}x${h} (${reason})`)
+    }
   }
 
   setMuted(m: boolean) {
@@ -594,6 +709,12 @@ class Engine {
     this.destroyed = true
     cancelAnimationFrame(this.raf)
     this.ro?.disconnect()
+    window.removeEventListener('orientationchange', this.onOrient)
+    this.canvas.removeEventListener('touchmove', this.onTouchMove)
+    this.canvas.removeEventListener('webglcontextlost', this.onCtxLost)
+    this.canvas.removeEventListener('webglcontextrestored', this.onCtxRestored)
+    document.documentElement.style.overscrollBehavior = this.prevOverscroll
+    this.dbg?.destroy()
     this.canvas.removeEventListener('pointerdown', this.onDown)
     window.removeEventListener('pointermove', this.onMove)
     window.removeEventListener('pointerup', this.onUp)
