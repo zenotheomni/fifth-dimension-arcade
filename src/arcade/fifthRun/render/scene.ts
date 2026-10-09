@@ -815,14 +815,22 @@ export class FrScene {
     this.updateCamera(v, dt)
     this.darkFade += ((v.invisible || v.idle ? 0 : 1) - this.darkFade) * (1 - Math.exp(-dt * (v.invisible ? 1.5 : 2.5)))
     this.dark.update(t, dt, v.dead && v.deathKind === 'caught' ? 1.5 : v.threat, v.x, v.idle ? 0 : Math.max(0.0, this.darkFade), this.camera.quaternion)
-    // keep the whole saucer inside the frame (any lane, any FOV)
+    // keep the whole saucer inside the frame (any lane, any FOV): clamp its centre in NDC
     {
       const g = this.dark.group
+      const p = this.ufoNdc.copy(g.position).project(this.camera)
       const d = Math.max(1, this.camera.position.z - g.position.z)
-      const halfW = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)) * d * this.camera.aspect
-      const lim = Math.max(0, halfW - UfoChaser.SIZE.w * 0.5 - 0.12)
-      const cx = this.camera.position.x
-      g.position.x = THREE.MathUtils.clamp(g.position.x, cx - lim, cx + lim)
+      const halfH = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)) * d
+      const mx = (UfoChaser.SIZE.w * 0.5 + 0.1) / (halfH * this.camera.aspect)
+      const my = (UfoChaser.SIZE.h * 0.5 + 0.08) / halfH
+      const cx = THREE.MathUtils.clamp(p.x, -1 + mx, 1 - mx)
+      const cy = THREE.MathUtils.clamp(p.y, -1 + my + 0.04, 1 - my)
+      if (cx !== p.x || cy !== p.y) {
+        p.x = cx
+        p.y = cy
+        p.unproject(this.camera)
+        g.position.copy(p)
+      }
     }
 
     this.roadMat.uniforms.uScroll.value = S
@@ -1155,6 +1163,7 @@ export class FrScene {
   }
 
   private camPush = 0
+  private ufoNdc = new THREE.Vector3()
   private potCache = new PotholeCache()
   private potMats: ReturnType<typeof potholeMaterials> | null = null
   private updateCamera(v: ViewState, dt: number) {

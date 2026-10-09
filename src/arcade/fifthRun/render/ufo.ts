@@ -7,7 +7,7 @@
  */
 import * as THREE from 'three'
 
-const R = 0.36 // disc radius (m)
+const R = 0.32 // disc radius (m)
 
 const GLOW_VERT = /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`
 const GLOW_FRAG = /* glsl */ `uniform vec3 uColor; uniform float uAmp; varying vec2 vUv;
@@ -35,8 +35,8 @@ export class UfoChaser {
   private under: THREE.ShaderMaterial
   private beam: THREE.Mesh
   private beamMat: THREE.ShaderMaterial
-  private z = 2.3
-  private y = 3.3
+  private z = 2.85
+  private y = 1.05
   private side = 1
   private sideT = 1
   private x = 0
@@ -104,22 +104,25 @@ export class UfoChaser {
     const k = Math.min(1.5, this.threatS)
     const near = Math.min(1, k) // 0 clean … 1 on his heels
     const back = 1 - fade // logo surge / intro: hangs back a little (but stays in frame)
-    // Temple Run monster framing: always on screen, a little behind and ABOVE him, beside his head
-    // (never over him). Clean: higher, further back, out over the next lane. Stumble: drops in close
-    // over his shoulder. Caught (k > 1): right above him, beam on.
-    const zT = 2.3 - 1.8 * near - Math.max(0, k - 1) * 0.5 + back * 0.6
-    const yT = 3.3 - 0.85 * near + back * 0.25
+    // Temple Run monster framing: it TRAILS him, between the camera and the runner, low in the frame
+    // behind his feet and off to one side (never over him or his lane's hazards, which sit higher up
+    // the screen). Clean: hangs back near the bottom edge. Stumble: surges up to his heels.
+    // Caught (k > 1): overtakes him and beams him from just ahead/above.
+    const over = Math.max(0, k - 1) * 2 // 0 → 1 across the catch
+    const zT = 2.85 - 0.85 * near - over * 4.3 + back * 0.2
+    const yT = 1.05 + 0.12 * near + over * 1.6
     // side: toward the middle of the road so it never leaves the frame; flips smoothly
     if (runnerX > 0.3) this.sideT = -1
     else if (runnerX < -0.3) this.sideT = 1
     this.side += (this.sideT - this.side) * (1 - Math.exp(-dt * 3))
-    const off = (1.0 - 0.5 * near - Math.max(0, k - 1) * 1.0) * this.side
+    const off = (0.95 - 0.1 * near - over * 0.85) * this.side
     this.z += (zT - this.z) * (1 - Math.exp(-dt * 3.5))
     this.y += (yT - this.y) * (1 - Math.exp(-dt * 3.5))
     this.x += (runnerX + off - this.x) * (1 - Math.exp(-dt * 4))
     const bob = 0.07 * Math.sin(time * 3.3)
     this.group.position.set(this.x + 0.1 * Math.sin(time * 1.3), this.y + bob, this.z)
-    this.craft.rotation.set(0.22 + 0.05 * Math.sin(time * 2.1), time * 1.6, -0.12 * this.side + 0.06 * Math.sin(time * 1.7))
+    // nose pitched toward him (chasing): from the chase cam we see its dome and back rim
+    this.craft.rotation.set(-0.16 + 0.05 * Math.sin(time * 2.1), time * 1.6, -0.1 * this.side + 0.06 * Math.sin(time * 1.7))
     this.group.visible = true
     for (let i = 0; i < this.lights.length; i++) {
       this.lights[i].emissiveIntensity = (i + Math.floor(time * (10 + 8 * near))) % 4 === 0 ? 5 : 1.6
