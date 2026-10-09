@@ -77,10 +77,18 @@ class SanitizeEffect extends Effect {
   constructor() {
     super(
       'SanitizeEffect',
-      `void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor){
+      // isnan()/isinf() can be compiled away under fast-math on Apple GPUs (Metal), which let NaNs
+      // through to the bloom mip chain → black squares. Test the exponent bits instead (not foldable).
+      `#if __VERSION__ >= 300
+      bool frBad(float x){ return (floatBitsToUint(x) & 0x7f800000u) == 0x7f800000u; }
+      #else
+      bool frBad(float x){ return !(x < 1e30 && x > -1e30); }
+      #endif
+      void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor){
         vec3 c = inputColor.rgb;
-        bool bad = any(isnan(c)) || any(isinf(c));
-        outputColor = vec4(bad ? vec3(0.0) : clamp(c, 0.0, 512.0), 1.0);
+        bool bad = frBad(c.r) || frBad(c.g) || frBad(c.b);
+        // NaN pixel → borrow the scene background tone rather than pure black (no visible hole)
+        outputColor = vec4(bad ? vec3(0.004, 0.005, 0.009) : clamp(c, 0.0, 512.0), 1.0);
       }`,
     )
   }
@@ -720,6 +728,8 @@ export class FrScene {
     const pr = this.renderer.getPixelRatio()
     if (this.reflRT) this.reflRT.setSize(Math.max(64, Math.round((w * pr) / 2)), Math.max(64, Math.round((h * pr) / 2)))
     this.starMat.uniforms.uPx.value = pr
+    // the resized reflection target is undefined until redrawn: redraw it on the very next frame
+    this.frameNo = 0
     ;(this.sparks.material as THREE.ShaderMaterial).uniforms.uPx.value = pr * (h / 844) * 1.4
   }
 
@@ -1234,7 +1244,59 @@ export class FrScene {
     else this.renderer.render(this.scene, this.camera)
   }
 
+  /** After a WebGL context restore: rebuild the post chain (its render targets died with the context). */
+  onContextRestored() {
+    const had = !!this.composer
+    this.disableComposer()
+    if (had) this.enableComposer()
+    this.frameNo = 0
+    this.warmup()
+  }
+
+  private probeRT: THREE.WebGLRenderTarget | null = null
+  private probeBuf: Uint16Array | null = null
+  /**
+   * Debug only: render the scene into a small HDR target and count NaN / Inf pixels (also samples the
+   * planar-reflection target). Returns [scene, reflection] bad-pixel counts.
+   */
+  probeNaN(): [number, number] {
+    const W = 72
+    const H = 156
+    if (!this.probeRT) {
+      this.probeRT = new THREE.WebGLRenderTarget(W, H, { type: THREE.HalfFloatType })
+      this.probeBuf = new Uint16Array(W * H * 4)
+    }
+    const r = this.renderer
+    const prev = r.getRenderTarget()
+    r.setRenderTarget(this.probeRT)
+    r.clear()
+    r.render(this.scene, this.camera)
+    r.setRenderTarget(prev)
+    const bad = (buf: Uint16Array, n: number) => {
+      let c = 0
+      for (let i = 0; i < n; i++) if ((buf[i] & 0x7c00) === 0x7c00) c++
+      return c
+    }
+    let a = 0
+    let b = 0
+    try {
+      r.readRenderTargetPixels(this.probeRT, 0, 0, W, H, this.probeBuf!)
+      a = bad(this.probeBuf!, W * H * 4)
+      if (this.reflRT) {
+        const rw = Math.min(64, this.reflRT.width)
+        const rh = Math.min(64, this.reflRT.height)
+        const buf = new Uint16Array(rw * rh * 4)
+        r.readRenderTargetPixels(this.reflRT, Math.max(0, (this.reflRT.width - rw) >> 1), Math.max(0, (this.reflRT.height - rh) >> 1), rw, rh, buf)
+        b = bad(buf, rw * rh * 4)
+      }
+    } catch {
+      /* readback unsupported for this format on this device */
+    }
+    return [a, b]
+  }
+
   dispose() {
+    this.probeRT?.dispose()
     this.composer?.dispose()
     this.reflRT?.dispose()
     this.scene.traverse((o) => {

@@ -775,7 +775,8 @@ export function buildGate(glow: THREE.Texture, emblem: THREE.Texture | null, met
   if (emblem) {
     const e = new THREE.Mesh(
       new THREE.PlaneGeometry(1.7, 1.7),
-      new THREE.MeshBasicMaterial({ map: emblem, transparent: true, color: new THREE.Color(1.6, 1.5, 1.3), fog: false }),
+      // no depth write from the transparent corners (they used to punch a dark square into glows behind)
+      new THREE.MeshBasicMaterial({ map: emblem, transparent: true, depthWrite: false, alphaTest: 0.04, color: new THREE.Color(1.6, 1.5, 1.3), fog: false }),
     )
     e.position.set(0, H + 1.2, 0.05)
     group.add(e)

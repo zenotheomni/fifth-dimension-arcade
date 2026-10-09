@@ -180,6 +180,13 @@ export function roadMaterial(reflTex: THREE.Texture | null) {
           vec4 r2 = r; r2.y -= 0.012 * r.w;
           vec4 r3 = r; r3.y -= 0.028 * r.w;
           refl = (a * 0.5 + texture2DProj(uRefl, r2).rgb * 0.3 + texture2DProj(uRefl, r3).rgb * 0.2) * 0.62;
+          // the mirror pass writes a half-float target with no sanitize: never let a NaN / Inf from it
+          // (or a w≈0 projective lookup) poison the road
+          #if __VERSION__ >= 300
+          uvec3 rb = floatBitsToUint(refl) & 0x7f800000u;
+          if (any(equal(rb, uvec3(0x7f800000u))) || r.w <= 1e-4) refl = vec3(0.0);
+          #endif
+          refl = min(refl, vec3(24.0));
         } else {
           refl = mix(vec3(0.5,0.15,0.4), vec3(0.08,0.03,0.15), smoothstep(40.0, 4.0, dist));
         }
