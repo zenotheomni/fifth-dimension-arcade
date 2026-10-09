@@ -725,7 +725,7 @@
   text-transform: uppercase;
 }
 .cv3-root .cvp-mode,
-.cv3-root > .cvp-back { z-index: 19; }
+.cv3-root > .cvp-back { z-index: 21; } /* above how-to (18) and end screen (20) so mute/← Floor stay tappable */
 
 /* End: score + best combo side by side */
 .cv3-root .cv3-end__stats { display: flex; gap: 1.6rem; align-items: flex-end; justify-content: center; }

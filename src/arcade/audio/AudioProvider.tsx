@@ -7,7 +7,6 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { useLocation } from 'react-router-dom'
 import { MUTE_STORAGE_KEY, SCENE_TRACKS, type MusicScene } from './music'
 import { setMusicDucked, setMusicMuted, setMusicScene, unlockMusic } from './sceneMusic'
 
@@ -18,8 +17,9 @@ type AudioCtx = {
   toggleMute: () => void
   duck: (on: boolean) => void
   /**
-   * A mounted game claims its music scene (overrides the route default, e.g.
-   * Court Vision inside /challenge/:id). Pass null to release.
+   * Call from the tap that starts gameplay to swap the lobby song for the
+   * game's song (no-op for games without a track). Pass null to release
+   * (e.g. on unmount) and crossfade back to the lobby song.
    */
   claimScene: (scene: MusicScene | null) => void
   /** Title of the track for the current scene ('' when the slot is empty). */
@@ -36,21 +36,24 @@ function readMuted(): boolean {
   }
 }
 
-/** Default music scene for a route (relative to the /arcade basename). */
-function sceneForPath(path: string): MusicScene {
-  if (path === '/' || path === '') return 'lobby'
-  if (path.startsWith('/court-vision')) return 'court-vision'
-  if (path.startsWith('/fifth-run') || path.startsWith('/fifth-glide')) return 'fifth-run'
-  // challenge pages: the mounted game claims its scene; admin/claim/key stay quiet
-  return 'none'
+/**
+ * Every route defaults to the lobby song — including game routes (loading,
+ * how-to) and challenge links. A game swaps in its own song only when play
+ * actually starts, by calling claimScene(<game>) from the start tap.
+ */
+const DEFAULT_SCENE: MusicScene = 'lobby'
+
+/** Games with no track of their own keep the lobby song. */
+function resolveScene(claimed: MusicScene | null): MusicScene {
+  if (claimed && SCENE_TRACKS[claimed]) return claimed
+  return DEFAULT_SCENE
 }
 
 export function AudioProvider({ children }: { children: ReactNode }) {
-  const { pathname } = useLocation()
   const [entered, setEntered] = useState(false)
   const [muted, setMuted] = useState(readMuted)
   const [claimed, setClaimed] = useState<MusicScene | null>(null)
-  const scene: MusicScene = claimed ?? sceneForPath(pathname)
+  const scene = resolveScene(claimed)
 
   useEffect(() => {
     setMusicMuted(muted)
@@ -80,7 +83,11 @@ export function AudioProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const duck = useCallback((on: boolean) => setMusicDucked(on), [])
-  const claimScene = useCallback((s: MusicScene | null) => setClaimed(s), [])
+  const claimScene = useCallback((s: MusicScene | null) => {
+    // apply synchronously so a claim made inside a tap can start playback on iOS
+    setMusicScene(resolveScene(s))
+    setClaimed(s)
+  }, [])
 
   const value = useMemo(
     () => ({

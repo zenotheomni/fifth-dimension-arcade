@@ -25,6 +25,11 @@ let muted = false
 let unlocked = false
 let started = false
 
+/** Scene-change log for tests / debugging: window.__ARCADE_MUSIC_LOG */
+type LogEntry = { t: number; scene: MusicScene; from: string | null; to: string | null; path: string }
+const sceneLog: LogEntry[] = []
+if (typeof window !== 'undefined') (window as unknown as { __ARCADE_MUSIC_LOG?: LogEntry[] }).__ARCADE_MUSIC_LOG = sceneLog
+
 function pickSrc(t: MusicTrack): string {
   const probe = document.createElement('audio')
   for (const s of t.sources) if (probe.canPlayType(s.type)) return s.src
@@ -144,6 +149,13 @@ export function setMusicScene(next: MusicScene) {
     return
   }
   const outgoing = active
+  sceneLog.push({
+    t: Math.round(performance.now()),
+    scene: next,
+    from: outgoing?.track?.id ?? null,
+    to: track?.id ?? null,
+    path: location.pathname,
+  })
   if (outgoing && !outgoing.el.paused) rampTo(outgoing, 0, MUSIC_FADE_OUT_S, true)
   if (!track) {
     active = null
