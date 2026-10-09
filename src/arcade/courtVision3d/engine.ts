@@ -9,9 +9,11 @@ import {
   setSfxMuted,
   sfxBounce,
   sfxCrowd,
+  sfxFlow,
   sfxGlass,
   sfxRelease,
   sfxRim,
+  sfxRimTick,
   sfxSwish,
   sfxTimeBonus,
   unlockSfx,
@@ -295,6 +297,8 @@ class Engine {
     this.slowMo = 0
     this.timeScale = 1
     this.respawnT = 1
+    this.lastRimSfx = -1
+    this.lastBoardSfx = -1
     sfxRelease(plan.power)
   }
 
@@ -421,7 +425,10 @@ class Engine {
     this.bestStreak = Math.max(this.bestStreak, this.streak)
     this.lastPoints = result.points || null
     this.score += result.points
+    // rim-in make: light tick first unless a clank just played for that contact
+    if (!swish && b.rimBeforeScore && s.b.t - this.lastRimSfx > 0.25) sfxRimTick()
     sfxSwish(swish)
+    if (this.streak >= 5) sfxFlow()
     this.view.net.kick(swish ? 1.25 : 0.8, 'snap')
     this.rimGlow = swish ? 1 : 0.7
     if (swish) {

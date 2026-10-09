@@ -4,11 +4,12 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type ReactNode,
 } from 'react'
-import { LOBBY_TRACK, MUTE_STORAGE_KEY } from './music'
+import { useLocation } from 'react-router-dom'
+import { MUTE_STORAGE_KEY, SCENE_TRACKS, type MusicScene } from './music'
+import { setMusicDucked, setMusicMuted, setMusicScene, unlockMusic } from './sceneMusic'
 
 type AudioCtx = {
   entered: boolean
@@ -16,6 +17,12 @@ type AudioCtx = {
   enterFloor: () => void
   toggleMute: () => void
   duck: (on: boolean) => void
+  /**
+   * A mounted game claims its music scene (overrides the route default, e.g.
+   * Court Vision inside /challenge/:id). Pass null to release.
+   */
+  claimScene: (scene: MusicScene | null) => void
+  /** Title of the track for the current scene ('' when the slot is empty). */
   trackTitle: string
 }
 
@@ -29,51 +36,34 @@ function readMuted(): boolean {
   }
 }
 
+/** Default music scene for a route (relative to the /arcade basename). */
+function sceneForPath(path: string): MusicScene {
+  if (path === '/' || path === '') return 'lobby'
+  if (path.startsWith('/court-vision')) return 'court-vision'
+  if (path.startsWith('/fifth-run') || path.startsWith('/fifth-glide')) return 'fifth-run'
+  // challenge pages: the mounted game claims its scene; admin/claim/key stay quiet
+  return 'none'
+}
+
 export function AudioProvider({ children }: { children: ReactNode }) {
-  const audioRef = useRef<HTMLAudioElement | null>(null)
-  const duckRef = useRef(false)
+  const { pathname } = useLocation()
   const [entered, setEntered] = useState(false)
   const [muted, setMuted] = useState(readMuted)
+  const [claimed, setClaimed] = useState<MusicScene | null>(null)
+  const scene: MusicScene = claimed ?? sceneForPath(pathname)
 
   useEffect(() => {
-    const el = new Audio(LOBBY_TRACK.src)
-    el.loop = true
-    el.preload = 'auto'
-    el.volume = LOBBY_TRACK.baseVolume
-    audioRef.current = el
-    return () => {
-      el.pause()
-      el.src = ''
-      audioRef.current = null
-    }
-  }, [])
-
-  const applyVolume = useCallback(() => {
-    const el = audioRef.current
-    if (!el) return
-    if (muted) {
-      el.muted = true
-      return
-    }
-    el.muted = false
-    el.volume = duckRef.current
-      ? LOBBY_TRACK.duckedVolume
-      : LOBBY_TRACK.baseVolume
+    setMusicMuted(muted)
   }, [muted])
 
   useEffect(() => {
-    applyVolume()
-  }, [applyVolume])
+    setMusicScene(scene)
+  }, [scene])
 
   const enterFloor = useCallback(() => {
     setEntered(true)
-    const el = audioRef.current
-    if (!el) return
-    applyVolume()
-    void el.play().catch(() => {
-      /* autoplay blocked until another gesture */
-    })
-  }, [applyVolume])
+    unlockMusic()
+  }, [])
 
   const toggleMute = useCallback(() => {
     setMuted((m) => {
@@ -83,23 +73,14 @@ export function AudioProvider({ children }: { children: ReactNode }) {
       } catch {
         /* ignore */
       }
+      // apply now, inside the tap, so iOS lets the unmute start playback
+      setMusicMuted(next)
       return next
     })
   }, [])
 
-  const duck = useCallback(
-    (on: boolean) => {
-      duckRef.current = on
-      applyVolume()
-    },
-    [applyVolume],
-  )
-
-  useEffect(() => {
-    if (!entered || muted) return
-    const el = audioRef.current
-    if (el && el.paused) void el.play().catch(() => {})
-  }, [entered, muted])
+  const duck = useCallback((on: boolean) => setMusicDucked(on), [])
+  const claimScene = useCallback((s: MusicScene | null) => setClaimed(s), [])
 
   const value = useMemo(
     () => ({
@@ -108,9 +89,10 @@ export function AudioProvider({ children }: { children: ReactNode }) {
       enterFloor,
       toggleMute,
       duck,
-      trackTitle: LOBBY_TRACK.title,
+      claimScene,
+      trackTitle: SCENE_TRACKS[scene]?.title ?? '',
     }),
-    [entered, muted, enterFloor, toggleMute, duck],
+    [entered, muted, enterFloor, toggleMute, duck, claimScene, scene],
   )
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>

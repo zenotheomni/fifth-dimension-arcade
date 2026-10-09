@@ -18,6 +18,7 @@ import SharePanel from '../social/SharePanel'
 import StoryShareButton from '../social/StoryShareButton'
 import { requestAlertsRefresh } from '../social/alertStore'
 import { createCourtVision3D, type CourtVision3DHandle } from './engine'
+import { unlockMusic } from '../audio/sceneMusic'
 import type {
   CvChallengeConfig,
   CvEndPayload,
@@ -104,15 +105,26 @@ export default function CourtVision3D({
     }
   }, [])
 
+  // Court Vision has its own theme ("ZENO 5"); claim the scene while mounted
+  // (also covers /challenge/:id). Releasing it crossfades to the route's track.
+  const { claimScene, duck } = audio
   useEffect(() => {
-    audio.duck(true)
-    return () => audio.duck(false)
-  }, [audio])
+    claimScene('court-vision')
+    return () => {
+      duck(false)
+      claimScene(null)
+    }
+  }, [claimScene, duck])
 
   useEffect(() => {
     mutedRef.current = audio.muted
     gameRef.current?.setMuted(audio.muted)
   }, [audio.muted])
+
+  // Duck slightly under the end screen.
+  useEffect(() => {
+    duck(Boolean(ended))
+  }, [ended, duck])
 
   useEffect(() => {
     if (engineChallenge) setMode('challenge')
@@ -332,6 +344,8 @@ export default function CourtVision3D({
             onClick={() => {
               setHowTo(false)
               gameRef.current?.setHold(false)
+              // inside the tap: unlocks WebAudio on iOS and fades the theme in
+              unlockMusic()
             }}
           >
             {hud.phase === 'ready' ? 'Loading…' : 'Tap to play'}
