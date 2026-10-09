@@ -365,17 +365,17 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
               <h3>Controls</h3>
               <ul className="fr-howto__controls">
                 <li><b>←&nbsp;→</b>Swipe left / right to change lanes</li>
-                <li><b>↑</b>Swipe up to jump low hurdles &amp; glowing gaps in the road</li>
+                <li><b>↑</b>Swipe up to jump low hurdles &amp; potholes in the road</li>
                 <li><b>↓</b>Swipe down to slide under high beams. Steel pipes: jump or slide</li>
               </ul>
             </section>
             <section>
               <h3>Rules</h3>
               <ul>
-                <li><b>🛸</b>A UFO is chasing you. Stay ahead of it</li>
+                <li><b>🛸</b>A UFO is right behind you. Stumble and it swoops in; run clean to keep it back</li>
                 <li><b>🚗</b>The farther you go, the more cars come at you head-on. Switch lanes to dodge them</li>
                 <li><b>⚠</b>Hit an obstacle and you stumble: you slow down and it closes in. Stumble again before you pull away (about {Math.round((CHASE.hit - CHASE.catchAt) * CHASE.recoverS)} s of clean running) and the UFO catches you</li>
-                <li><b>{'♥'.repeat(START_LIVES)}</b>{START_LIVES} lives. Getting caught, falling into a gap, or hitting a boulder or a car costs one. You flash and respawn right where you were, then keep running</li>
+                <li><b>{'♥'.repeat(START_LIVES)}</b>{START_LIVES} lives. Getting caught, falling into a pothole, or hitting a boulder or a car costs one. You flash and respawn right where you were, then keep running</li>
                 <li><b>☠</b>Lose all {START_LIVES} and the run is over. It gets faster the farther you go</li>
               </ul>
             </section>
@@ -384,7 +384,7 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
               <ul>
                 <li><b>m</b>Your score is your distance, 1 point per metre</li>
                 <li><b>💫</b>Each shooting star adds +{STAR_M} m. They come in short lines; the ones arcing over rubble need a jump</li>
-                <li><img src={BRAND_LOGO} alt="" width={28} height={28} style={{ borderRadius: '50%', verticalAlign: 'middle', marginRight: 6, boxShadow: '0 0 10px #ffc83c' }} />Rare 5D logo: {Math.round(POWER_TICKS.hand / FR_HZ)} s invincible plus a {BOOST.mul}× speed surge. Nothing can catch you, you can’t fall, you blast through everything. You blink for the last {BLINK_S} s, still invincible, so you know it’s almost over</li>
+                <li><img src={BRAND_LOGO} alt="" width={28} height={28} style={{ borderRadius: '50%', verticalAlign: 'middle', marginRight: 6, boxShadow: '0 0 10px #ffc83c' }} />Rare 5D logo: {Math.round(POWER_TICKS.hand / FR_HZ)} s invincible plus a {BOOST.mul}× speed surge. Nothing can catch you, you can’t fall, you blast through everything without losing your star streak. You blink for the last {BLINK_S} s, still invincible, so you know it’s almost over</li>
               </ul>
             </section>
             <button type="button" className="ffa-btn ffa-btn--primary fr-howto__start" onClick={startFromHowto} disabled={hud.phase === 'loading'}>
