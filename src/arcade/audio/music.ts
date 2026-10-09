@@ -40,7 +40,9 @@ export const LOBBY_THEME: MusicTrack = {
     { src: `${BASE}audio/lobby-theme.mp3`, type: 'audio/mpeg' },
   ],
   level: 0.35,
-  duckedLevel: 0.18,
+  // Fifth Glide (no track yet) asks for a duck on mount; the lobby song keeps
+  // its normal level there instead of dipping.
+  duckedLevel: 0.35,
 }
 
 export const SCENE_TRACKS: Record<MusicScene, MusicTrack | null> = {
@@ -54,4 +56,9 @@ export const SCENE_TRACKS: Record<MusicScene, MusicTrack | null> = {
 export const MUSIC_FADE_IN_S = 1
 export const MUSIC_FADE_OUT_S = 0.8
 
-export const MUTE_STORAGE_KEY = 'fd_arcade_music_muted'
+/**
+ * v2: sound defaults ON. The old key ('fd_arcade_music_muted') is ignored so
+ * anyone muted by an earlier build hears music again; only a deliberate mute
+ * after this change is remembered.
+ */
+export const MUTE_STORAGE_KEY = 'fd_arcade_sound_muted_v2'

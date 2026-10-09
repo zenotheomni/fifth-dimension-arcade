@@ -105,11 +105,11 @@ export default function CourtVision3D({
     }
   }, [])
 
-  // Court Vision has its own theme ("ZENO 5"); claim the scene while mounted
-  // (also covers /challenge/:id). Releasing it crossfades to the route's track.
+  // Lobby song plays through loading + how-to. The "Tap to play" tap claims the
+  // Court Vision scene (ZENO 5); it stays through end screen and restarts.
+  // Leaving the game releases it → crossfade back to the lobby song.
   const { claimScene, duck } = audio
   useEffect(() => {
-    claimScene('court-vision')
     return () => {
       duck(false)
       claimScene(null)
@@ -344,8 +344,9 @@ export default function CourtVision3D({
             onClick={() => {
               setHowTo(false)
               gameRef.current?.setHold(false)
-              // inside the tap: unlocks WebAudio on iOS and fades the theme in
+              // inside the tap: unlock WebAudio (iOS) and crossfade lobby → ZENO 5
               unlockMusic()
+              claimScene('court-vision')
             }}
           >
             {hud.phase === 'ready' ? 'Loading…' : 'Tap to play'}
