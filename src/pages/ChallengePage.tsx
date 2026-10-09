@@ -289,7 +289,7 @@ export default function ChallengePage() {
               <p className="cvp-challenger__copy">
                 {isFifthRun
                   ? 'Fifth Glide · same track, same stars, same traffic · run farther.'
-                  : `Court Vision · same court, same ${view.seed.startsWith('still:') ? 'setup' : 'sway & wind'} · 60 seconds.`}
+                  : `Court Vision · same court, same ${view.seed.startsWith('still:') ? 'setup' : 'wind'} · 60 seconds.`}
               </p>
 
               <button type="button" className="ffa-btn ffa-btn--primary" onClick={onAccept}>
