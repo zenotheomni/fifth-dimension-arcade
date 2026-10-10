@@ -12,21 +12,21 @@ export const LANE_W = 2.0
 export const laneX = (lane: number) => (lane - 1) * LANE_W
 
 /**
- * Forward speed (m/s). Starts at the old surge pace (30 m/s) and ramps naturally toward vmax
- * (≈37.5 m/s at 1 km, ≈43.6 m/s at 2.5 km, ≈48.7 m/s at 5 km).
+ * Forward speed (m/s). Temple Run pace on a narrow sky path: brisk 21 m/s start, ramping toward vmax
+ * (≈26 m/s at 1 km, ≈31 m/s at 2.5 km, ≈35 m/s at 5 km).
  */
-export const SPEED = { v0: 30, vmax: 60, k: 3000 }
+export const SPEED = { v0: 21, vmax: 52, k: 3000 }
 export const speedAt = (s: number) => SPEED.v0 + (SPEED.vmax - SPEED.v0) * (s / (s + SPEED.k))
 /**
  * Warm-up distance (≈ first 40 s, easing out linearly): sparse single-car rows, slower oncoming
  * traffic, wider spacing.
  * warmAt = 1 at the start line → 0 at WARM_M (linear; exact IEEE ops only).
  */
-export const WARM_M = 900
+export const WARM_M = 700
 export const warmAt = (s: number) => (s >= WARM_M ? 0 : s <= 0 ? 1 : 1 - s / WARM_M)
 /** Difficulty 0..1 (pattern mix + spacing). Held at 0 through the first LEVEL_OFFSET metres. */
-export const DIFF_K = 950
-export const LEVEL_OFFSET = 520
+export const DIFF_K = 420
+export const LEVEL_OFFSET = 420
 export const levelAt = (s: number) => (s <= LEVEL_OFFSET ? 0 : (s - LEVEL_OFFSET) / (s - LEVEL_OFFSET + DIFF_K))
 
 /** Jump: fixed airtime / apex (feet height). */
@@ -62,24 +62,51 @@ export const OB = {
   overhead: { bottom: 1.2, len: 0.45, halfW: 0.95 },
   pipe: { bottom: 0.95, top: 1.2, len: 0.3, halfW: 0.95 },
   block: { h: 2.6, len: 1.6, halfW: 0.85 },
-  /** oncoming car (dodge by changing lanes); hits cost a life like a boulder */
-  car: { h: 1.5, len: 4.3, halfW: 0.86 },
+  /** 1959 Cadillac wreck lying across a lane (switch lanes); hits cost a life like a boulder */
+  car: { h: 1.5, len: 5.4, halfW: 0.9 },
   gap: { halfW: 1.0 },
 } as const
-
-/** @deprecated Continuous oncoming no longer uses a park-then-lerp window. */
-export const ONCOMING_WINDOW = 95
 
 export const START_LIVES = 3
 
 /**
- * Oncoming cars: none before CARS.startM, then the chance that an open stretch between rows gets a
- * car ramps linearly to CARS.pMax by CARS.fullM. Each closes at vs ∈ [vsMin, vsMax] m/s on top of
- * your own speed, and needs ≥ CARS.reactS of your travel after the previous row to switch lanes.
+ * Temple Run corners. The path is straight segments joined by 90° corners (L / R) and T-junctions
+ * (either way). A corner is a square of side 2·HALF centred on `s`.
+ * - A left/right swipe within `armS` seconds of the corner centre is a TURN (not a lane change); it is
+ *   taken as soon as the runner is on the corner square (s ≥ s − HALF). Swiping inside the square
+ *   turns at once.
+ * - No turn by s + HALF (the far edge of the square) = ran off the end → fall (−1 life).
+ * - Wrong way at an L / R corner = ran off the side → fall.
+ * - Respawn after a corner fall: already turned the right way, just past the corner.
+ * - Segments: `segMin..segMax` m early on, shrinking with level to `segMinHard..segMaxHard`; T chance tP.
+ * - No obstacles from `preS` s before a corner to `postS` s after it (T: `postT` m, the unchosen arm
+ *   is drawn this far).
  */
-export const CARS = { startM: 1100, fullM: 4200, pMax: 0.5, vsMin: 8, vsMax: 15, reactS: 0.5 }
-export const carChanceAt = (s: number) =>
-  s < CARS.startM ? 0 : s >= CARS.fullM ? CARS.pMax : 0.08 + ((CARS.pMax - 0.08) * (s - CARS.startM)) / (CARS.fullM - CARS.startM)
+export const CORNER = {
+  half: 3.2,
+  armS: 1.0,
+  /** extra time past the far edge of the corner square you may still turn (+ more during the warm-up) */
+  lateS: 0.1,
+  lateWarmS: 0.15,
+  segMin: 170,
+  segMax: 260,
+  segMinHard: 70,
+  segMaxHard: 140,
+  tP: 0.22,
+  preS: 1.7,
+  postS: 0.8,
+  postT: 70,
+}
+/** Path half width the runner can drift across (tilt) — lane centres are ±LANE_W. */
+export const PATH_HALF = 2.25
+
+/**
+ * Narrow sections / edge drop-offs: a lane of the path simply isn't there for `len` metres (void).
+ * Narrow = both side lanes missing; drop-off = one side lane missing.
+ */
+export const VOID = { startM: 260, pMax: 0.3, fullM: 2000, minLen: 26, maxLen: 60 }
+export const voidChanceAt = (s: number) =>
+  s < VOID.startM ? 0 : s >= VOID.fullM ? VOID.pMax : 0.06 + ((VOID.pMax - 0.06) * (s - VOID.startM)) / (VOID.fullM - VOID.startM)
 
 /**
  * Temple Run continue: a life lost plays the fall / crash for DOWN_S seconds (no forward motion),

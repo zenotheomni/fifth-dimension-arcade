@@ -1,14 +1,22 @@
 /**
- * Fifth Glide — seeded endless track.
+ * Fifth Glide — seeded endless Temple Run path.
  *
- * Rows of lane obstacles are generated strictly in order from a single Mulberry32 stream, so the
- * layout depends only on the seed (never on the player). Temple Run kit only (no traffic): barriers, overhead beams, gaps and crate stacks. Power-ups are
- * Fifth Dimension logo (15 s invuln) only. Collectibles are shooting stars (💫).
+ * Everything is generated strictly in order from a single Mulberry32 stream, so the layout depends
+ * only on the seed (never on the player). The path is straight segments joined by 90° corners and
+ * T-junctions (`corners`), all addressed by path distance `s`; which way the path bends in 3D is a
+ * render concern (render/layout.ts). Kit: low rubble (jump), arches (slide), pipes (either), gaps
+ * (jump), missing lanes (narrow sections / edge drop-offs), crate stacks and 1959 Cadillac wrecks
+ * (switch lanes). Power-up: the Fifth Dimension logo. Collectibles: shooting stars (💫).
  */
 import { hashSeed, mulberry32 } from '../../core/seededRandom'
-import { CARS, JUMP_APEX, JUMP_T, OB, carChanceAt, laneX, START_CLEAR_M, levelAt, speedAt, warmAt } from './constants'
+import { CORNER, JUMP_APEX, JUMP_T, OB, VOID, laneX, START_CLEAR_M, levelAt, speedAt, voidChanceAt, warmAt } from './constants'
 
-export type ObKind = 'barrier' | 'overhead' | 'pipe' | 'block' | 'gap' | 'car'
+/** void = a lane of the path is missing (narrow section / edge drop-off); car = static Cadillac wreck */
+export type ObKind = 'barrier' | 'overhead' | 'pipe' | 'block' | 'gap' | 'void' | 'car'
+
+/** 90° corner (L / R) or T-junction (either way), centred at path distance `s`. */
+export type CornerKind = 'L' | 'R' | 'T'
+export type Corner = { id: number; s: number; kind: CornerKind }
 /** Rare 5D logo invuln pickup. */
 export type PowerKind = 'hand'
 
@@ -26,20 +34,10 @@ export type Obstacle = {
   smashed: boolean
 }
 
-/**
- * Live world-s of an obstacle. Oncoming cars close from ahead as the runner approaches the
- * meet point — derived only from runner.s (input-independent, deterministic).
- */
+/** World-s of an obstacle (everything is static on the sky path; kept as a function for callers). */
 export function obstacleS(o: Obstacle, runnerS: number): number {
-  if (o.vs <= 0 || o.smashed) return o.s
-  const gap = o.s - runnerS
-  // Past the meet point — stay put (smashed or already cleared).
-  if (gap <= 0) return o.s
-  // Continuous independent oncoming: car closes at `vs` while the runner
-  // advances at ~speedAt(meet). liveS = meet + gap*(vs/v) ⇒ world ds/dt = −vs
-  // (never a parked blocker that only starts moving inside a window).
-  const v = Math.max(8, speedAt(o.s))
-  return o.s + gap * (o.vs / v)
+  void runnerS
+  return o.s
 }
 
 export type KeyItem = {
@@ -149,10 +147,10 @@ export class Track {
   private lineBob = false
   /** first s a new star may use (after the previous row's jump arc) */
   private starFloor = 0
-  /** lane an oncoming car is driving down (kept clear of obstacles until carUntil) */
-  private carLane = -1
-  private carUntil = 0
-  private carMeet = 0
+  corners: Corner[] = []
+  private nextCornerS = 0
+  private lastTurns: CornerKind[] = []
+  voids = 0
   cars = 0
 
   constructor(seed: string) {
@@ -162,6 +160,8 @@ export class Track {
     for (let s = 14; s <= 47; s += STAR_SPACING) this.addKey(1, s, 0.9)
     this.lineGapTo = 47 + LINE_GAP_MIN
     this.prevEnd = 60
+    // first corner after a calm straight (~10 s) so the turn is learned on its own
+    this.nextCornerS = 230 + Math.floor(this.r() * 40)
   }
 
   private r() {
@@ -177,30 +177,76 @@ export class Track {
     this.obstacles.push({ id: this.nextId++, kind, lane, s: q(s), len: q(len), vs, variant, smashed: false })
   }
 
+  /** Next corner: L / R (never three the same way in a row, so the path can't fold back on itself) or T. */
+  private addCorner() {
+    const cs = this.nextCornerS
+    const L = levelAt(cs)
+    let kind: CornerKind
+    if (this.corners.length >= 1 && this.r() < CORNER.tP) kind = 'T'
+    else {
+      kind = this.r() < 0.5 ? 'L' : 'R'
+      const n = this.lastTurns.length
+      if (n >= 2 && this.lastTurns[n - 1] === kind && this.lastTurns[n - 2] === kind) kind = kind === 'L' ? 'R' : 'L'
+    }
+    if (kind !== 'T') {
+      this.lastTurns.push(kind)
+      if (this.lastTurns.length > 4) this.lastTurns.shift()
+    }
+    this.corners.push({ id: this.nextId++, s: cs, kind })
+    const v = speedAt(cs)
+    // nothing on the corner square or just after it (a T keeps both arms empty for postT m)
+    const after = q(cs + CORNER.half + (kind === 'T' ? CORNER.postT : Math.max(14, v * CORNER.postS)))
+    if (this.lineLeft > 0) this.endLine(this.prevEnd, v)
+    this.lineGapTo = Math.max(this.lineGapTo, after + 4)
+    this.cursor = after
+    this.prevEnd = after
+    this.starFloor = after + 2
+    const segMin = CORNER.segMin + (CORNER.segMinHard - CORNER.segMin) * L
+    const segMax = CORNER.segMax + (CORNER.segMaxHard - CORNER.segMax) * L
+    const seg = segMin + this.r() * (segMax - segMin)
+    this.nextCornerS = q(Math.max(cs + seg, after + v * 3.2))
+  }
+
   /**
-   * Oncoming car in the open stretch after this row. It meets you mid-stretch, at least CARS.reactS
-   * of travel after the row so you can switch lanes, preferring a lane this row blocks anyway.
+   * A stretch where lanes are missing: narrow (only the middle lane) or an edge drop-off (one side
+   * lane gone). Starts with a reaction lead after the previous row. Returns false if it doesn't fit.
    */
-  private maybeCar(toks: Tok[], rowEnd: number, v: number, path: number) {
-    const p = carChanceAt(rowEnd)
-    if (p <= 0) return
-    const roll = this.r()
-    if (roll >= p || rowEnd < this.carUntil) return
-    // meets you ≥ reactS after this row; if that lands in the next row, the next rows keep the
-    // car's lane open (see genRow), so there is always somewhere to dodge to
-    const meet = q(rowEnd + Math.max(v * CARS.reactS, 10))
-    const blocked = [0, 1, 2].filter((l) => toks[l] === 'K' && l !== path)
-    const open = [0, 1, 2].filter((l) => toks[l] !== 'K' && l !== path)
-    const pool = blocked.length ? blocked : open
-    if (!pool.length) return
-    const lane = pool[Math.floor(this.r() * pool.length)]
-    const vs = q(CARS.vsMin + this.r() * (CARS.vsMax - CARS.vsMin))
-    this.addOb('car', lane, meet, OB.car.len, vs)
-    this.cars++
-    this.carLane = lane
-    this.carMeet = meet
-    // the car is visible from ~VIEW_AHEAD away; it sweeps this much lane ahead of its meet point
-    this.carUntil = q(meet + (190 * vs) / (v + vs) + 8)
+  private maybeVoid(s0: number, v: number, L: number): boolean {
+    const p = voidChanceAt(s0)
+    if (p <= 0 || this.r() >= p) return false
+    const lead = v * 0.55
+    const start = q(s0 + lead)
+    const len = q(VOID.minLen + this.r() * (VOID.maxLen - VOID.minLen) * (0.6 + 0.4 * L))
+    const end = start + len
+    if (end + v * CORNER.preS + CORNER.half + 8 > this.nextCornerS) return false
+    const narrow = this.r() < 0.5
+    const side = this.r() < 0.5 ? 0 : 2
+    const gone = narrow ? [0, 2] : [side]
+    for (const l of gone) this.addOb('void', l, start, len)
+    this.voids++
+    const open = [0, 1, 2].filter((l) => !gone.includes(l))
+    // stars run the open lane (the one nearest the current line)
+    let path = open[0]
+    for (const l of open) if (Math.abs(l - this.pathLane) < Math.abs(path - this.pathLane)) path = l
+    // later on: a hurdle or an arch inside the narrow stretch
+    let mid = -1
+    if (L > 0.25 && len > 34 && this.r() < 0.5 + 0.4 * L) {
+      mid = q(start + len * (0.4 + this.r() * 0.2))
+      const kind = this.r() < 0.5 ? 'barrier' : 'overhead'
+      for (const l of open) this.addOb(kind, l, mid, kind === 'barrier' ? OB.barrier.len : OB.overhead.len)
+    }
+    if (this.lineLeft <= 0 && start >= this.lineGapTo) this.startLine()
+    for (let s = Math.max(start + 3, this.starFloor); s <= end - 2 && this.lineLeft > 0; s += STAR_SPACING) {
+      if (mid > 0 && Math.abs(s - mid) < v * 0.35) continue
+      this.placeLineStar(path, s, 0.9, start)
+    }
+    this.obstacles.sort((a, b) => a.s - b.s || a.id - b.id)
+    this.pathLane = path
+    this.prevEnd = end
+    this.starFloor = end + STAR_SPACING
+    this.cursor = q(end + Math.max(8, v * 0.6))
+    this.rows++
+    return true
   }
 
   private startLine() {
@@ -248,6 +294,7 @@ export class Track {
   /** Drop items well behind the runner (keeps arrays short on long runs). */
   prune(behind: number) {
     const cut = behind - 40
+    if (this.corners.length > 12 && this.corners[0].s < cut - 100) this.corners = this.corners.filter((c) => c.s >= cut - 100)
     if (this.obstacles.length > 80 && this.obstacles[0].s + this.obstacles[0].len < cut) {
       this.obstacles = this.obstacles.filter((o) => o.s + o.len >= cut)
     }
@@ -282,20 +329,18 @@ export class Track {
     const L = levelAt(s0)
     const W = warmAt(s0)
     const v = speedAt(s0)
+    // corner due: keep its approach clear (≈ CORNER.preS of running) and build it
+    if (s0 + 8 > this.nextCornerS - CORNER.half - v * CORNER.preS) {
+      this.addCorner()
+      return
+    }
+    if (this.maybeVoid(s0, v, L)) return
     const toks = this.pickPattern(L, W)
     // first rows: never put a crate straight in the start lane before the player has learned to swipe
     if (W > 0.62 && toks[1] === 'K') {
       const e = toks[0] === 'E' ? 0 : 2
       toks[1] = toks[e]
       toks[e] = 'K'
-    }
-    if (this.carLane >= 0 && s0 < this.carUntil) {
-      // an oncoming car drives down this lane: keep it open, and keep another lane open too
-      toks[this.carLane] = 'E'
-      const others = [0, 1, 2].filter((l) => l !== this.carLane)
-      if (others.every((l) => toks[l] === 'K')) toks[others[0]] = 'E'
-      // around the meet point the dodge lanes must not force you back into the car's lane
-      if (s0 < this.carMeet + OB.car.len + v * 0.6 && others.every((l) => toks[l] !== 'E')) toks[others[Math.floor(this.r() * 2)]] = 'E'
     }
     const gapLen = q(Math.min(5, Math.max(2.6, 0.3 * v)))
     if (W > 0.62 && toks.includes('P')) {
@@ -316,8 +361,15 @@ export class Track {
         this.addOb('pipe', lane, s0, OB.pipe.len)
         rowEnd = Math.max(rowEnd, s0 + OB.pipe.len)
       } else if (t === 'K') {
-        this.addOb('block', lane, s0, OB.block.len)
-        rowEnd = Math.max(rowEnd, s0 + OB.block.len)
+        // crate stack or a wrecked '59 Cadillac across the lane
+        if (this.r() < 0.4) {
+          this.addOb('car', lane, s0, OB.car.len)
+          this.cars++
+          rowEnd = Math.max(rowEnd, s0 + OB.car.len)
+        } else {
+          this.addOb('block', lane, s0, OB.block.len)
+          rowEnd = Math.max(rowEnd, s0 + OB.block.len)
+        }
       } else if (t === 'G') {
         this.addOb('gap', lane, s0, gapLen)
         rowEnd = Math.max(rowEnd, s0 + gapLen)
@@ -338,13 +390,8 @@ export class Track {
         }
       }
     }
-    // stars never lead you into an oncoming car's lane
-    if (this.carLane >= 0 && s0 < this.carUntil + 10 && path === this.carLane) {
-      const alt = options.filter((l) => l !== this.carLane)
-      if (alt.length) path = alt[0]
-    }
     // a running coin line stays in its lane whenever that lane is open
-    if (this.lineLeft > 0 && passable(toks[this.pathLane]) && !(this.carLane === this.pathLane && s0 < this.carUntil + 10)) path = this.pathLane
+    if (this.lineLeft > 0 && passable(toks[this.pathLane])) path = this.pathLane
     const changed = path !== this.pathLane
     const tok = toks[path]
     // ── stars: short coin lines in the path lane, then a real gap (never a continuous river) ──
@@ -389,12 +436,11 @@ export class Track {
     this.prevEnd = rowEnd
 
     // ── spacing to next wave: reaction window shrinks; density ramps like Surfers ──
-    const base = 0.95 - 0.55 * L
+    const base = 0.85 - 0.55 * L
     // warm-up: up to ~2.9× the gap between waves at the start line, tapering by WARM_M; a little
     // extra breathing room while the level is still low (fades out as L → 1)
     const T = Math.max(0.32, base * (0.7 + 0.35 * this.r()) * (1 + 1.6 * W + 0.3 * (1 - L)))
     this.cursor = q(rowEnd + Math.max(5.2, v * T))
-    this.maybeCar(toks, rowEnd, v, path)
     this.rows++
   }
 }

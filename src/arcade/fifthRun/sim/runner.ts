@@ -18,6 +18,9 @@ import {
   HANG,
   BOOST,
   CHASE,
+  CORNER,
+  PATH_HALF,
+  LANE_W,
   DOWN_S,
   SLOW_TICKS,
   STAR_M,
@@ -28,10 +31,10 @@ import {
   multFor,
   speedAt,
 } from './constants'
-import { keyPos, obstacleS, type ObKind, type Obstacle, type PowerKind, type Track } from './track'
+import { keyPos, obstacleS, type Corner, type ObKind, type Obstacle, type PowerKind, type Track } from './track'
 
 export type Action = 'left' | 'right' | 'jump' | 'slide'
-/** fall = missed a gap · crash = boulder / oncoming car · caught = the UFO got you */
+/** fall = gap / void / missed corner · crash = crate stack / Cadillac wreck · caught = the UFO got you */
 export type LifeCause = 'caught' | 'fall' | 'crash'
 
 export type RunEvent =
@@ -50,6 +53,10 @@ export type RunEvent =
   | { type: 'lane'; dir: -1 | 1 }
   | { type: 'bump'; dir: -1 | 1 }
   | { type: 'dead'; kind: string; ob: number }
+  /** took corner `id` (dir −1 = left, 1 = right); `auto` = invincible / respawn auto-turn */
+  | { type: 'turn'; id: number; s: number; dir: -1 | 1; auto: boolean }
+  /** a left/right swipe was taken as a turn request for the next corner */
+  | { type: 'turnQ'; id: number; dir: -1 | 1 }
 
 export type RunState = {
   tick: number
@@ -95,6 +102,20 @@ export type RunState = {
   queued: Action | null
   queuedAt: number
   latQ: Action | null
+  /** lateral target x (lane centre, or tilt) */
+  tx: number
+  /** device tilt −1..1 (NaN = not in use) and the swipe bias stacked on it */
+  tilt: number
+  tiltBias: number
+  /** s of the last corner handled (turned / fallen at); the next corner is the first beyond it */
+  cDone: number
+  /** queued turn for the next corner (−1 / 1, 0 = none) */
+  turnQ: number
+  /** corner fall: the correct way to auto-turn on respawn (0 = none) */
+  pendTurn: number
+  pendCorner: number
+  turns: number
+  cornerFallN: number
   obCur: number
   keyCur: number
   pkCur: number
@@ -138,6 +159,15 @@ export function newRun(): RunState {
     queued: null,
     queuedAt: 0,
     latQ: null,
+    tx: 0,
+    tilt: NaN,
+    tiltBias: 0,
+    cDone: -1,
+    turnQ: 0,
+    pendTurn: 0,
+    pendCorner: -1,
+    turns: 0,
+    cornerFallN: 0,
     obCur: 0,
     keyCur: 0,
     pkCur: 0,
@@ -171,7 +201,7 @@ function carBeside(track: Track, lane: number, s: number, from: number): boolean
   for (let i = Math.max(0, Math.min(from, obs.length) - 2); i < obs.length; i++) {
     const o = obs[i]
     if (o.s > s + ONCOMING_LEAD) break
-    if (o.kind !== 'block' || o.lane !== lane || o.smashed) continue
+    if ((o.kind !== 'block' && o.kind !== 'car') || o.lane !== lane || o.smashed) continue
     const os = o.s
     if (os - BODY.halfD - 0.15 < s && os + o.len + BODY.halfD > s) return true
   }
@@ -187,7 +217,7 @@ function hurdleAhead(track: Track, st: RunState, ahead: number): boolean {
   for (let i = Math.max(0, st.obCur - 2); i < obs.length; i++) {
     const o = obs[i]
     if (o.s > st.s + ahead + BODY.halfD) break
-    if (o.smashed || o.kind === 'block' || o.kind === 'car' || o.kind === 'overhead') continue
+    if (o.smashed || o.kind === 'block' || o.kind === 'car' || o.kind === 'overhead' || o.kind === 'void') continue
     if (Math.abs(st.x - laneX(o.lane)) > 1.0) continue
     if (o.s + o.len < st.s - BODY.halfD) continue
     return true
@@ -211,6 +241,8 @@ function applyAction(st: RunState, a: Action, track: Track, ev: RunEvent[] | nul
       return true
     }
     st.lane = target
+    if (st.tilt === st.tilt) st.tiltBias = Math.max(-2 * LANE_W, Math.min(2 * LANE_W, st.tiltBias + dir * LANE_W))
+    else st.tx = laneX(target)
     ev?.push({ type: 'lane', dir })
     return true
   }
@@ -232,6 +264,54 @@ function applyAction(st: RunState, a: Action, track: Track, ev: RunEvent[] | nul
   st.slide = SLIDE_TICKS
   ev?.push({ type: 'slide' })
   return true
+}
+
+/** Device tilt −1..1 (NaN turns tilt steering off and snaps back to lanes). */
+export function setTilt(st: RunState, t: number) {
+  if (t !== t) {
+    if (st.tilt === st.tilt) {
+      st.tilt = NaN
+      st.tiltBias = 0
+      st.tx = laneX(st.lane)
+    }
+    return
+  }
+  st.tilt = Math.max(-1, Math.min(1, t))
+}
+
+/** The next corner not yet handled (null if none generated). */
+export function nextCorner(st: RunState, track: Track): Corner | null {
+  for (const c of track.corners) if (c.s > st.cDone) return c
+  return null
+}
+
+const cornerDir = (c: Corner, want: number): -1 | 1 => (c.kind === 'L' ? -1 : c.kind === 'R' ? 1 : want < 0 ? -1 : 1)
+
+function doTurn(st: RunState, c: Corner, dir: -1 | 1, auto: boolean, ev: RunEvent[] | null | undefined) {
+  st.cDone = c.s
+  st.turnQ = 0
+  st.turns++
+  ev?.push({ type: 'turn', id: c.id, s: c.s, dir, auto })
+}
+
+/** Ran off the corner (too late / wrong way): fall, respawn already turned the right way. */
+function cornerFall(st: RunState, c: Corner, want: number, opts: StepOpts, ev: RunEvent[] | null | undefined) {
+  const fake = { id: c.id, kind: 'gap', lane: 1, s: c.s, len: 0, vs: 0, variant: 0, smashed: false } as Obstacle
+  st.cornerFallN++
+  if (st.combo > 0) breakCombo(st, -1, ev)
+  if (!opts.full) {
+    st.dead = true
+    st.deathKind = 'fall'
+    st.deathOb = c.id
+    ev?.push({ type: 'dead', kind: 'fall', ob: c.id })
+    return
+  }
+  st.cDone = c.s
+  st.turnQ = 0
+  st.pendTurn = cornerDir(c, want || (st.x <= 0 ? -1 : 1))
+  st.pendCorner = c.id
+  loseLife(st, fake, 'fall', ev)
+  st.downS = c.s + CORNER.half + 0.6
 }
 
 export function queueAction(st: RunState, a: Action) {
@@ -259,7 +339,7 @@ function loseLife(st: RunState, o: Obstacle, cause: LifeCause, ev: RunEvent[] | 
   st.down = Math.round(DOWN_S[cause] * FR_HZ)
   st.downMax = st.down
   st.downKind = cause
-  st.downS = cause === 'fall' ? Math.max(st.s, o.s + o.len + 0.6) : st.s
+  st.downS = cause === 'fall' && o.kind === 'gap' ? Math.max(st.s, o.s + o.len + 0.6) : st.s
   st.threat = 0
   st.slowT = 0
   st.queued = null
@@ -272,6 +352,21 @@ function loseLife(st: RunState, o: Obstacle, cause: LifeCause, ev: RunEvent[] | 
 function respawn(st: RunState, track: Track, ev: RunEvent[] | null | undefined) {
   const cause = st.downKind ?? 'crash'
   st.s = st.downS
+  if (st.pendTurn) {
+    ev?.push({ type: 'turn', id: st.pendCorner, s: st.cDone, dir: st.pendTurn as -1 | 1, auto: true })
+    st.turns++
+    st.pendTurn = 0
+    st.pendCorner = -1
+  }
+  // fell off a missing lane: come back on the nearest lane that is there
+  for (let i = Math.max(0, st.obCur - 2); i < track.obstacles.length; i++) {
+    const o = track.obstacles[i]
+    if (o.s > st.s + 4) break
+    if (o.kind !== 'void' || o.s + o.len < st.s - 1 || o.lane !== st.lane) continue
+    st.lane = 1
+  }
+  st.tiltBias = 0
+  st.tx = laneX(st.lane)
   st.x = laneX(st.lane)
   st.y = 0
   st.vy = 0
@@ -288,7 +383,7 @@ function respawn(st: RunState, track: Track, ev: RunEvent[] | null | undefined) 
     const o = track.obstacles[i]
     if (o.s > st.s + 3) break
     const os = obstacleS(o, st.s)
-    if (os <= st.s + 3 && os + o.len >= st.s - 1 && o.lane === st.lane && o.kind !== 'gap') o.smashed = true
+    if (os <= st.s + 3 && os + o.len >= st.s - 1 && o.lane === st.lane && o.kind !== 'gap' && o.kind !== 'void') o.smashed = true
   }
   ev?.push({ type: 'respawn', cause })
 }
@@ -312,7 +407,7 @@ function applyHit(st: RunState, o: Obstacle, opts: StepOpts, ev: RunEvent[] | nu
     ev?.push({ type: 'dead', kind: o.kind, ob: o.id })
     return
   }
-  if (o.kind === 'gap') {
+  if (o.kind === 'gap' || o.kind === 'void') {
     loseLife(st, o, 'fall', ev)
     return
   }
@@ -350,8 +445,14 @@ export function step(st: RunState, track: Track, opts: StepOpts) {
     return
   }
 
+  const corner = nextCorner(st, track)
   if (st.latQ) {
-    applyAction(st, st.latQ, track, ev)
+    // near a corner a left/right swipe is a turn, not a lane change
+    const d = corner ? corner.s - st.s : 1e9
+    if (corner && d <= st.v * CORNER.armS + CORNER.half && d >= -CORNER.half - st.v * (CORNER.lateS + CORNER.lateWarmS)) {
+      st.turnQ = st.latQ === 'left' ? -1 : 1
+      ev?.push({ type: 'turnQ', id: corner.id, dir: st.turnQ as -1 | 1 })
+    } else applyAction(st, st.latQ, track, ev)
     st.latQ = null
   }
   if (st.queued) {
@@ -359,7 +460,11 @@ export function step(st: RunState, track: Track, opts: StepOpts) {
     else if (st.tick - st.queuedAt > BUFFER_TICKS) st.queued = null
   }
 
-  const tx = laneX(st.lane)
+  if (st.tilt === st.tilt) {
+    st.tx = Math.max(-PATH_HALF, Math.min(PATH_HALF, st.tilt * PATH_HALF * 1.15 + st.tiltBias))
+    st.lane = st.tx < -LANE_W / 2 ? 0 : st.tx > LANE_W / 2 ? 2 : 1
+  }
+  const tx = st.tx
   const dx = tx - st.x
   const maxStep = LANE_SPEED * FR_DT
   st.x = Math.abs(dx) <= maxStep ? tx : st.x + (dx > 0 ? maxStep : -maxStep)
@@ -388,6 +493,24 @@ export function step(st: RunState, track: Track, opts: StepOpts) {
 
   st.s += st.v * FR_DT
   st.v = speedAt(st.s) * speedMul(st)
+
+  // ── corners ──
+  if (corner) {
+    if (st.hand > 0 && st.s >= corner.s - 0.5) {
+      // invincible: takes the turn by itself (a T goes the way you asked, else toward your side)
+      doTurn(st, corner, cornerDir(corner, st.turnQ || (st.x <= 0 ? -1 : 1)), true, ev)
+    } else if (st.turnQ && st.s >= corner.s - CORNER.half) {
+      const ok = corner.kind === 'T' || (corner.kind === 'L' ? st.turnQ < 0 : st.turnQ > 0)
+      if (ok) doTurn(st, corner, st.turnQ as -1 | 1, false, ev)
+      else {
+        cornerFall(st, corner, st.turnQ, opts, ev)
+        return
+      }
+    } else if (st.s >= corner.s + CORNER.half + st.v * (CORNER.lateS + CORNER.lateWarmS * warmAt(st.s))) {
+      cornerFall(st, corner, 0, opts, ev)
+      return
+    }
+  }
 
   if (st.invuln > 0) st.invuln--
   if (st.slowT > 0) st.slowT--
@@ -426,6 +549,9 @@ export function step(st: RunState, track: Track, opts: StepOpts) {
       // you fall only with both feet on the ground over the hole; coyote time at the near edge
       const coy = Math.min(o.len * 0.35, 0.2 + st.v * COYOTE_S)
       hit = !st.air && st.y <= 0 && lx < OB.gap.halfW - 0.1 && st.s > os + coy && st.s < os + o.len - 0.35
+    } else if (o.kind === 'void') {
+      // the lane isn't there: fall as soon as both feet are down over it (no jumping a whole stretch)
+      hit = !st.air && st.y <= 0 && lx < OB.gap.halfW - 0.1 && st.s > os + 0.25 && st.s < os + o.len - 0.25
     } else if (o.kind === 'barrier') {
       // low hurdle: feet above the top = clear, always
       hit = lx < BODY.halfW + OB.barrier.halfW && st.y < OB.barrier.h
@@ -443,7 +569,7 @@ export function step(st: RunState, track: Track, opts: StepOpts) {
     if (protected_) {
       // Hand / post-hit: smash through without losing a life
       // Logo: auto-pass (smash) everything, gaps included. Post-hit grace: pass through.
-      if (st.hand > 0 && o.kind !== 'gap') o.smashed = true
+      if (st.hand > 0 && o.kind !== 'gap' && o.kind !== 'void') o.smashed = true
       continue
     }
     applyHit(st, o, opts, ev)
