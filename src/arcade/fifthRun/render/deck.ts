@@ -353,8 +353,8 @@ export function deckMaterial(env: THREE.Texture | null) {
           vec2 ti = floor(tile);
           vec2 tf = fract(tile) - 0.5;
           float th = dh(ti + 7.0);
-          float grout = max(aaLine(tf.x - 0.5, 0.025) , aaLine(tf.y - 0.5, 0.02));
-          grout = max(grout, max(aaLine(tf.x + 0.5, 0.025), aaLine(tf.y + 0.5, 0.02)));
+          float grout = max(aaLine(tf.x - 0.5, 0.012) , aaLine(tf.y - 0.5, 0.01));
+          grout = max(grout, max(aaLine(tf.x + 0.5, 0.012), aaLine(tf.y + 0.5, 0.01)));
           float veins = dn(p * vec2(2.3, 1.1) + th * 9.0) * dn(p * 7.0);
           vec3 stone = mix(vec3(0.03, 0.028, 0.042), vec3(0.075, 0.065, 0.095), th * 0.6 + veins * 0.5);
           diffuseColor.rgb = mix(stone, vec3(0.02, 0.018, 0.03), grout);
@@ -367,7 +367,7 @@ export function deckMaterial(env: THREE.Texture | null) {
           rough = mix(rough, 0.3, curb); metal = mix(metal, 0.95, curb);
           // lane seams: thin brass inlays at x = ±1
           float seam = aaLine(ax - 1.0, 0.03);
-          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.5, 0.36, 0.16), seam * 0.85);
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.32, 0.24, 0.12), seam * 0.6);
           metal = mix(metal, 0.9, seam);
           if (kind == 0.0) {
             // inlaid chevrons every 6 m down the middle lane, cycling the brand colours

@@ -410,20 +410,20 @@ export class FrScene {
     geo.translate(0, 0.5, 0)
     this.skylineMat = towerMaterial(700, 1600)
     ;(this.skylineMat.uniforms.uFog.value as THREE.Color).set('#4a1c3a')
-    const N = 220
+    const N = 170
     const mesh = new THREE.InstancedMesh(geo, this.skylineMat, N)
     const seeds = new Float32Array(N)
+    // one downtown waterfront cluster ahead-left of the start line, far below the path
+    const dir = -Math.PI / 2 - 0.45
     for (let i = 0; i < N; i++) {
-      // a dense downtown ahead-left of the start, a sparser ring all round (the path turns)
-      const downtown = i < 120
-      const a = downtown ? -Math.PI / 2 - 0.55 + (rnd() - 0.5) * 1.3 : rnd() * Math.PI * 2
-      const r = downtown ? 1000 + rnd() * 300 : 1150 + rnd() * 300
-      const center = downtown ? Math.exp(-Math.abs(a + Math.PI / 2 + 0.55) * 2.2) : 0.1
-      // we are high above the city: tops sit around the horizon line
-      const h = 30 + rnd() * 60 + center * 150 * rnd()
-      const w = 14 + rnd() * 22
+      const u = (rnd() - 0.5) * 2
+      const a = dir + u * 0.42
+      const core = Math.exp(-u * u * 4)
+      const r = 1150 + rnd() * 220 - core * 120
+      const h = 20 + rnd() * 40 + core * (60 + 120 * rnd() * rnd())
+      const w = 12 + rnd() * 20
       this.tmpQ.setFromEuler(this.tmpE.set(0, rnd() * 3, 0))
-      this.tmpM.compose(this.tmpV.set(Math.cos(a) * r, -260, Math.sin(a) * r), this.tmpQ, this.tmpS.set(w, h + 160, w * (0.7 + rnd() * 0.6)))
+      this.tmpM.compose(this.tmpV.set(Math.cos(a) * r, -230, Math.sin(a) * r), this.tmpQ, this.tmpS.set(w, h + 120, w * (0.7 + rnd() * 0.6)))
       mesh.setMatrixAt(i, this.tmpM)
       seeds[i] = rnd()
     }

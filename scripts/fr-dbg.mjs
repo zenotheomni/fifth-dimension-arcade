@@ -14,7 +14,7 @@ for (let i = 0; i < 12; i++) {
       const c = tr.corners.find(c => Math.abs(c.s - st.s) < 12)
       const key = e.type + ':' + (e.cause || e.kind || '')
       counts[key] = (counts[key] || 0) + 1
-      if (i < 4) console.log(i, (st.tick / FR_HZ).toFixed(1), e.type, e.cause || e.kind || '', 'lane', st.lane, 'x', st.x.toFixed(2), 'hand', st.hand, near, c ? `corner ${c.kind} d=${(c.s - st.s).toFixed(1)}` : '')
+      if (i < 0) console.log(i, (st.tick / FR_HZ).toFixed(1), e.type, e.cause || e.kind || '', 'lane', st.lane, 'x', st.x.toFixed(2), 'hand', st.hand, near, c ? `corner ${c.kind} d=${(c.s - st.s).toFixed(1)}` : '')
     }
   }
 }

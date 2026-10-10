@@ -112,6 +112,8 @@ export const SKILLS: Record<string, Skill> = {
   /** first-timer on a phone: slow reads of oncoming traffic, frequent late swipes (calibrated so the
    *  pre-tune curve reproduced the ~24 s / 528 m first run seen in review: median 32 s, IQR 22–37 s) */
   rookie: { name: 'rookie', reactMs: 600, jitterMs: 170, lapseP: 0.22, lapseMs: 500, lookS: 0.8, minGapMs: 350 },
+  /** mid-skill phone player (between a first run and a regular): the 60–90 s target */
+  mid: { name: 'mid', reactMs: 450, jitterMs: 130, lapseP: 0.12, lapseMs: 380, lookS: 1.0, minGapMs: 290 },
   novice: { name: 'novice', reactMs: 330, jitterMs: 90, lapseP: 0.05, lapseMs: 260, lookS: 1.2, minGapMs: 240 },
   decent: { name: 'decent', reactMs: 250, jitterMs: 70, lapseP: 0.03, lapseMs: 230, lookS: 1.4, minGapMs: 190 },
   expert: { name: 'expert', reactMs: 180, jitterMs: 40, lapseP: 0.01, lapseMs: 180, lookS: 1.7, minGapMs: 130 },

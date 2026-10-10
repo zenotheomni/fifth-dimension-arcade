@@ -15,7 +15,7 @@ export const laneX = (lane: number) => (lane - 1) * LANE_W
  * Forward speed (m/s). Temple Run pace on a narrow sky path: brisk 21 m/s start, ramping toward vmax
  * (≈26 m/s at 1 km, ≈31 m/s at 2.5 km, ≈35 m/s at 5 km).
  */
-export const SPEED = { v0: 21, vmax: 52, k: 3000 }
+export const SPEED = { v0: 21, vmax: 54, k: 2200 }
 export const speedAt = (s: number) => SPEED.v0 + (SPEED.vmax - SPEED.v0) * (s / (s + SPEED.k))
 /**
  * Warm-up distance (≈ first 40 s, easing out linearly): sparse single-car rows, slower oncoming
@@ -25,8 +25,8 @@ export const speedAt = (s: number) => SPEED.v0 + (SPEED.vmax - SPEED.v0) * (s / 
 export const WARM_M = 700
 export const warmAt = (s: number) => (s >= WARM_M ? 0 : s <= 0 ? 1 : 1 - s / WARM_M)
 /** Difficulty 0..1 (pattern mix + spacing). Held at 0 through the first LEVEL_OFFSET metres. */
-export const DIFF_K = 420
-export const LEVEL_OFFSET = 420
+export const DIFF_K = 360
+export const LEVEL_OFFSET = 360
 export const levelAt = (s: number) => (s <= LEVEL_OFFSET ? 0 : (s - LEVEL_OFFSET) / (s - LEVEL_OFFSET + DIFF_K))
 
 /** Jump: fixed airtime / apex (feet height). */
@@ -104,7 +104,7 @@ export const PATH_HALF = 2.25
  * Narrow sections / edge drop-offs: a lane of the path simply isn't there for `len` metres (void).
  * Narrow = both side lanes missing; drop-off = one side lane missing.
  */
-export const VOID = { startM: 260, pMax: 0.3, fullM: 2000, minLen: 26, maxLen: 60 }
+export const VOID = { startM: 260, pMax: 0.32, fullM: 2000, minLen: 18, maxLen: 44 }
 export const voidChanceAt = (s: number) =>
   s < VOID.startM ? 0 : s >= VOID.fullM ? VOID.pMax : 0.06 + ((VOID.pMax - 0.06) * (s - VOID.startM)) / (VOID.fullM - VOID.startM)
 

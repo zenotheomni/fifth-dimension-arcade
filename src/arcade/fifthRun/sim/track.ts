@@ -218,7 +218,7 @@ export class Track {
     const start = q(s0 + lead)
     const len = q(VOID.minLen + this.r() * (VOID.maxLen - VOID.minLen) * (0.6 + 0.4 * L))
     const end = start + len
-    if (end + v * CORNER.preS + CORNER.half + 8 > this.nextCornerS) return false
+    if (end + v * 1.1 + CORNER.half + 8 > this.nextCornerS) return false
     const narrow = this.r() < 0.5
     const side = this.r() < 0.5 ? 0 : 2
     const gone = narrow ? [0, 2] : [side]
@@ -230,7 +230,7 @@ export class Track {
     for (const l of open) if (Math.abs(l - this.pathLane) < Math.abs(path - this.pathLane)) path = l
     // later on: a hurdle or an arch inside the narrow stretch
     let mid = -1
-    if (L > 0.25 && len > 34 && this.r() < 0.5 + 0.4 * L) {
+    if (L > 0.2 && len > 24 && this.r() < 0.55 + 0.4 * L) {
       mid = q(start + len * (0.4 + this.r() * 0.2))
       const kind = this.r() < 0.5 ? 'barrier' : 'overhead'
       for (const l of open) this.addOb(kind, l, mid, kind === 'barrier' ? OB.barrier.len : OB.overhead.len)
@@ -436,10 +436,10 @@ export class Track {
     this.prevEnd = rowEnd
 
     // ── spacing to next wave: reaction window shrinks; density ramps like Surfers ──
-    const base = 0.85 - 0.55 * L
+    const base = 0.78 - 0.5 * L
     // warm-up: up to ~2.9× the gap between waves at the start line, tapering by WARM_M; a little
     // extra breathing room while the level is still low (fades out as L → 1)
-    const T = Math.max(0.32, base * (0.7 + 0.35 * this.r()) * (1 + 1.6 * W + 0.3 * (1 - L)))
+    const T = Math.max(0.28, base * (0.7 + 0.35 * this.r()) * (1 + 1.6 * W + 0.3 * (1 - L)))
     this.cursor = q(rowEnd + Math.max(5.2, v * T))
     this.rows++
   }
