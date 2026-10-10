@@ -54,7 +54,7 @@ export type RunEvent =
   | { type: 'bump'; dir: -1 | 1 }
   | { type: 'dead'; kind: string; ob: number }
   /** took corner `id` (dir −1 = left, 1 = right); `auto` = invincible / respawn auto-turn */
-  | { type: 'turn'; id: number; s: number; dir: -1 | 1; auto: boolean }
+  | { type: 'turn'; id: number; s: number; dir: -1 | 1; auto: boolean; respawn?: boolean }
   /** a left/right swipe was taken as a turn request for the next corner */
   | { type: 'turnQ'; id: number; dir: -1 | 1 }
 
@@ -353,7 +353,7 @@ function respawn(st: RunState, track: Track, ev: RunEvent[] | null | undefined) 
   const cause = st.downKind ?? 'crash'
   st.s = st.downS
   if (st.pendTurn) {
-    ev?.push({ type: 'turn', id: st.pendCorner, s: st.cDone, dir: st.pendTurn as -1 | 1, auto: true })
+    ev?.push({ type: 'turn', id: st.pendCorner, s: st.cDone, dir: st.pendTurn as -1 | 1, auto: true, respawn: true })
     st.turns++
     st.pendTurn = 0
     st.pendCorner = -1

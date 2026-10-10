@@ -5,7 +5,7 @@
 import { FIFTH_RUN_COPY } from '../copyLocks'
 import { RuleBot, SKILLS } from './sim/bot'
 import { BLINK_S, FR_DT, FR_HZ, POWER_TICKS, STAR_M } from './sim/constants'
-import { newRun, queueAction, resetCursors, scoreOf, speedMul, step, type Action, type RunEvent, type RunState } from './sim/runner'
+import { newRun, queueAction, resetCursors, scoreOf, setTilt, speedMul, step, type Action, type RunEvent, type RunState } from './sim/runner'
 import { Track } from './sim/track'
 import { DebugOverlay } from './debugOverlay'
 import { FrScene, type QualityTier, type ViewState } from './render/scene'
@@ -35,6 +35,9 @@ export type FifthRunHandle = {
   setLocked: (v: boolean) => void
   /** Begin the run from the intro phase (START button). */
   start: () => void
+  /** Tilt steering on / off (saved). */
+  setTilt: (on: boolean) => void
+  tiltEnabled: () => boolean
 }
 
 const PB_KEY = 'fd_fifth_run_pb'
@@ -265,6 +268,74 @@ class Engine {
   /** While true (pre-run how-to screen is up), swipes/keys/taps don't start the run. */
   locked = false
 
+  // ── tilt steering (DeviceOrientation; iOS asks for permission on the START tap) ──
+  private tiltOn = (() => {
+    try {
+      return localStorage.getItem('fd_glide_tilt') !== '0'
+    } catch {
+      return true
+    }
+  })()
+  private tiltRaw = NaN
+  private tiltZero = NaN
+  private tiltSm = 0
+  private tiltSeen = 0
+  private onOrientEv = (e: DeviceOrientationEvent) => {
+    if (e.gamma === null || e.beta === null) return
+    const ang = (screen.orientation?.angle ?? (window as unknown as { orientation?: number }).orientation ?? 0) as number
+    // left / right tilt in the current screen orientation
+    const v = ang === 90 ? e.beta : ang === -90 || ang === 270 ? -e.beta : ang === 180 ? -e.gamma : e.gamma
+    this.tiltRaw = v
+    if (this.tiltZero !== this.tiltZero || this.phase !== 'playing') this.tiltZero = v
+    this.tiltSeen++
+  }
+
+  /** Request motion permission (must run inside a user gesture on iOS) and start listening. */
+  enableTilt() {
+    if (!this.tiltOn || typeof window === 'undefined' || !('DeviceOrientationEvent' in window)) return
+    const D = DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<string> }
+    const listen = () => window.addEventListener('deviceorientation', this.onOrientEv)
+    if (typeof D.requestPermission === 'function') {
+      D.requestPermission()
+        .then((r) => {
+          if (r === 'granted') listen()
+        })
+        .catch(() => {
+          /* denied: lane swipes only */
+        })
+    } else listen()
+  }
+
+  setTiltEnabled(on: boolean) {
+    this.tiltOn = on
+    try {
+      localStorage.setItem('fd_glide_tilt', on ? '1' : '0')
+    } catch {
+      /* ignore */
+    }
+    if (on) this.enableTilt()
+    else window.removeEventListener('deviceorientation', this.onOrientEv)
+  }
+
+  get tiltEnabledPref() {
+    return this.tiltOn
+  }
+
+  get tiltActive() {
+    return this.tiltOn && this.tiltSeen > 3
+  }
+
+  /** −1..1 from the device tilt (±20° full scale, 2.5° dead zone, smoothed), NaN when unavailable. */
+  private tiltValue(): number {
+    if (!this.tiltActive || this.tiltRaw !== this.tiltRaw) return NaN
+    let d = this.tiltRaw - this.tiltZero
+    const dz = 2.5
+    d = Math.abs(d) < dz ? 0 : d - Math.sign(d) * dz
+    const target = Math.max(-1, Math.min(1, d / 20))
+    this.tiltSm += (target - this.tiltSm) * 0.18
+    return this.tiltSm
+  }
+
   setLocked(v: boolean) {
     this.locked = v
   }
@@ -281,6 +352,8 @@ class Engine {
 
   start(first: Action | null) {
     if (this.phase !== 'intro') return
+    this.enableTilt()
+    this.tiltZero = this.tiltRaw
     this.phase = 'playing'
     this.startedAt = this.clock
     sfxStart()
@@ -358,6 +431,7 @@ class Engine {
         this.prev = { ...this.run }
         this.track.ensure(this.run.s + 260)
         if (this.autopilot) this.autopilot.update(this.run, this.track)
+        else setTilt(this.run, this.tiltValue())
         this.events.length = 0
         step(this.run, this.track, { full: true, events: this.events })
         for (const e of this.events) this.onEvent(e)
@@ -461,6 +535,8 @@ class Engine {
       obstacles: this.track.obstacles,
       keys: this.track.keys,
       pickups: this.track.pickups,
+      corners: this.track.corners,
+      generatedTo: this.track.generatedTo,
       tick: b.tick,
       hz: FR_HZ,
       shake: this.shake,
@@ -521,6 +597,12 @@ class Engine {
       case 'respawn':
         sfxStart()
         this.say('Keep running!', 'teal', 0.9)
+        break
+      case 'turn':
+        this.view?.onTurn(e.id, e.dir, this.track.corners, !!e.respawn)
+        if (!e.respawn) sfxLane()
+        break
+      case 'turnQ':
         break
       case 'jump':
         sfxJump()
@@ -720,6 +802,7 @@ class Engine {
     window.removeEventListener('pointerup', this.onUp)
     window.removeEventListener('pointercancel', this.onUp)
     window.removeEventListener('keydown', this.onKey)
+    window.removeEventListener('deviceorientation', this.onOrientEv)
     document.removeEventListener('visibilitychange', this.onVis)
     this.view?.dispose()
     this.canvas.remove()
@@ -740,5 +823,7 @@ export function createFifthRun(host: HTMLElement, bridge: FrBridge): FifthRunHan
       engine.locked = false
       engine.start(null)
     },
+    setTilt: (on) => engine.setTiltEnabled(on),
+    tiltEnabled: () => engine.tiltEnabledPref,
   }
 }
