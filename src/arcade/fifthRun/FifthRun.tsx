@@ -12,7 +12,7 @@ import SharePanel from '../social/SharePanel'
 import StoryShareButton from '../social/StoryShareButton'
 import { requestAlertsRefresh } from '../social/alertStore'
 import { createFifthRun, type FifthRunHandle } from './engine'
-import { BLINK_S, BOOST, CHASE, FR_HZ, POWER_TICKS, START_LIVES, STAR_M } from './sim/constants'
+import { BLINK_S, BOOST, CHASE, FR_HZ, POWER_TICKS, START_LIVES, STAR_M, STREAK_EVERY, STREAK_M } from './sim/constants'
 import type { FrChallengeConfig, FrEndPayload, FrHudState } from './types'
 import './fifthRun.css'
 import { BRAND_LOGO } from '../brand/BrandLockup'
@@ -376,9 +376,9 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
               <h3>Rules</h3>
               <ul>
                 <li><b>🛸</b>A UFO is right behind you. Stumble and it swoops in; run clean to keep it back</li>
-                <li><b>⚠</b>Watch for gaps, parts of the path that drop away, and narrow stretches. Crates and old Cadillac wrecks block a lane, so go around them</li>
+                <li><b>⚠</b>Watch for gaps, parts of the path that drop away, and narrow stretches. Crystal pylons and crashed satellites block a lane, so go around them</li>
                 <li><b>⚠</b>Hit an obstacle and you stumble: you slow down and it closes in. Stumble again before you pull away (about {Math.round((CHASE.hit - CHASE.catchAt) * CHASE.recoverS)} s of clean running) and the UFO catches you</li>
-                <li><b>{'♥'.repeat(START_LIVES)}</b>{START_LIVES} lives. Getting caught, falling off the path, or running into a crate or a wreck costs one. You flash and respawn right where you were, then keep running</li>
+                <li><b>{'♥'.repeat(START_LIVES)}</b>{START_LIVES} lives. Getting caught, falling off the path, or running into a pylon or a satellite costs one. You flash and respawn right where you were, then keep running</li>
                 <li><b>☠</b>Lose all {START_LIVES} and the run is over. It gets faster the farther you go</li>
               </ul>
             </section>
@@ -386,7 +386,7 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
               <h3>Scoring</h3>
               <ul>
                 <li><b>m</b>Your score is your distance, 1 point per metre</li>
-                <li><b>💫</b>Each shooting star adds +{STAR_M} m. They come in short lines; the ones arcing over rubble need a jump</li>
+                <li><b>💫</b>Each shooting star adds +{STAR_M} m. Every {STREAK_EVERY} in a row without missing one pays a streak bonus (+{STREAK_M} m, then +{STREAK_M * 2} m, +{STREAK_M * 3} m…). The ones arcing over obstacles need a jump</li>
                 <li><img src={BRAND_LOGO} alt="" width={28} height={28} style={{ borderRadius: '50%', verticalAlign: 'middle', marginRight: 6, boxShadow: '0 0 10px #ffc83c' }} />Rare 5D logo: {Math.round(POWER_TICKS.hand / FR_HZ)} s invincible plus a {BOOST.mul}× speed surge. Nothing can catch you, you can’t fall, corners take themselves, and you blast through everything without losing your star streak. You blink for the last {BLINK_S} s, still invincible, so you know it’s almost over</li>
               </ul>
             </section>

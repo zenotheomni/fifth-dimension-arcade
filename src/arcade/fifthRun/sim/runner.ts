@@ -23,6 +23,8 @@ import {
   DOWN_S,
   SLOW_TICKS,
   STAR_M,
+  STREAK_EVERY,
+  STREAK_M,
   START_LIVES,
   FR_HZ,
   warmAt,
@@ -40,6 +42,7 @@ export type RunEvent =
   | { type: 'key'; id: number; pts: number; combo: number; mult: number; magnet: boolean; first: boolean }
   | { type: 'miss'; id: number; lostCombo: number }
   | { type: 'mult'; mult: number }
+  | { type: 'streak'; combo: number; bonus: number }
   | { type: 'power'; kind: PowerKind; id: number }
   | { type: 'hit'; ob: number; kind: ObKind; lives: number }
   | { type: 'stumble'; ob: number; kind: ObKind }
@@ -107,6 +110,8 @@ export type RunState = {
   tx: number
   /** metres banked by corner re-framing so the score never runs backwards */
   sBank: number
+  /** streak bonus metres earned */
+  bonusM: number
   /** ticks spent held at the far edge of a corner square waiting for a (late) turn swipe */
   edgeHold: number
   /** s of the last corner handled (turned / fallen at); the next corner is the first beyond it */
@@ -163,6 +168,7 @@ export function newRun(): RunState {
     latQ: null,
     tx: 0,
     sBank: 0,
+    bonusM: 0,
     edgeHold: 0,
     cDone: -1,
     turnQ: 0,
@@ -177,7 +183,7 @@ export function newRun(): RunState {
 }
 
 /** Score = distance: metres run + STAR_M bonus metres per star. */
-export const scoreOf = (st: RunState) => Math.floor(st.s + st.sBank) + st.keys * STAR_M
+export const scoreOf = (st: RunState) => Math.floor(st.s + st.sBank) + st.keys * STAR_M + st.bonusM
 
 /** Speed multiplier from stumble slow-down × logo surge (eased). */
 export function speedMul(st: RunState) {
@@ -629,6 +635,11 @@ export function step(st: RunState, track: Track, opts: StepOpts) {
       st.keyPts += pts
       ev?.push({ type: 'key', id: k.id, pts, combo: st.combo, mult: st.mult, magnet: false, first: st.keys === 1 })
       if (st.mult > prevMult) ev?.push({ type: 'mult', mult: st.mult })
+      if (st.combo % STREAK_EVERY === 0) {
+        const bonus = STREAK_M * (st.combo / STREAK_EVERY)
+        st.bonusM += bonus
+        ev?.push({ type: 'streak', combo: st.combo, bonus })
+      }
     } else if (dz < -0.8) {
       k.state = 2
       // invincible (5D logo, incl. its blinking tail) or respawn grace: smashing / passing through

@@ -23,6 +23,7 @@ import {
   sfxSurge,
   sfxNear,
   sfxWhoosh,
+  sfxLineDone,
   sfxSlide,
   sfxStart,
   unlockSfx,
@@ -401,13 +402,6 @@ class Engine {
         this.view?.punch()
         if (!this.callout) this.say('Speed up!', 'teal', 0.9)
       }
-      if (this.run.s >= 600 && this.biomeCalled < 1) {
-        this.biomeCalled = 1
-        this.say('Into the Fifth Dimension…', 'teal', 1.4)
-      } else if (this.run.s >= 1600 && this.biomeCalled < 2) {
-        this.biomeCalled = 2
-        this.say('Deep space.', 'gold', 1.5)
-      }
     }
 
     this.hudAcc += dt
@@ -500,8 +494,11 @@ class Engine {
         break
       }
       case 'mult':
+        break
+      case 'streak':
         sfxMult()
-        this.say(`${st.combo} star streak!`, e.mult >= 5 ? 'coral' : 'gold', 1.1)
+        sfxLineDone()
+        this.say(`${e.combo} streak · +${e.bonus} m`, e.combo >= 50 ? 'coral' : 'gold', 1.2)
         break
       case 'miss':
         if (e.lostCombo >= 10) this.say(`Combo lost · ${e.lostCombo}`, 'coral', 0.9)
@@ -627,7 +624,7 @@ class Engine {
       maxCombo: st.maxCombo,
       livesLeft: st.lives,
       ranM: Math.floor(st.s + st.sBank),
-      starM: st.keys * STAR_M,
+      starM: st.keys * STAR_M + st.bonusM,
       durationS: Math.round((st.tick / FR_HZ) * 10) / 10,
       deathKind: st.deathKind,
       pb: this.pb,

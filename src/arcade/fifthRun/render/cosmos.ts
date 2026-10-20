@@ -17,8 +17,8 @@ float n3(vec3 x){ vec3 i = floor(x); vec3 f = fract(x); f = f*f*(3.0-2.0*f);
 float fbm(vec3 p){ float a = 0.5, s = 0.0; for (int i = 0; i < 5; i++){ s += a * n3(p); p = p * 2.03 + 7.1; a *= 0.5; } return s; }
 `
 
-export type PlanetKind = 'earth' | 'saturn' | 'jupiter' | 'mars' | 'neptune' | 'moon'
-const KIND_ID: Record<PlanetKind, number> = { earth: 0, saturn: 1, jupiter: 2, mars: 3, neptune: 4, moon: 5 }
+export type PlanetKind = 'earth' | 'saturn' | 'jupiter' | 'mars' | 'neptune' | 'moon' | 'mercury' | 'venus' | 'uranus' | 'pluto' | 'io' | 'europa'
+const KIND_ID: Record<PlanetKind, number> = { earth: 0, saturn: 1, jupiter: 2, mars: 3, neptune: 4, moon: 5, mercury: 6, venus: 7, uranus: 8, pluto: 9, io: 10, europa: 11 }
 
 function planetMaterial(kind: PlanetKind) {
   return new THREE.ShaderMaterial({
@@ -62,6 +62,26 @@ function planetMaterial(kind: PlanetKind) {
           float b = fbm(vec3(p.y * 10.0, p.x * 2.0, p.z * 2.0));
           col = mix(vec3(0.08, 0.22, 0.65), vec3(0.25, 0.48, 0.9), b);
           atmo = vec3(0.4, 0.6, 1.0) * 0.6;
+        } else if (uKind == 6) {
+          float cr = smoothstep(0.5, 0.6, fbm(p * 7.0)) * 0.4;
+          col = mix(vec3(0.5, 0.46, 0.42), vec3(0.3, 0.28, 0.26), cr + fbm(p * 15.0) * 0.3);
+        } else if (uKind == 7) {
+          float w = fbm(vec3(p.x * 2.0 + p.y * 3.0, p.y * 5.0, p.z * 2.0) + vec3(uTime * 0.005));
+          col = mix(vec3(0.85, 0.66, 0.36), vec3(1.0, 0.9, 0.66), w);
+          atmo = vec3(1.0, 0.8, 0.5) * 0.5;
+        } else if (uKind == 8) {
+          col = mix(vec3(0.55, 0.82, 0.86), vec3(0.68, 0.9, 0.92), 0.5 + 0.5 * sin(p.y * 14.0) * 0.3);
+          atmo = vec3(0.6, 0.95, 1.0) * 0.5;
+        } else if (uKind == 9) {
+          float heart = 1.0 - smoothstep(0.25, 0.32, length(vec2(p.x - 0.2, p.y + 0.1)));
+          col = mix(vec3(0.55, 0.45, 0.38), vec3(0.85, 0.78, 0.68), max(heart * step(0.0, p.z), fbm(p * 6.0) * 0.4));
+        } else if (uKind == 10) {
+          float sp = smoothstep(0.6, 0.66, fbm(p * 9.0));
+          col = mix(vec3(0.9, 0.78, 0.3), vec3(0.95, 0.55, 0.15), fbm(p * 4.0));
+          col = mix(col, vec3(0.25, 0.12, 0.05), sp);
+        } else if (uKind == 11) {
+          float cr = smoothstep(0.02, 0.0, abs(fbm(p * 5.0) - 0.5));
+          col = mix(vec3(0.88, 0.86, 0.82), vec3(0.55, 0.32, 0.2), cr);
         } else {
           float cr = smoothstep(0.55, 0.62, fbm(p * 5.0)) * 0.35;
           col = mix(vec3(0.62), vec3(0.4), cr + fbm(p * 12.0) * 0.25);
@@ -203,7 +223,8 @@ export class Cosmos {
   private planets: Body[] = []
   private holes: Body[] = []
   private galaxies: Body[] = []
-  private order: PlanetKind[] = ['saturn', 'earth', 'jupiter', 'mars', 'neptune', 'moon']
+  /** the sky changes gradually: the inner worlds first, the gas giants and the far dwarfs later on */
+  private order: PlanetKind[] = ['moon', 'mercury', 'venus', 'earth', 'mars', 'jupiter', 'io', 'saturn', 'europa', 'uranus', 'neptune', 'pluto']
   private next = 0
   private lastS = 0
   private rng = 1
@@ -260,14 +281,15 @@ export class Cosmos {
     const sphere = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 40), pm)
     sphere.rotation.set(0.25, 0, 0.18)
     g.add(sphere)
-    if (kind === 'saturn') {
+    if (kind === 'saturn' || kind === 'uranus') {
       const rm = ringMaterial(1.3, 2.35)
       mats.push(rm)
       const ring = new THREE.Mesh(new THREE.RingGeometry(1.3, 2.35, 128, 1), rm)
-      ring.rotation.set(1.25, 0.25, 0.15)
+      ring.rotation.set(kind === 'uranus' ? 0.2 : 1.25, 0.25, kind === 'uranus' ? 1.4 : 0.15)
+      if (kind === 'uranus') ring.scale.setScalar(0.8)
       g.add(ring)
     }
-    const size: Record<PlanetKind, number> = { earth: 70, saturn: 85, jupiter: 120, mars: 48, neptune: 60, moon: 36 }
+    const size: Record<PlanetKind, number> = { earth: 70, saturn: 85, jupiter: 120, mars: 48, neptune: 62, moon: 36, mercury: 32, venus: 64, uranus: 66, pluto: 26, io: 30, europa: 30 }
     g.scale.setScalar(size[kind])
     return this.body(g, mats, false)
   }
@@ -303,7 +325,7 @@ export class Cosmos {
     this.group.updateMatrixWorld(true)
     const vis = THREE.MathUtils.smoothstep(space, 0.05, 0.45)
     // keep up to two planets and (deeper in) one black hole in the sky
-    const want = space > 0.05 ? 2 : 1
+    const want = space > 0.6 ? 3 : space > 0.05 ? 2 : 1
     let live = 0
     for (const p of this.planets) if (p.live) live++
     if (active && live < want) {

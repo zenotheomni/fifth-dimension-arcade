@@ -10,7 +10,7 @@ import * as THREE from 'three'
 import { BloomEffect, Effect, EffectComposer, EffectPass, RenderPass, SMAAEffect, SMAAPreset, ToneMappingEffect, ToneMappingMode } from 'postprocessing'
 import { CORNER, laneX } from '../sim/constants'
 import { keyPos, type Corner, type KeyItem, type Obstacle, type Pickup, type PowerKind } from '../sim/track'
-import { buildBarrier, buildBlock, buildGantry, buildPickup, buildPipe } from './props'
+import { buildBarrier, buildPickup, buildPipe } from './props'
 import { UfoChaser } from './ufo'
 import { Cosmos } from './cosmos'
 import { Roadside } from './roadside'
@@ -23,7 +23,7 @@ import { blobTexture, chevronTexture, glowTexture, shootingStarTexture, streakTe
 import { PathLayout, turned, type WorldPt } from './layout'
 import { buildCornerSquare, buildDeckChunk, deckMaterial, DECK_HALF, glowStripMaterial } from './deck'
 import { voidSkyMaterial } from './sky'
-import { buildCadillac } from './cadillac'
+import { buildCrystal, buildSatellite, buildTruss } from './relics'
 import { buildArch, buildIsland, buildTurnSign } from './decor'
 
 export type QualityTier = 'high' | 'low'
@@ -206,7 +206,7 @@ export class FrScene {
   private runYaw0 = 0
   private fovKick = 0
   /** seconds for the camera to swing round a 90° corner */
-  static readonly TURN_S = 0.34
+  static readonly TURN_S = 0.22
   private pendingTurn: { oldSeg: number; snap: boolean } | null = null
   private runnerLocal = new THREE.Vector3()
   private billQ = new THREE.Quaternion()
@@ -427,9 +427,9 @@ export class FrScene {
     }
     add(this.pools.pipe, () => buildPipe(metal), 18)
     add(this.pools.barrier, () => buildBarrier(chev, metal), 24)
-    add(this.pools.overhead, () => buildGantry(chev, metal, this.glow), 24)
-    add(this.pools.block, () => buildBlock(chev, metal), 16)
-    add(this.pools.car, () => buildCadillac(this.glow), 8, false)
+    add(this.pools.overhead, () => buildTruss(this.glow), 24)
+    add(this.pools.block, () => buildCrystal(this.glow), 16)
+    add(this.pools.car, () => buildSatellite(this.glow), 8)
     for (const k of ['hand'] as PowerKind[]) {
       for (let i = 0; i < 2; i++) {
         const p = buildPickup(k, this.glow, emblem)
@@ -715,7 +715,9 @@ export class FrScene {
     this.updateSparks(dt)
     this.updateSky(v, dt)
     this.darkFade += ((v.invisible || v.idle ? 0 : 1) - this.darkFade) * (1 - Math.exp(-dt * (v.invisible ? 1.5 : 2.5)))
-    this.dark.update(t, dt, v.dead && v.deathKind === 'caught' ? 1.5 : v.dead && !v.idle ? 1 : v.threat, this.runnerLocal.x, v.idle ? 0 : Math.max(0.0, this.darkFade), this.camera.quaternion)
+    // Temple Run opening: the UFO starts right on his heels, then falls back to its chase spot
+    const intro = v.idle ? 0 : THREE.MathUtils.clamp(1 - (v.s - 8) / 55, 0, 1)
+    this.dark.update(t, dt, v.dead && v.deathKind === 'caught' ? 1.5 : v.dead && !v.idle ? 1 : Math.max(v.threat, intro * 0.95), this.runnerLocal.x, v.idle ? 0 : Math.max(0.0, this.darkFade), this.camera.quaternion)
     {
       const g = this.dark.group
       const p = this.ufoNdc.copy(g.position).project(this.camera)
@@ -1225,7 +1227,7 @@ export class FrScene {
     const rl = this.runnerLocal
     const k = 1 - Math.exp(-dt * 7)
     this.camX += (rl.x * 0.62 - this.camX) * k
-    const ty = 3.9 + Math.max(0, v.y) * 0.08
+    const ty = 3.9 + Math.max(0, v.y) * 0.08 - (v.idle ? 0 : THREE.MathUtils.clamp(1 - (v.s - 8) / 55, 0, 1)) * 0.9
     this.camY += (ty - this.camY) * (1 - Math.exp(-dt * 6))
     const speedF = THREE.MathUtils.clamp((v.speed - 18) / 22, 0, 1)
     const aspect = this.camera.aspect
@@ -1236,7 +1238,9 @@ export class FrScene {
     const sh = v.shake
     const sx = sh ? (Math.sin(v.time * 61) + Math.sin(v.time * 37)) * 0.06 * sh : 0
     const sy = sh ? Math.sin(v.time * 53) * 0.05 * sh : 0
-    let dz = 6.4 - speedF * 0.4
+    // opening shot: camera starts a little further back and lower so the pursuing UFO fills the frame
+    const intro = v.idle ? 0 : THREE.MathUtils.clamp(1 - (v.s - 8) / 55, 0, 1)
+    let dz = 6.4 - speedF * 0.4 + intro * 1.4
     const push = v.dead ? Math.min(1.2, v.deadT * 1.5) : 0
     this.camPush += (push - this.camPush) * (v.dead ? 1 : 1 - Math.exp(-dt * 4))
     dz -= this.camPush

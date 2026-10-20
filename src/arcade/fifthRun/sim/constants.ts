@@ -25,8 +25,8 @@ export const speedAt = (s: number) => SPEED.v0 + (SPEED.vmax - SPEED.v0) * (s / 
 export const WARM_M = 700
 export const warmAt = (s: number) => (s >= WARM_M ? 0 : s <= 0 ? 1 : 1 - s / WARM_M)
 /** Difficulty 0..1 (pattern mix + spacing). Held at 0 through the first LEVEL_OFFSET metres. */
-export const DIFF_K = 650
-export const LEVEL_OFFSET = 360
+export const DIFF_K = 450
+export const LEVEL_OFFSET = 150
 export const levelAt = (s: number) => (s <= LEVEL_OFFSET ? 0 : (s - LEVEL_OFFSET) / (s - LEVEL_OFFSET + DIFF_K))
 
 /** Jump: fixed airtime / apex (feet height). */
@@ -140,7 +140,10 @@ export const POWER_TICKS = {
 }
 
 /** Bonus metres per 💫 star. score (= distance) = floor(metres run) + stars × STAR_M */
-export const STAR_M = 3
+export const STAR_M = 5
+/** Streak bonus: every STREAK_EVERY stars in a row pays STREAK_M × (streak / STREAK_EVERY) bonus metres. */
+export const STREAK_EVERY = 10
+export const STREAK_M = 10
 /** Streak tiers (display callouts only). */
 export const COMBO_STEPS = [0, 10, 30, 60, 100]
 export const multFor = (combo: number) => {
