@@ -720,19 +720,12 @@ export class FrScene {
     this.dark.update(t, dt, v.dead && v.deathKind === 'caught' ? 1.5 : v.dead && !v.idle ? 1 : Math.max(v.threat, intro * 0.95), this.runnerLocal.x, v.idle ? 0 : Math.max(0.0, this.darkFade), this.camera.quaternion)
     {
       const g = this.dark.group
-      const p = this.ufoNdc.copy(g.position).project(this.camera)
-      const d = Math.max(1, this.camera.position.z - g.position.z)
-      const halfH = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)) * d
-      const mx = (UfoChaser.SIZE.w * 0.5 + 0.1) / (halfH * this.camera.aspect)
-      const my = (UfoChaser.SIZE.h * 0.5 + 0.08) / halfH
-      const cx = THREE.MathUtils.clamp(p.x, -1 + mx, 1 - mx)
-      const cy = THREE.MathUtils.clamp(p.y, -1 + my + 0.04, 1 - my)
-      if (cx !== p.x || cy !== p.y) {
-        p.x = cx
-        p.y = cy
-        p.unproject(this.camera)
-        g.position.copy(p)
-      }
+      // place the chaser in screen space so it always reads big at the lower right, whatever the turn / camera does
+      const po = this.dark.pose
+      const tanH = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2))
+      const tgt = this.ufoNdc.set(po.x * tanH * this.camera.aspect * po.dist, po.y * tanH * po.dist, -po.dist).applyMatrix4(this.camera.matrixWorld)
+      if (this.ufoInit) g.position.lerp(tgt, 1 - Math.exp(-dt * 6))
+      else { g.position.copy(tgt); this.ufoInit = true }
       this.tmpV.copy(this.runnerLocal).setY(this.runnerLocal.y + 0.9)
       this.dark.aim(this.tmpV, !v.idle && this.darkFade > 0.3)
       this.dark.spotlight.position.y = this.runnerLocal.y + 0.03
@@ -1222,6 +1215,7 @@ export class FrScene {
   }
 
   private camPush = 0
+  private ufoInit = false
   private ufoNdc = new THREE.Vector3()
   private updateCamera(v: ViewState, dt: number) {
     const rl = this.runnerLocal

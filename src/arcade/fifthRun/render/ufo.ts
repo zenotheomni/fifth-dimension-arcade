@@ -46,6 +46,8 @@ export class UfoChaser {
   private x = 0
   private threatS = 0
   private near = 0
+  /** screen-space chase pose the scene places the craft at (ndc x/y + camera distance) */
+  readonly pose = { x: 0.42, y: -0.5, dist: 6 }
   private tmp = new THREE.Vector3()
   /** world size (QA): diameter × height */
   static readonly SIZE = { w: R * 3.4 * SCALE, h: 0.55 * SCALE }
@@ -142,8 +144,12 @@ export class UfoChaser {
     const off = 1.0 - 0.45 * near - over * 0.6 + 0.12 * Math.sin(time * 1.3)
     this.x += (runnerX + off - this.x) * (1 - Math.exp(-dt * 4))
     const bob = 0.09 * Math.sin(time * 3.1)
+    // screen pose (v11 / Jenks's screenshot): lower right, big, bobbing; lunges in and grows on a stumble
+    this.pose.x = 0.4 - 0.1 * near - over * 0.3 + 0.06 * Math.sin(time * 1.3)
+    this.pose.y = -0.5 + 0.12 * near + over * 0.35 + 0.035 * Math.sin(time * 3.1)
+    this.pose.dist = 6.2 - 3.1 * near + hunt * 2.2 * (1 - near) + back * 1.5 - over * 1.2
     this.group.position.set(this.x, this.y + bob, this.z)
-    this.craft.rotation.set(-0.22 + 0.04 * Math.sin(time * 2.1), time * 0.9, 0.05 * Math.sin(time * 1.7))
+    this.craft.rotation.set(-0.42 + 0.04 * Math.sin(time * 2.1), time * 0.9, 0.05 * Math.sin(time * 1.7))
     this.group.visible = true
     const pulse = 0.5 + 0.5 * Math.sin(time * (5 + 6 * near))
     this.eyeMat.emissiveIntensity = 2.5 + 3 * pulse
