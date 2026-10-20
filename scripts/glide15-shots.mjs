@@ -80,6 +80,14 @@ for (let f = 0; f < 210; f++) {
   await page.screenshot({ path: path.join(vdir, `f${String(f).padStart(3, '0')}.png`), timeout: 0 })
 }
 execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-framerate', '30', '-i', path.join(vdir, 'f%03d.png'), '-vf', 'scale=780:1688:flags=lanczos,format=yuv420p', '-c:v', 'libx264', '-crf', '20', '-movflags', '+faststart', path.join(OUT, `${P}-ufo.mp4`)])
+// background: run deeper (invulnerable) and grab the galaxy at a few distances
+await page.evaluate(() => { globalThis.__FR.run.invuln = 1e6; globalThis.__FR.run.threat = 0 })
+let k = 1
+for (const target of [900, 2200, 3600]) {
+  for (let i = 0; i < 120 && (await page.evaluate(() => globalThis.__FR.run.s + globalThis.__FR.run.sBank)) < target; i++) await adv(1000)
+  await adv(34)
+  await shot(`bg-${k++}`)
+}
 console.log('stored after', await page.evaluate(() => localStorage.getItem('fr.ufoVariant')))
 console.log('done')
 await browser.close()

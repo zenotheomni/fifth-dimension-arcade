@@ -72,7 +72,8 @@ export function voidSkyMaterial() {
         space += vec3(0.42, 0.12, 0.62) * pow(neb, 2.6) * 0.9;
         space += vec3(0.0, 0.45, 0.5) * pow(neb2, 3.5) * 0.7;
         space += vec3(1.0, 0.35, 0.28) * pow(neb * neb2, 2.4) * 0.8;
-        space += vec3(0.75, 0.62, 0.85) * band * (0.14 + 0.5 * fbm3(d * 9.0)) ;
+        float core = exp(-pow(dot(d, normalize(vec3(0.35, 0.82, 0.45))) * 9.0, 2.0));
+        space += vec3(0.75, 0.62, 0.85) * band * (0.14 + 0.5 * fbm3(d * 9.0)) + vec3(1.0, 0.85, 0.7) * core * 0.35 * fbm3(d * 22.0);
         space *= 1.0 - dust * 0.75;
         // fine star dust
         vec3 c = floor(d * 380.0);
@@ -82,6 +83,9 @@ export function voidSkyMaterial() {
         // below: darker abyss
         space *= mix(1.0, 0.55, smoothstep(0.0, -0.8, h));
         vec3 col = mix(sunset, space, uSpace);
+        // the galaxy is overhead from the start: Milky-Way band + nebula glow in the upper dusk sky
+        float upper = smoothstep(0.12, 0.5, h) * (1.0 - uSpace);
+        col += (vec3(0.75, 0.62, 0.9) * band * (0.1 + 0.45 * fbm3(d * 9.0)) * (1.0 - dust * 0.7) + vec3(0.42, 0.12, 0.62) * pow(neb, 2.6) * 0.45 + vec3(0.0, 0.4, 0.45) * pow(neb2, 3.5) * 0.35) * upper;
         // dusk stars already in the upper sky at the start
         col += vec3(1.0) * step(0.9985, st) * smoothstep(0.25, 0.6, h) * (1.0 - uSpace) * 0.6;
         gl_FragColor = vec4(col, 1.0);

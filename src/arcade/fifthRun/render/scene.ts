@@ -20,7 +20,7 @@ import { neonEnvironment } from './env'
 import { mergeStatic } from './merge'
 import { glowMaterial, PALETTE, towerMaterial } from './shaders'
 import { blobTexture, chevronTexture, glowTexture, shootingStarTexture, streakTexture } from './textures'
-import { PathLayout, turned, type WorldPt } from './layout'
+import { PathLayout, turned, type Seg, type WorldPt } from './layout'
 import { buildCornerSquare, buildDeckChunk, deckMaterial, DECK_HALF, glowStripMaterial } from './deck'
 import { voidSkyMaterial } from './sky'
 import { buildCrystal, buildSatellite, buildTruss } from './relics'
@@ -170,7 +170,7 @@ export class FrScene {
   private glow: THREE.Texture
   private stars!: THREE.Points
   private starMat!: THREE.ShaderMaterial
-  private comets: { mesh: THREE.Mesh; t: number; dur: number; x: number; y: number; dx: number; dy: number; wait: number }[] = []
+  private comets: { mesh: THREE.Mesh; t: number; dur: number; x: number; y: number; dx: number; dy: number; wait: number; z: number }[] = []
   private skyline!: THREE.InstancedMesh
   private skylineMat!: THREE.ShaderMaterial
   private planets: THREE.Object3D[] = []
@@ -223,7 +223,9 @@ export class FrScene {
   private lead: { dir: number; s: number } | null = null
   private fovKick = 0
   /** seconds for the camera to swing round a 90° corner */
-  private pendingTurn: { oldSeg: number; snap: boolean } | null = null
+  /** the segment we turned off, held BY REFERENCE: PathLayout.sync() drops old segments (shifting every
+   * index) once a run has more than 8, so an index captured before the turn goes stale mid-run (v15 fix) */
+  private pendingTurn: { oldSeg: Seg; snap: boolean } | null = null
   private runnerLocal = new THREE.Vector3()
   private billQ = new THREE.Quaternion()
   private invWorldQ = new THREE.Quaternion()
@@ -371,11 +373,13 @@ export class FrScene {
 
   private buildComets() {
     const tex = streakTexture()
-    for (let i = 0; i < 12; i++) {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(150 + (i % 3) * 40, 6), glowMaterial(tex, i % 4 === 0 ? '#bfe8ff' : '#ffd27a', 1))
+    // dense shooting stars (v15): 24 streaks at mixed depths / lengths
+    const cc = ['#ffd27a', '#bfe8ff', '#ffd27a', '#ffb0d8', '#bfe8ff', '#fff2c8']
+    for (let i = 0; i < 24; i++) {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(110 + (i % 4) * 45, 4 + (i % 3) * 2), glowMaterial(tex, cc[i % cc.length], 1))
       m.visible = false
       this.skyGroup.add(m)
-      this.comets.push({ mesh: m, t: 0, dur: 1.4, x: 0, y: 0, dx: -1, dy: -0.5, wait: 0.2 + i * 0.35 })
+      this.comets.push({ mesh: m, t: 0, dur: 1.4, x: 0, y: 0, dx: -1, dy: -0.5, wait: 0.1 + i * 0.18, z: -800 })
     }
   }
 
@@ -549,7 +553,7 @@ export class FrScene {
 
   /** The runner took corner `id`. `snap`: respawn / auto turn after a fall (no swing). */
   onTurn(id: number, dir: number, corners: Corner[], snap = false) {
-    const old = this.layout.runnerSeg
+    const old = this.layout.segs[this.layout.runnerSeg]
     const c = corners.find((x) => x.id === id)
     // a T keeps its other arm in view for a while
     if (c && c.kind === 'T') {
@@ -562,7 +566,7 @@ export class FrScene {
       }
     }
     this.layout.onTurn(id, dir, corners)
-    if (this.layout.runnerSeg !== old) this.pendingTurn = { oldSeg: old, snap }
+    if (this.layout.segs[this.layout.runnerSeg] !== old) this.pendingTurn = { oldSeg: old, snap }
   }
 
   /** A turn swipe was accepted for corner `id` (before the corner centre): start rotating now. */
@@ -664,7 +668,7 @@ export class FrScene {
         this.camYawV = 0
         this.runYawV = 0
       } else {
-        const b = L.pt(pt.oldSeg, this.lastS, 0, this.wp2)
+        const b = PathLayout.ptOn(pt.oldSeg, this.lastS, 0, this.wp2)
         // frame-origin hand-off: start from where the old frame was (plus whatever is left of a swing)
         this.offO.set(b.x - ox + this.offO.x, b.z - oz + this.offO.y)
       }
@@ -1243,7 +1247,8 @@ export class FrScene {
         c.mesh.visible = false
         if (c.wait <= 0) {
           c.t = 0
-          c.dur = 1.1 + Math.random() * 0.8
+          c.dur = 0.8 + Math.random() * 1.0
+          c.z = -520 - Math.random() * 480
           c.x = -260 + Math.random() * 520
           c.y = 220 + Math.random() * 220
           const ang = Math.PI + 0.32 + Math.random() * 0.25
@@ -1255,14 +1260,14 @@ export class FrScene {
       c.t += dt
       const f = c.t / c.dur
       if (f >= 1) {
-        c.wait = 0.3 + Math.random() * 1.6
+        c.wait = 0.15 + Math.random() * 0.9
         c.mesh.visible = false
         continue
       }
       c.mesh.visible = true
       const travel = 280 * f
       // comets live in the camera's current heading (sky group is yaw-rotated): place in world-yaw space
-      this.tmpV.set(c.x + c.dx * travel, c.y + c.dy * travel, -800).applyAxisAngle(THREE.Object3D.DEFAULT_UP, this.camYaw)
+      this.tmpV.set(c.x + c.dx * travel, c.y + c.dy * travel, c.z).applyAxisAngle(THREE.Object3D.DEFAULT_UP, this.camYaw)
       c.mesh.position.copy(this.tmpV)
       c.mesh.rotation.set(0, this.camYaw, Math.atan2(c.dy, c.dx))
       ;(c.mesh.material as THREE.MeshBasicMaterial).opacity = Math.sin(Math.PI * Math.min(1, f * 1.15)) * (0.5 + 0.5 * Math.max(sp, 0.3))

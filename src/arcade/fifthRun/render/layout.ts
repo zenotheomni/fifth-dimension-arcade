@@ -104,6 +104,15 @@ export class PathLayout {
     return out
   }
 
+  /** Point on a segment held by reference (safe across sync() pruning). */
+  static ptOn(g: Seg, s: number, x: number, out: WorldPt): WorldPt {
+    const d = s - g.s0
+    out.x = g.x + d * g.fx - x * g.fz
+    out.z = g.z + d * g.fz + x * g.fx
+    out.yaw = yawOf(g.fx, g.fz)
+    return out
+  }
+
   /** Point on an explicit heading from a corner centre (used for the arms of an unresolved T). */
   static ptFrom(cx: number, cz: number, fx: number, fz: number, d: number, x: number, out: WorldPt): WorldPt {
     out.x = cx + d * fx - x * fz
