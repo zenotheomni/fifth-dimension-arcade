@@ -7,22 +7,22 @@
  *   executes them with reaction delay, timing jitter and occasional lapses.
  */
 import { mulberry32 } from '../../core/seededRandom'
-import { FR_HZ, JUMP_T, laneX, speedAt } from './constants'
-import { cloneRun, queueAction, step, type Action, type RunState } from './runner'
+import { CORNER, FR_HZ, JUMP_T, laneX, speedAt } from './constants'
+import { cloneRun, nextCorner, queueAction, step, type Action, type RunState } from './runner'
 import { obstacleS, type Track } from './track'
 
 const ACTIONS: (Action | null)[] = [null, 'left', 'right', 'jump', 'slide']
 
 function stateKey(c: RunState) {
-  return `${c.lane}|${Math.round(c.x * 10)}|${c.air ? 1 : 0}|${Math.round(c.y * 20)}|${Math.round(c.vy * 4)}|${
+  return `${c.turnQ}|${c.cDone}|${c.lane}|${Math.round(c.x * 10)}|${c.air ? 1 : 0}|${Math.round(c.y * 20)}|${Math.round(c.vy * 4)}|${
     c.slide > 0 ? Math.ceil(c.slide / 6) : 0
   }|${c.slideOnLand ? 1 : 0}`
 }
 
 function validAction(c: RunState, a: Action | null) {
   if (a === null) return true
-  if (a === 'left') return c.lane > 0
-  if (a === 'right') return c.lane < 2
+  // (left / right are also corner turns, so they stay valid at the path edge)
+  if (a === 'left' || a === 'right') return c.turnQ === 0
   if (a === 'jump') return !c.air
   return !(c.air && c.slideOnLand)
 }
@@ -112,6 +112,8 @@ export const SKILLS: Record<string, Skill> = {
   /** first-timer on a phone: slow reads of oncoming traffic, frequent late swipes (calibrated so the
    *  pre-tune curve reproduced the ~24 s / 528 m first run seen in review: median 32 s, IQR 22–37 s) */
   rookie: { name: 'rookie', reactMs: 600, jitterMs: 170, lapseP: 0.22, lapseMs: 500, lookS: 0.8, minGapMs: 350 },
+  /** mid-skill phone player (between a first run and a regular): the 60–90 s target */
+  mid: { name: 'mid', reactMs: 450, jitterMs: 130, lapseP: 0.12, lapseMs: 380, lookS: 1.0, minGapMs: 290 },
   novice: { name: 'novice', reactMs: 330, jitterMs: 90, lapseP: 0.05, lapseMs: 260, lookS: 1.2, minGapMs: 240 },
   decent: { name: 'decent', reactMs: 250, jitterMs: 70, lapseP: 0.03, lapseMs: 230, lookS: 1.4, minGapMs: 190 },
   expert: { name: 'expert', reactMs: 180, jitterMs: 40, lapseP: 0.01, lapseMs: 180, lookS: 1.7, minGapMs: 130 },
@@ -133,6 +135,10 @@ export class RuleBot {
   private done = new Set<number>()
   private lastInput = -1e9
   private exitOk = new Map<string, boolean>()
+  /** corner the turn is planned for, its scheduled swipe, and the way chosen at a T */
+  private turnFor = -1
+  private turnSched: { a: Action; leadS: number } | null = null
+  private tDir: -1 | 1 = -1
   constructor(skill: Skill, seed = 1) {
     this.skill = skill
     this.rng = mulberry32(seed >>> 0)
@@ -200,7 +206,8 @@ export class RuleBot {
       const o = track.obstacles[i]
       if (o.s > until) break
       if (o.smashed || o.s + o.len < st.s - 0.3 || o.lane !== lane) continue
-      if (o.kind === 'block' || o.kind === 'car' || this.done.has(o.id)) continue
+      if (o.kind === 'void' && o.s < until && o.s + o.len > st.s) return null
+      if (o.kind === 'block' || o.kind === 'car' || o.kind === 'void' || this.done.has(o.id)) continue
       const mid = o.s + o.len / 2
       const lead = o.kind === 'overhead' ? o.s - st.s - v * 0.3 : mid - st.s - (v * JUMP_T) / 2
       const tk = st.tick + Math.round((lead / v) * FR_HZ)
@@ -212,6 +219,8 @@ export class RuleBot {
   /** Run the ideal plan to `untilS`; returns the end state (null if it crashes). */
   private simulate(st: RunState, track: Track, plan: Sched[], untilS: number): RunState | null {
     const c = cloneRun(st)
+    const nc = nextCorner(c, track)
+    if (nc && !c.turnQ) c.turnQ = nc.kind === 'L' ? -1 : nc.kind === 'R' ? 1 : this.tDir
     let qi = 0
     while (c.s < untilS) {
       while (qi < plan.length && plan[qi].tick <= c.tick) queueAction(c, plan[qi++].a)
@@ -249,8 +258,25 @@ export class RuleBot {
       this.nextThink = st.tick + 6
       this.think(st, track)
     }
+    // corners: swipe the turn ~0.3 s before the corner centre, with this skill's timing noise
+    const c = nextCorner(st, track)
+    const v = Math.max(st.v, 1)
+    const arm = c ? c.s - st.s <= v * CORNER.armS + CORNER.half + v * 0.15 : false
+    if (c && c.id !== this.turnFor && c.s - st.s < v * (this.skill.lookS + 0.6)) {
+      this.turnFor = c.id
+      if (c.kind === 'T') this.tDir = this.rng() < 0.5 ? -1 : 1
+      const dir: Action = c.kind === 'L' ? 'left' : c.kind === 'R' ? 'right' : this.tDir < 0 ? 'left' : 'right'
+      this.turnSched = { a: dir, leadS: 0.3 - this.noise() / FR_HZ }
+    }
+    if (this.turnSched && c && st.down === 0 && (c.s - st.s) / v <= this.turnSched.leadS) {
+      queueAction(st, this.turnSched.a)
+      this.turnSched = null
+      this.lastInput = st.tick
+    }
     while (this.sched.length && this.sched[0].tick <= st.tick) {
       const a = this.sched.shift()!
+      // inside a corner's turn arm a sideways swipe would be a turn: no lane changes there
+      if (a.lat && arm) continue
       queueAction(st, a.a)
       this.lastInput = st.tick
       if (a.ob !== undefined) {

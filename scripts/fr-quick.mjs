@@ -25,7 +25,7 @@ const pct = (a, p) => [...a].sort((x, y) => x - y)[Math.min(a.length - 1, Math.f
 for (const name of skills) {
   const sk = SKILLS[name] ?? (process.env.SKILL_JSON ? { name, ...JSON.parse(process.env.SKILL_JSON) } : undefined)
   if (!sk) { console.log('no skill', name); continue }
-  const ts = []
+  const ts = []; globalThis.cfl = []; globalThis.trn = []; globalThis.crs = []
   const firstHit = []
   const dists = []
   const stb = [], cgt = [], fls = [], scs = []
@@ -44,12 +44,12 @@ for (const name of skills) {
     }
     ts.push(st.tick / FR_HZ)
     dists.push(st.s)
-    stb.push(st.stumbles); cgt.push(st.caughtN); fls.push(st.fallN); scs.push(scoreOf(st))
+    stb.push(st.stumbles); cgt.push(st.caughtN); fls.push(st.fallN); scs.push(scoreOf(st)); (globalThis.cfl ??= []).push(st.cornerFallN); (globalThis.trn ??= []).push(st.turns); (globalThis.crs ??= []).push(st.crashN)
     firstHit.push(fh ?? st.tick / FR_HZ)
     void lives
   })
   const r1 = (x) => Math.round(x * 10) / 10
-  console.log(name.padEnd(8), JSON.stringify({ stumblesMed: pct(stb, 0.5), caughtMed: pct(cgt, 0.5), fallsMed: pct(fls, 0.5), scoreMed: pct(scs, 0.5), n: N, medianT: r1(pct(ts, 0.5)), p25T: r1(pct(ts, 0.25)), p75T: r1(pct(ts, 0.75)), under30: ts.filter((t) => t < 30).length, under60: ts.filter((t) => t < 60).length, medianFirstHitT: r1(pct(firstHit, 0.5)), hitBefore30: firstHit.filter((t) => t < 30).length, medianDist: Math.round(pct(dists, 0.5)) }))
+  console.log(name.padEnd(8), JSON.stringify({ stumblesMed: pct(stb, 0.5), caughtMed: pct(cgt, 0.5), fallsMed: pct(fls, 0.5), cornerFalls: globalThis.cfl.reduce((a,b)=>a+b,0), turnsMed: pct(globalThis.trn,0.5), crashes: globalThis.crs.reduce((a,b)=>a+b,0), falls: fls.reduce((a,b)=>a+b,0), stumbles: stb.reduce((a,b)=>a+b,0), caught: cgt.reduce((a,b)=>a+b,0), scoreMed: pct(scs, 0.5), n: N, medianT: r1(pct(ts, 0.5)), p25T: r1(pct(ts, 0.25)), p75T: r1(pct(ts, 0.75)), under30: ts.filter((t) => t < 30).length, under60: ts.filter((t) => t < 60).length, medianFirstHitT: r1(pct(firstHit, 0.5)), hitBefore30: firstHit.filter((t) => t < 30).length, medianDist: Math.round(pct(dists, 0.5)) }))
 }
 let s = 0
 const sp = []
