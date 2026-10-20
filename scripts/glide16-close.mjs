@@ -78,10 +78,11 @@ await page.evaluate(() => {
       from = target.clone().addScaledVector(d, 0.75).add(new T(0, 0.04, 0))
     } else if (which === 'powerup') {
       let best = null
-      v.scene.traverse((o) => { if (o.visible && o.material && o.material.map && String(o.material.map.image?.src || '').includes('5d-logo-exact') && !v.runner.group.getObjectById(o.id)) { const p = wp(o); const dd = p.distanceTo(camPos); if (!best || dd < best[1]) best = [p, dd] } })
+      v.scene.traverse((o) => { if (o.visible && o.material && o.material.map && String(o.material.map.image?.src || '').includes('5d-logo-exact') && !v.runner.group.getObjectById(o.id)) { const p = wp(o); const dd = p.distanceTo(camPos); if (!best || dd < best[1]) best = [p, dd, o] } })
       target = best[0]
+      globalThis.__pu = best[2]
       const d = toCam(target)
-      from = target.clone().addScaledVector(d, 2.2).add(new T(0, 0.1, 0))
+      from = target.clone().addScaledVector(d, 4.2).add(new T(0, 0.1, 0))
     } else if (which === 'rocket') {
       let best = null
       for (const it of v.pools.block) if (it.group.visible) { const p = wp(it.group); const dd = p.distanceTo(camPos); if (dd > 3 && (!best || dd < best[1])) best = [p, dd] }
@@ -110,12 +111,14 @@ const shot = async (n) => { await page.screenshot({ path: path.join(OUT, n) }); 
 await page.click('.fr-howto__start')
 await page.evaluate(() => { globalThis.__FR.setAutopilot('expert'); globalThis.__FR.run.invuln = 1e6 })
 await adv(4000)
+if (!process.env.LATE) {
 console.log(await page.evaluate(() => globalThis.__close('backpack')))
 await shot('glide16-logo-backpack.png')
 console.log(await page.evaluate(() => globalThis.__close('ufo')))
 await shot('glide16-ufo-close.png')
 console.log(await page.evaluate(() => globalThis.__close('ufo', { az: 2.4, dist: 3.0, up: -0.9 })))
 await shot('glide16-ufo-close-under.png')
+}
 // power-up close-up
 for (let i = 0; i < 400; i++) {
   const d = await page.evaluate(() => { const e = globalThis.__FR; e.run.invuln = 1e6; const p = e.track.pickups.find((p) => !p.taken && p.s > e.run.s); return p ? p.s - e.run.s : 999 })
@@ -130,7 +133,7 @@ for (let i = 0; i < 600 && n < 2; i++) {
   await adv(250)
   const ok = await page.evaluate(() => { const e = globalThis.__FR; e.run.invuln = 1e6; return e.track.obstacles.some((o) => o.kind === 'block' && o.s - e.run.s > 10 && o.s - e.run.s < 24) })
   if (!ok) continue
-  console.log(await page.evaluate((k) => globalThis.__close('rocket', k ? { az: -0.7, dist: 3.6, up: 0.3 } : { az: 0.6 }), n))
+  console.log(await page.evaluate((k) => globalThis.__close('rocket', k ? { az: -0.7, dist: 5.4, up: 0.9 } : { az: 0.6, dist: 5.8, up: 1.2 }), n))
   await shot(`glide16-rocket-close${n + 1}.png`)
   n++
   await adv(2500)

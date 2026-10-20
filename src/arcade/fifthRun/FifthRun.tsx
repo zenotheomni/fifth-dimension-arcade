@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { track } from '../analytics'
 import { useArcadeAudio } from '../audio/AudioProvider'
+import { unlockMusic } from '../audio/sceneMusic'
 import { END_DOORS } from '../brandPlacement'
 import { COPY, FIFTH_RUN_COPY } from '../copyLocks'
 import { challengeFromScore, newRunId, submitRun, type ChallengeInfo, type RunResult } from '../core/arcadeApi'
@@ -103,10 +104,22 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
 
   useEffect(() => onPlayerChange(setPlayer), [])
 
+  // Lobby song plays through loading + how-to; START (inside the tap, for iOS) crossfades to
+  // "Thousand Yard Stare", which stays through the end screen + restarts. Leaving releases it.
+  const { claimScene, duck } = audio
   useEffect(() => {
-    audio.duck(true)
-    return () => audio.duck(false)
-  }, [audio])
+    return () => {
+      duck(false)
+      claimScene(null)
+    }
+  }, [claimScene, duck])
+  useEffect(() => {
+    duck(Boolean(ended))
+  }, [ended, duck])
+  // any other way into gameplay (challenge link, restart) also claims the Glide song
+  useEffect(() => {
+    if (hud.phase === 'playing') claimScene('fifth-run')
+  }, [hud.phase, claimScene])
 
   useEffect(() => {
     mutedRef.current = audio.muted
@@ -184,6 +197,8 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
 
   const startFromHowto = () => {
     setHowto(false)
+    unlockMusic()
+    claimScene('fifth-run')
     gameRef.current?.start()
     track('arcade_fifth_run_howto_start')
   }

@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react'
 import { MUTE_STORAGE_KEY, SCENE_TRACKS, type MusicScene } from './music'
+import NowPlaying from './NowPlaying'
 import { setMusicDucked, setMusicMuted, setMusicScene, unlockMusic } from './sceneMusic'
 
 type AudioCtx = {
@@ -102,7 +103,12 @@ export function AudioProvider({ children }: { children: ReactNode }) {
     [entered, muted, enterFloor, toggleMute, duck, claimScene, scene],
   )
 
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>
+  return (
+    <Ctx.Provider value={value}>
+      {children}
+      <NowPlaying title={value.trackTitle} muted={muted} />
+    </Ctx.Provider>
+  )
 }
 
 export function useArcadeAudio(): AudioCtx {

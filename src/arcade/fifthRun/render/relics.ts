@@ -273,7 +273,7 @@ export function buildRocket(glow: THREE.Texture) {
   crater.position.y = 0.012
   group.add(crater)
   const plateMat = new THREE.MeshStandardMaterial({ color: '#1c1a20', metalness: 0.6, roughness: 0.55 })
-  const edgeMat = new THREE.MeshStandardMaterial({ color: '#3a2a22', emissive: new THREE.Color('#ff4a10'), emissiveIntensity: 0.6, roughness: 0.6 })
+  const edgeMat = new THREE.MeshStandardMaterial({ color: '#2a2320', metalness: 0.5, emissive: new THREE.Color('#ff4a10'), emissiveIntensity: 0.12, roughness: 0.7 })
   for (let i = 0; i < 7; i++) {
     const a = (i / 7) * Math.PI * 2 + rnd() * 0.4
     const w = 0.28 + rnd() * 0.22
@@ -285,8 +285,8 @@ export function buildRocket(glow: THREE.Texture) {
   // ── rocket (pivot at the impact point; +Y = from the buried nose up to the tail) ──
   const pivot = new THREE.Group()
   group.add(pivot)
-  const tex = hullTextures('rocket', { base: '#b9b6ae', brush: 0.6, panelsU: 8, panelsV: 6, rivets: true, soot: 1.4, seed: 59 })
-  const hullMat = addRim(new THREE.MeshStandardMaterial({ map: tex.map, bumpMap: tex.bump, bumpScale: 2.2, roughnessMap: tex.rough, roughness: 0.62, metalness: 0.82, envMapIntensity: 1.4 }), new THREE.Color('#ffb27a'), 0.35, 3.0)
+  const tex = hullTextures('rocket', { base: '#a8a49b', brush: 0.6, panelsU: 8, panelsV: 6, rivets: true, soot: 2.2, seed: 59 })
+  const hullMat = addRim(new THREE.MeshStandardMaterial({ map: tex.map, bumpMap: tex.bump, bumpScale: 2.2, roughnessMap: tex.rough, roughness: 0.78, metalness: 0.7, envMapIntensity: 0.75, color: '#a29d95' }), new THREE.Color('#ffb27a'), 0.25, 3.0)
   const R0 = 0.24
   const prof: THREE.Vector2[] = []
   // ogive nose (buried) → body → boat tail
@@ -304,18 +304,19 @@ export function buildRocket(glow: THREE.Texture) {
   pivot.add(band)
   // fins: bevelled, scorched, one bent
   const finShape = new THREE.Shape()
+  // swept, trapezoidal fins (smaller than the hull is wide)
   finShape.moveTo(0, 0)
-  finShape.lineTo(0.34, -0.12)
-  finShape.lineTo(0.38, 0.3)
-  finShape.lineTo(0.0, 0.55)
+  finShape.lineTo(0.2, 0.12)
+  finShape.lineTo(0.22, 0.36)
+  finShape.lineTo(0.0, 0.46)
   finShape.closePath()
   const finGeo = new THREE.ExtrudeGeometry(finShape, { depth: 0.035, bevelEnabled: true, bevelThickness: 0.012, bevelSize: 0.012, bevelSegments: 3, curveSegments: 4 })
   finGeo.translate(0, 0, -0.0175)
-  const finMat = new THREE.MeshStandardMaterial({ map: tex.map, color: '#77736c', metalness: 0.8, roughness: 0.5, bumpMap: tex.bump, bumpScale: 1.5 })
+  const finMat = new THREE.MeshStandardMaterial({ map: tex.map, color: '#4a4640', metalness: 0.75, roughness: 0.62, bumpMap: tex.bump, bumpScale: 1.5 })
   for (let i = 0; i < 4; i++) {
     const f = new THREE.Mesh(finGeo, finMat)
     const a = (i / 4) * Math.PI * 2
-    f.position.set(Math.cos(a) * R0 * 0.95, 1.2, Math.sin(a) * R0 * 0.95)
+    f.position.set(Math.cos(a) * R0 * 0.95, 1.34, Math.sin(a) * R0 * 0.95)
     f.rotation.set(0, -a, i === 2 ? 0.45 : 0)
     pivot.add(f)
   }

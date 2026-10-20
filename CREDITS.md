@@ -6,6 +6,11 @@
 - Bundled: `public/audio/zeno-5.mp3` → `/arcade/audio/zeno-5.mp3`
 - Used with owner permission (Jenks / 5D Imperial).
 
+- **We Outside** (Jenks ft. Val Underwood) — lobby · `public/audio/lobby-theme.{m4a,mp3}`
+- **Zeno 5** (Jenks) — Court Vision · `public/audio/court-vision-theme.{m4a,mp3}`
+- **Thousand Yard Stare** (Jenks) — Fifth Glide · `public/audio/fifth-glide-theme.{m4a,mp3}`
+- All © Fifth Dimension Imperial, used with owner permission; details in `public/audio/CREDITS.md`.
+
 ## Engine / runtime
 
 - [Phaser 3](https://phaser.io/) — MIT
