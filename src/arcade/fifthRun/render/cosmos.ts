@@ -220,14 +220,14 @@ export class Cosmos {
       this.holes.push(this.body(m, [m.material as THREE.ShaderMaterial], true))
     }
     const tints = ['#b48cff', '#7fd4ff', '#ffb8d8', '#9fffe0']
-    for (let i = 0; i < 4; i++) {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), galaxyMaterial(i * 1.7, new THREE.Color(tints[i])))
+    for (let i = 0; i < 8; i++) {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), galaxyMaterial(i * 1.7, new THREE.Color(tints[i % 4])))
       const b = this.body(m, [m.material as THREE.ShaderMaterial], true)
       b.live = true
-      b.az = (i / 4) * Math.PI * 2 + 0.4
-      b.el = 0.25 + 0.2 * (i % 2)
+      b.az = (i / 8) * Math.PI * 2 + 0.25
+      b.el = 0.16 + 0.12 * (i % 3)
       b.dist = 1300
-      m.scale.set(260 + i * 40, 150 + i * 25, 1)
+      m.scale.set(230 + (i % 4) * 40, 140 + (i % 3) * 30, 1)
       m.userData.roll = i * 0.9
       this.galaxies.push(b)
     }
@@ -275,10 +275,11 @@ export class Cosmos {
   /** Spawn body `b` ahead of the heading (camYaw), off to one side. */
   private spawn(b: Body, camYaw: number, near: boolean) {
     b.side = this.r() < 0.5 ? -1 : 1
-    b.az = camYaw + b.side * (near ? 0.2 + this.r() * 0.25 : 0.1 + this.r() * 0.2)
-    b.el = 0.06 + this.r() * 0.32
+    // portrait view is only ~±0.3 rad wide: spawn inside it, a little off the path's vanishing point
+    b.az = camYaw + b.side * (near ? 0.12 + this.r() * 0.08 : 0.05 + this.r() * 0.12)
+    b.el = 0.1 + this.r() * 0.22
     b.dist = 900 + this.r() * 300
-    b.rate = 0.0016 + this.r() * 0.0009 // rad per metre run → ~15–25 s to sweep past
+    b.rate = 0.00035 + this.r() * 0.00025 // rad per metre run → ~15–25 s to drift out of frame
     b.live = true
   }
 
@@ -316,11 +317,12 @@ export class Cosmos {
         this.next++
       }
     }
-    if (active && space > 0.45 && !this.holes.some((h) => h.live) && Math.floor(s / 900) % 2 === 1) {
-      const h = this.holes[Math.floor(s / 1800) % 2]
+    if (active && space > 0.4 && !this.holes.some((h) => h.live) && Math.floor(s / 600) % 2 === 1) {
+      const h = this.holes[Math.floor(s / 1200) % 2]
       this.spawn(h, camYaw, false)
-      h.el = 0.12 + this.r() * 0.2
-      h.g.scale.setScalar(150 + this.r() * 80)
+      h.el = 0.2 + this.r() * 0.12
+      h.az = camYaw - Math.sign(wrap(h.az - camYaw) || 1) * 0.08
+      h.g.scale.setScalar(170 + this.r() * 60)
     }
     const place = (b: Body, alpha: number) => {
       const ce = Math.cos(b.el)
@@ -342,13 +344,13 @@ export class Cosmos {
       // drift outward (away from the heading), sinking slightly as it passes
       b.az += Math.sign(rel || b.side) * b.rate * ds
       b.el = Math.max(-0.05, b.el - b.rate * ds * 0.08)
-      if (Math.abs(rel) > 1.75) {
+      if (Math.abs(rel) > 0.55) {
         b.live = false
         b.g.visible = false
         continue
       }
-      const fadeIn = Math.min(1, Math.abs(rel) / 0.06 + 0.4)
-      const fadeOut = THREE.MathUtils.smoothstep(Math.abs(rel), 1.75, 1.3)
+      const fadeIn = 1
+      const fadeOut = 1 - THREE.MathUtils.smoothstep(Math.abs(rel), 0.4, 0.55)
       const base = this.holes.includes(b) ? vis : Math.max(0.75, vis)
       place(b, base * fadeIn * fadeOut)
     }
