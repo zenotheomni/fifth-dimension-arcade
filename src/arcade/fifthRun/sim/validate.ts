@@ -28,7 +28,7 @@ const uFor = (h: number) => (1 - Math.sqrt(Math.max(0, 1 - h / JUMP_APEX))) / 2
  * fall, so it may start a little before landing. Jumps may take off anywhere that clears the obstacle.
  */
 export type Reach = St[][]
-const MAX_STATES = 10
+const MAX_STATES = 16
 
 function addState(list: St[], c: St) {
   for (const x of list) if (Math.abs(x.act - c.act) < 0.05 && Math.abs(x.mv - c.mv) < 0.05) return

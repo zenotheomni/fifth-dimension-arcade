@@ -286,6 +286,14 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
               {hud.score.toLocaleString('en-US')}
               <small>m</small>
             </span>
+            {/* v16: hearts sit centred BELOW the distance box (never over the number) */}
+            <div className="fr-lives" aria-label={`${hud.lives} lives`}>
+          {[0, 1, 2].map((i) => (
+            <span key={i} className={`fr-life${i < hud.lives ? ' is-on' : ''}`} aria-hidden>
+              ♥
+            </span>
+          ))}
+        </div>
           </div>
           <div className="fr-cell fr-cell--right">
             <span className="fr-cell__label">Time</span>
@@ -305,14 +313,6 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
               {hud.score > hud.target ? 'Ahead' : `Target ${hud.target.toLocaleString('en-US')} m`}
             </span>
           ) : null}
-        </div>
-
-        <div className="fr-lives" aria-label={`${hud.lives} lives`}>
-          {[0, 1, 2].map((i) => (
-            <span key={i} className={`fr-life${i < hud.lives ? ' is-on' : ''}`} aria-hidden>
-              ♥
-            </span>
-          ))}
         </div>
 
         <div className="fr-powers">

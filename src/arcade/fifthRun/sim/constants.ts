@@ -50,7 +50,7 @@ export const speedAt = (s: number) => {
 export const WARM_M = 700
 export const warmAt = (s: number) => (s >= WARM_M ? 0 : s <= 0 ? 1 : 1 - s / WARM_M)
 /** Difficulty 0..1 (pattern mix + spacing). Held at 0 through the first LEVEL_OFFSET metres. */
-export const DIFF_K = 450
+export const DIFF_K = 330
 export const LEVEL_OFFSET = 150
 export const levelAt = (s: number) => (s <= LEVEL_OFFSET ? 0 : (s - LEVEL_OFFSET) / (s - LEVEL_OFFSET + DIFF_K))
 

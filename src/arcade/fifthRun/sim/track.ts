@@ -398,11 +398,11 @@ export class Track {
         const len = toks.map(lenOf)
         return { s0: at, cells: toks.map((t) => (t === 'H' ? 'X' : t)) as Cell[], len, end: at + Math.max(0, ...len) }
       }
-      let nx = stepRow(this.reach, this.vEnd, mk(s0), v)
+      let nx = stepRow(this.reach, this.vEnd, mk(s0), speedAt(s0))
       // 1) give the row a little more room (keeps the pattern)
       for (let k = 0; k < 18 && !anyReach(nx); k++) {
         s0 = q(s0 + 1)
-        nx = stepRow(this.reach, this.vEnd, mk(s0), v)
+        nx = stepRow(this.reach, this.vEnd, mk(s0), speedAt(s0))
         if (anyReach(nx)) this.repairs++
       }
       // 2) still blocked: open the blocker nearest to a reachable lane
@@ -413,7 +413,7 @@ export class Track {
         if (pick < 0) break
         toks[pick] = 'E'
         this.repairs++
-        nx = stepRow(this.reach, this.vEnd, mk(s0), v)
+        nx = stepRow(this.reach, this.vEnd, mk(s0), speedAt(s0))
       }
       this.reach = anyReach(nx) ? nx : fresh(s0)
       this.vEnd = mk(s0).end
