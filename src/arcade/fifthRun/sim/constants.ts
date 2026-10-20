@@ -15,7 +15,7 @@ export const laneX = (lane: number) => (lane - 1) * LANE_W
  * Forward speed (m/s). Temple Run pace on a narrow sky path: brisk 21 m/s start, ramping toward vmax
  * (≈26 m/s at 1 km, ≈31 m/s at 2.5 km, ≈35 m/s at 5 km).
  */
-export const SPEED = { v0: 21, vmax: 54, k: 2200 }
+export const SPEED = { v0: 24, vmax: 54, k: 2200 }
 export const speedAt = (s: number) => SPEED.v0 + (SPEED.vmax - SPEED.v0) * (s / (s + SPEED.k))
 /**
  * Warm-up distance (≈ first 40 s, easing out linearly): sparse single-car rows, slower oncoming
@@ -84,9 +84,9 @@ export const START_LIVES = 3
  */
 export const CORNER = {
   half: 3.2,
-  armS: 1.0,
+  armS: 1.3,
   /** extra time past the far edge of the corner square you may still turn (+ more during the warm-up) */
-  lateS: 0.1,
+  lateS: 0.28,
   lateWarmS: 0.15,
   segMin: 170,
   segMax: 260,
@@ -94,7 +94,7 @@ export const CORNER = {
   segMaxHard: 140,
   tP: 0.22,
   preS: 1.7,
-  postS: 0.8,
+  postS: 1.9,
   postT: 70,
 }
 /** Path half width the runner can occupy — lane centres are ±LANE_W. */

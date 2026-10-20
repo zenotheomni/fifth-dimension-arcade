@@ -15,7 +15,8 @@ import { createFifthRun, type FifthRunHandle } from './engine'
 import { BLINK_S, BOOST, CHASE, FR_HZ, POWER_TICKS, START_LIVES, STAR_M } from './sim/constants'
 import type { FrChallengeConfig, FrEndPayload, FrHudState } from './types'
 import './fifthRun.css'
-import BrandLockup, { BRAND_LOGO } from '../brand/BrandLockup'
+import { BRAND_LOGO } from '../brand/BrandLockup'
+import GlideWordmark, { WORDMARK } from '../brand/GlideWordmark'
 
 export type SeededRun = { ticketId: string; seed: string; rivalHandle?: string | null }
 
@@ -263,13 +264,13 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
 
       {hud.phase === 'loading' ? (
         <div className="fr-loading" aria-live="polite">
-          <BrandLockup size={96} />
+          <GlideWordmark width={200} />
           <span className="fr-loading__bar" />
           Lighting up the highway…
         </div>
       ) : null}
 
-      <img className="fr-wordmark" src={`${import.meta.env.BASE_URL}art/5d-wordmark-white.png`} alt="Fifth Dimension" draggable={false} />
+      <img className="fr-wordmark" src={WORDMARK} alt="Fifth Dimension" draggable={false} />
       <div className="fr-hud" aria-live="polite">
         <div className={`fr-board${hud.phase === 'intro' ? ' is-dim' : ''}`}>
           <div className="fr-cell">
@@ -359,7 +360,7 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
       {howto && !ended ? (
         <div className="fr-howto" role="dialog" aria-label="How to play Fifth Glide">
           <div className="fr-howto__card">
-            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}><BrandLockup size={64} /></div>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}><GlideWordmark width={170} /></div>
             <p className="fr-howto__eyebrow">How to play</p>
             <h2 className="fr-howto__title">Fifth Glide</h2>
             <section>

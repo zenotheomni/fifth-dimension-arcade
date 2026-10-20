@@ -193,14 +193,20 @@ export class FrScene {
   private sparkGeo!: THREE.BufferGeometry
   private darkFade = 1
   private camX = 0
-  private camY = 5.6
+  private camY = 3.9
   private fov = 62
   private camYaw = 0
   private runYaw = 0
   private space = 0
   /** decaying offsets that hide the hop when the runner changes segment at a corner */
-  private offR = new THREE.Vector2()
   private offO = new THREE.Vector2()
+  private offO0 = new THREE.Vector2()
+  private turnT = 1
+  private camYaw0 = 0
+  private runYaw0 = 0
+  private fovKick = 0
+  /** seconds for the camera to swing round a 90° corner */
+  static readonly TURN_S = 0.34
   private pendingTurn: { oldSeg: number; snap: boolean } | null = null
   private runnerLocal = new THREE.Vector3()
   private billQ = new THREE.Quaternion()
@@ -349,11 +355,11 @@ export class FrScene {
 
   private buildComets() {
     const tex = streakTexture()
-    for (let i = 0; i < 4; i++) {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(190, 7), glowMaterial(tex, '#ffd27a', 1))
+    for (let i = 0; i < 12; i++) {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(150 + (i % 3) * 40, 6), glowMaterial(tex, i % 4 === 0 ? '#bfe8ff' : '#ffd27a', 1))
       m.visible = false
       this.skyGroup.add(m)
-      this.comets.push({ mesh: m, t: 0, dur: 1.4, x: 0, y: 0, dx: -1, dy: -0.5, wait: 0.4 + i * 1.3 })
+      this.comets.push({ mesh: m, t: 0, dur: 1.4, x: 0, y: 0, dx: -1, dy: -0.5, wait: 0.2 + i * 0.35 })
     }
   }
 
@@ -543,6 +549,12 @@ export class FrScene {
     if (this.layout.runnerSeg !== old) this.pendingTurn = { oldSeg: old, snap }
   }
 
+  /** Speed-up beat: brief FOV punch. */
+  punch() {
+    this.fovKick = 7
+    this.fov += 3
+  }
+
   applyAnisotropy(root: THREE.Object3D = this.scene) {
     const max = this.renderer.capabilities.getMaxAnisotropy()
     root.traverse((o) => {
@@ -612,34 +624,39 @@ export class FrScene {
     const po = L.pt(seg, S, 0, this.wp2)
     let ox = po.x
     let oz = po.z
+    // ── turn swing: ONE time-based ease drives the camera yaw and the frame-origin hand-off together,
+    // so the camera can't snap, lag on a dt spike, or drift differently at 60 / 120 Hz. Yaw deltas are
+    // wrap-safe (shortest way round ±π). The runner is never moved: the sim re-frames him in place.
+    const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a))
     if (this.pendingTurn) {
       const pt = this.pendingTurn
       this.pendingTurn = null
-      // the sim re-frames s / x onto the new heading with no position change, so there is nothing to
-      // blend: the runner stays planted on the corner square (no slide / airtime). Only the yaw swings.
-      // The camera frame origin (path centre) does move, so that one is still blended.
-      this.offR.set(0, 0)
       if (pt.snap) {
-        this.offO.set(0, 0)
+        this.turnT = 1
+        this.offO0.set(0, 0)
         this.camYaw = segYaw
         this.runYaw = segYaw
+        this.camYaw0 = segYaw
+        this.runYaw0 = segYaw
       } else {
         const b = L.pt(pt.oldSeg, this.lastS, 0, this.wp2)
-        this.offO.set(b.x - ox, b.z - oz)
+        // carry over whatever is left of a previous swing
+        this.offO0.set(b.x - ox + this.offO.x, b.z - oz + this.offO.y)
+        this.camYaw0 = this.camYaw
+        this.runYaw0 = this.runYaw
+        this.turnT = 0
       }
     }
-    const kOff = Math.exp(-dt * 9)
-    this.offR.multiplyScalar(kOff)
-    this.offO.multiplyScalar(kOff)
-    rx += this.offR.x
-    rz += this.offR.y
+    this.turnT = Math.min(1, this.turnT + Math.min(dt, 1 / 30) / FrScene.TURN_S)
+    const e = this.turnT * this.turnT * (3 - 2 * this.turnT)
+    const er = Math.min(1, this.turnT * 1.8)
+    const eR = er * er * (3 - 2 * er)
+    this.offO.copy(this.offO0).multiplyScalar(1 - e)
     ox += this.offO.x
     oz += this.offO.y
     this.lastS = S
-    // smoothed yaw (wrap-safe): the camera swings round the corner, the runner pivots faster
-    const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a))
-    this.runYaw += wrap(segYaw - this.runYaw) * (1 - Math.exp(-dt * 16))
-    this.camYaw += wrap(segYaw - this.camYaw) * (1 - Math.exp(-dt * 6.5))
+    this.camYaw = this.camYaw0 + wrap(segYaw - this.camYaw0) * e
+    this.runYaw = this.runYaw0 + wrap(segYaw - this.runYaw0) * eR
 
     // world → local frame: origin at the path centre under the runner, heading −Z under camYaw
     this.world.rotation.set(0, -this.camYaw, 0)
@@ -1188,7 +1205,7 @@ export class FrScene {
       c.t += dt
       const f = c.t / c.dur
       if (f >= 1) {
-        c.wait = 0.8 + Math.random() * 3.2
+        c.wait = 0.3 + Math.random() * 1.6
         c.mesh.visible = false
         continue
       }
@@ -1208,25 +1225,25 @@ export class FrScene {
     const rl = this.runnerLocal
     const k = 1 - Math.exp(-dt * 7)
     this.camX += (rl.x * 0.62 - this.camX) * k
-    // Temple Run framing: high and pitched down so the chaser right behind him is always in frame
-    const ty = 5.6 + Math.max(0, v.y) * 0.08
+    const ty = 3.9 + Math.max(0, v.y) * 0.08
     this.camY += (ty - this.camY) * (1 - Math.exp(-dt * 6))
     const speedF = THREE.MathUtils.clamp((v.speed - 18) / 22, 0, 1)
     const aspect = this.camera.aspect
     const baseFov = aspect > 0.8 ? 52 : 66
-    const tf = baseFov + speedF * 8 + (v.boost - 1) * 20
+    this.fovKick = Math.max(0, this.fovKick - dt * 9)
+    const tf = baseFov + speedF * 8 + (v.boost - 1) * 20 + this.fovKick
     this.fov += (tf - this.fov) * (1 - Math.exp(-dt * 3))
     const sh = v.shake
     const sx = sh ? (Math.sin(v.time * 61) + Math.sin(v.time * 37)) * 0.06 * sh : 0
     const sy = sh ? Math.sin(v.time * 53) * 0.05 * sh : 0
-    let dz = 7.2 - speedF * 0.4
+    let dz = 6.4 - speedF * 0.4
     const push = v.dead ? Math.min(1.2, v.deadT * 1.5) : 0
     this.camPush += (push - this.camPush) * (v.dead ? 1 : 1 - Math.exp(-dt * 4))
     dz -= this.camPush
     // a fall: the camera stays at the rim and looks down after him
     const fall = v.dead && v.deathKind === 'gap' ? Math.min(1, v.deadT * 1.4) : 0
     this.camera.position.set(this.camX + sx, this.camY + sy, rl.z * 0 + dz)
-    this.lookT.set(rl.x * 0.5, 0.3 - fall * 3.5, -11 + fall * 6)
+    this.lookT.set(rl.x * 0.5, 0.7 - fall * 3.5, -13 + fall * 8)
     this.camera.lookAt(this.lookT)
     this.camera.rotation.z += (this.runner.group.rotation.z || 0) * 0.15
     this.camera.fov = this.fov

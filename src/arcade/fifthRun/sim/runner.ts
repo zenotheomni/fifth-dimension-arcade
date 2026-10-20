@@ -56,6 +56,8 @@ export type RunEvent =
   | { type: 'turn'; id: number; s: number; dir: -1 | 1; auto: boolean; respawn?: boolean }
   /** a left/right swipe was taken as a turn request for the next corner */
   | { type: 'turnQ'; id: number; dir: -1 | 1 }
+  /** just cleared an obstacle close by (jumped / slid it in your lane, or brushed past one beside you) */
+  | { type: 'near'; ob: number; kind: ObKind; close: boolean }
 
 export type RunState = {
   tick: number
@@ -105,6 +107,8 @@ export type RunState = {
   tx: number
   /** metres banked by corner re-framing so the score never runs backwards */
   sBank: number
+  /** ticks spent held at the far edge of a corner square waiting for a (late) turn swipe */
+  edgeHold: number
   /** s of the last corner handled (turned / fallen at); the next corner is the first beyond it */
   cDone: number
   /** queued turn for the next corner (−1 / 1, 0 = none) */
@@ -159,6 +163,7 @@ export function newRun(): RunState {
     latQ: null,
     tx: 0,
     sBank: 0,
+    edgeHold: 0,
     cDone: -1,
     turnQ: 0,
     pendTurn: 0,
@@ -271,6 +276,7 @@ export function nextCorner(st: RunState, track: Track): Corner | null {
 const cornerDir = (c: Corner, want: number): -1 | 1 => (c.kind === 'L' ? -1 : c.kind === 'R' ? 1 : want < 0 ? -1 : 1)
 
 function doTurn(st: RunState, c: Corner, dir: -1 | 1, auto: boolean, ev: RunEvent[] | null | undefined) {
+  st.edgeHold = 0
   // Snap onto the new heading with NO position pop: the runner's point on the corner square is
   // re-expressed in the new segment's frame (origin = corner centre). Old frame: p = c + d·F + x·R
   // (d = s − c.s). New frame after turning `dir`: F' = dir·R, R' = −dir·F ⇒ d' = dir·x, x' = −dir·d.
@@ -443,7 +449,7 @@ export function step(st: RunState, track: Track, opts: StepOpts) {
   if (st.latQ) {
     // near a corner a left/right swipe is a turn, not a lane change
     const d = corner ? corner.s - st.s : 1e9
-    if (corner && d <= st.v * CORNER.armS + CORNER.half && d >= -CORNER.half - st.v * (CORNER.lateS + CORNER.lateWarmS)) {
+    if (corner && d <= st.v * CORNER.armS + CORNER.half && d >= -CORNER.half - 0.5) {
       st.turnQ = st.latQ === 'left' ? -1 : 1
       ev?.push({ type: 'turnQ', id: corner.id, dir: st.turnQ as -1 | 1 })
     } else applyAction(st, st.latQ, track, ev)
@@ -496,9 +502,21 @@ export function step(st: RunState, track: Track, opts: StepOpts) {
         cornerFall(st, corner, st.turnQ, opts, ev)
         return
       }
-    } else if (st.s >= corner.s + CORNER.half + st.v * (CORNER.lateS + CORNER.lateWarmS * warmAt(st.s))) {
-      cornerFall(st, corner, 0, opts, ev)
-      return
+    } else {
+      // Forgiving late turn: the runner never leaves the corner square. Past its far edge he is held at
+      // the edge (still running in place, on the deck) for the late window; a swipe in that time turns
+      // cleanly from the edge, otherwise he runs off.
+      const edge = corner.s + CORNER.half - 0.35
+      if (st.s > edge) {
+        st.s = edge
+        st.edgeHold++
+        const lateT = CORNER.lateS + CORNER.lateWarmS * warmAt(st.s)
+        if (st.edgeHold * FR_DT > lateT) {
+          st.edgeHold = 0
+          cornerFall(st, corner, 0, opts, ev)
+          return
+        }
+      }
     }
   }
 
@@ -567,6 +585,21 @@ export function step(st: RunState, track: Track, opts: StepOpts) {
   }
 
   if (!opts.full) return
+
+  // ── near misses (feedback only): obstacles whose back edge passed the body this tick ──
+  if (!protected_ && ev) {
+    const prevS = st.s - st.v * FR_DT
+    for (let i = Math.max(0, st.obCur - 2); i < obs.length; i++) {
+      const o = obs[i]
+      if (o.s > st.s) break
+      if (o.smashed || o.kind === 'gap' || o.kind === 'void') continue
+      const back = obstacleS(o, st.s) + o.len
+      if (!(back < sB && back >= prevS - BODY.halfD)) continue
+      const lx = Math.abs(st.x - laneX(o.lane))
+      if (lx < 1.0) ev.push({ type: 'near', ob: o.id, kind: o.kind, close: true })
+      else if (lx < 2.3 && (o.kind === 'block' || o.kind === 'car')) ev.push({ type: 'near', ob: o.id, kind: o.kind, close: false })
+    }
+  }
 
   // ── shooting stars ──
   const keys = track.keys

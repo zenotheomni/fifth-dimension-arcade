@@ -123,7 +123,7 @@ export const STAR_SPACING = 3
 export const LINE_MIN = 8
 /** base line length max; a jump arc / slide trio can add ≤ 2 more, so a line never exceeds 15 */
 export const LINE_MAX = 13
-export const LINE_GAP_MIN = 40
+export const LINE_GAP_MIN = 22
 
 export class Track {
   readonly seed: string
@@ -142,6 +142,8 @@ export class Track {
   private pickupBag: PowerKind[] = []
   /** star coin-line state: stars left in the current line, where the next line may start, bob flag */
   private lineLeft = 0
+  /** rows left after a corner that may block at most one lane (readable runway out of every turn) */
+  private postCorner = 0
   private lineLen = 0
   private lineGapTo = 0
   private lineBob = false
@@ -200,6 +202,7 @@ export class Track {
     this.lineGapTo = Math.max(this.lineGapTo, after + 4)
     this.cursor = after
     this.prevEnd = after
+    this.postCorner = 2
     this.starFloor = after + 2
     const segMin = CORNER.segMin + (CORNER.segMinHard - CORNER.segMin) * L
     const segMax = CORNER.segMax + (CORNER.segMaxHard - CORNER.segMax) * L
@@ -257,7 +260,7 @@ export class Track {
 
   private endLine(at: number, v: number) {
     this.lineLeft = 0
-    this.lineGapTo = q(at + Math.max(LINE_GAP_MIN, v * 1.1) + this.r() * 30)
+    this.lineGapTo = q(at + Math.max(LINE_GAP_MIN, v * 0.8) + this.r() * 14)
   }
 
   /** One star of the running line (or the rare 5D logo in its middle when one is due). */
@@ -334,8 +337,18 @@ export class Track {
       this.addCorner()
       return
     }
-    if (this.maybeVoid(s0, v, L)) return
+    if (this.postCorner <= 0 && this.maybeVoid(s0, v, L)) return
     const toks = this.pickPattern(L, W)
+    if (this.postCorner > 0) {
+      this.postCorner--
+      // out of a turn: one obstacle at most, never a wall, so there's always an obvious line
+      let kept = false
+      for (let i = 0; i < 3; i++) {
+        if (toks[i] === 'E') continue
+        if (kept || toks[i] === 'K' || toks[i] === 'G') toks[i] = 'E'
+        else kept = true
+      }
+    }
     // first rows: never put a crate straight in the start lane before the player has learned to swipe
     if (W > 0.62 && toks[1] === 'K') {
       const e = toks[0] === 'E' ? 0 : 2

@@ -21,6 +21,8 @@ import {
   sfxPower,
   sfxRumble,
   sfxSurge,
+  sfxNear,
+  sfxWhoosh,
   sfxSlide,
   sfxStart,
   unlockSfx,
@@ -140,7 +142,7 @@ class Engine {
 
   async init() {
     const [emblem, logo] = await Promise.all([
-      loadTexture(`${import.meta.env.BASE_URL}art/emblem-160.webp`),
+      loadTexture(`${import.meta.env.BASE_URL}art/5d-wordmark-white.png`),
       loadTexture(`${import.meta.env.BASE_URL}art/5d-logo-color.png`),
     ])
     if (this.destroyed) return
@@ -153,10 +155,10 @@ class Engine {
     this.ro = new ResizeObserver(() => this.requestResize('observer'))
     this.ro.observe(this.canvas)
     window.addEventListener('orientationchange', this.onOrient)
-    this.canvas.addEventListener('pointerdown', this.onDown)
+    window.addEventListener('pointerdown', this.onDown)
     window.addEventListener('pointermove', this.onMove)
     window.addEventListener('pointerup', this.onUp)
-    window.addEventListener('pointercancel', this.onUp)
+    window.addEventListener('pointercancel', this.onCancel)
     window.addEventListener('keydown', this.onKey)
     document.addEventListener('visibilitychange', this.onVis)
     // warm the GPU (compile shaders) before revealing
@@ -170,7 +172,15 @@ class Engine {
   }
 
   // ── input ──
+  private onCancel = (e: PointerEvent) => {
+    // iOS cancels a touch it decides is a system gesture: never turn its (often zeroed) coords into a swipe
+    if (this.touch && this.touch.id === e.pointerId) this.touch = null
+  }
+
   private onDown = (e: PointerEvent) => {
+    // swipes may start anywhere on the game (HUD, callouts…), just not on real controls / overlays
+    const tg = e.target as Element | null
+    if (tg && tg.closest && tg.closest('button, a, input, label, .fr-howto, .fr-end')) return
     unlockSfx()
     if (this.phase === 'paused') {
       this.resume()
@@ -262,6 +272,8 @@ class Engine {
     this.requestResize('context-restored')
   }
 
+  private speedMs = 0
+  private nearAt = -10
   /** While true (pre-run how-to screen is up), swipes/keys/taps don't start the run. */
   locked = false
 
@@ -380,6 +392,14 @@ class Engine {
       if (this.run.threat > 0.3 && this.clock - this.rumbleAt > 1.6) {
         this.rumbleAt = this.clock
         sfxRumble(0.35 + this.run.threat * 0.4)
+      }
+      // speed-up beats: every 450 m a whoosh + FOV punch (the pace keeps climbing)
+      const ms = Math.floor((this.run.s + this.run.sBank) / 450)
+      if (ms > this.speedMs) {
+        this.speedMs = ms
+        sfxWhoosh()
+        this.view?.punch()
+        if (!this.callout) this.say('Speed up!', 'teal', 0.9)
       }
       if (this.run.s >= 600 && this.biomeCalled < 1) {
         this.biomeCalled = 1
@@ -534,6 +554,16 @@ class Engine {
         break
       case 'turnQ':
         break
+      case 'near': {
+        sfxNear()
+        const o = this.track.obstacles.find((x) => x.id === e.ob)
+        if (o) this.view?.burst(o.lane, o.s + o.len, 0.6, e.close ? 5 : 8)
+        if (!e.close && this.clock - this.nearAt > 3 && !this.callout) {
+          this.nearAt = this.clock
+          this.say('Close one!', 'teal', 0.7)
+        }
+        break
+      }
       case 'jump':
         sfxJump()
         break
@@ -727,10 +757,10 @@ class Engine {
     this.canvas.removeEventListener('webglcontextrestored', this.onCtxRestored)
     document.documentElement.style.overscrollBehavior = this.prevOverscroll
     this.dbg?.destroy()
-    this.canvas.removeEventListener('pointerdown', this.onDown)
+    window.removeEventListener('pointerdown', this.onDown)
     window.removeEventListener('pointermove', this.onMove)
     window.removeEventListener('pointerup', this.onUp)
-    window.removeEventListener('pointercancel', this.onUp)
+    window.removeEventListener('pointercancel', this.onCancel)
     window.removeEventListener('keydown', this.onKey)
     document.removeEventListener('visibilitychange', this.onVis)
     this.view?.dispose()
