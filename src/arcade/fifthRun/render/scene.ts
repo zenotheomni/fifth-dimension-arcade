@@ -763,12 +763,20 @@ export class FrScene {
       const po = this.dark.pose
       const tanH = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2))
       const tgt = this.ufoNdc.set(po.x * tanH * this.camera.aspect * po.dist, po.y * tanH * po.dist, -po.dist).applyMatrix4(this.camera.matrixWorld)
-      if (this.ufoInit) g.position.lerp(tgt, 1 - Math.exp(-dt * 6))
-      else { g.position.copy(tgt); this.ufoInit = true }
+      if (this.dark.variant === 'v13') {
+        // v13 (default, unchanged look): blends from the craft's own chase spot toward the screen pose
+        if (this.ufoInit) g.position.lerp(tgt, 1 - Math.exp(-dt * 6))
+        else { g.position.copy(tgt); this.ufoInit = true }
+      } else {
+        // variants: a persistent smoothed screen-space pose (lands exactly where the variant asks)
+        if (this.ufoInit) this.ufoPos.lerp(tgt, 1 - Math.exp(-dt * 8))
+        else { this.ufoPos.copy(tgt); this.ufoInit = true }
+        g.position.copy(this.ufoPos)
+      }
       if (this.openK < 1) {
         // opening: the craft hangs big just behind / above him while the camera swoops past it
         const k = this.openK
-        this.tmpV.set(this.runnerLocal.x + 0.5, 2.3, 3.0)
+        this.tmpV.set(this.runnerLocal.x + 0.5 + 0.6 * (1 - k), 2.3 + 1.6 * (1 - k), 3.0 + 7.5 * (1 - k))
         g.position.lerpVectors(this.tmpV, tgt, k * k)
       }
       const f = this.openK < 1 ? Math.sin(Math.min(1, this.openK * 1.25) * Math.PI) : 0
@@ -1263,6 +1271,7 @@ export class FrScene {
 
   private camPush = 0
   private ufoInit = false
+  private ufoPos = new THREE.Vector3()
   /** smoothed opening blend (0 = cinematic start, 1 = gameplay camera); a skip blends in ~0.25 s */
   private openK = 1
   private openPos = new THREE.Vector3()

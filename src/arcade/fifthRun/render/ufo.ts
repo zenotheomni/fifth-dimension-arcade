@@ -89,7 +89,7 @@ export class UfoChaser {
   constructor(variant: UfoVariant = 'v13') {
     this.variant = variant
     this.group.add(this.craft)
-    this.baseScale = variant === 'a' ? SCALE * 1.45 : variant === 'b' ? SCALE * 1.7 : variant === 'c' ? SCALE * 0.62 : SCALE
+    this.baseScale = variant === 'a' ? SCALE * 1.5 : variant === 'b' ? SCALE * 1.55 : variant === 'c' ? SCALE * 0.72 : SCALE
     this.craft.scale.setScalar(this.baseScale)
     if (variant === 'a') {
       this.buildSaucer()
@@ -253,16 +253,16 @@ export class UfoChaser {
     if (v === 'a') {
       // big saucer close behind, centred low; gentle hover, eases in on a stumble
       this.pose.x = 0.04 * Math.sin(time * 0.8)
-      this.pose.y = -0.6 + 0.1 * near + over * 0.35 + 0.03 * Math.sin(time * 2.2)
-      this.pose.dist = 6.4 - 2.6 * near + hunt * 1.4 * (1 - near) + back * 1.5 - over * 1.2
+      this.pose.y = -0.74 + 0.1 * near + over * 0.35 + 0.025 * Math.sin(time * 2.2)
+      this.pose.dist = 3.9 - 1.2 * near + hunt * 1.4 * (1 - near) + back * 1.5 - over * 1.2
     } else if (v === 'b') {
       // large and looming above and behind, swooping side to side; dives lower when it closes in
       const sx = 0.42 * Math.sin(time * 0.75) + 0.08 * Math.sin(time * 1.9)
       this.swoopV = (sx - this.lastSwoopX) / Math.max(dt, 1e-3)
       this.lastSwoopX = sx
       this.pose.x = sx * (1 - 0.5 * near)
-      this.pose.y = 0.12 - 0.42 * near + over * 0.2 + 0.04 * Math.sin(time * 1.6)
-      this.pose.dist = 8.2 - 3.6 * near + back * 2 - over * 1.4
+      this.pose.y = 0.2 - 0.45 * near + over * 0.2 + 0.04 * Math.sin(time * 1.6)
+      this.pose.dist = 4.6 - 1.6 * near + back * 2 - over * 1.4
     } else if (v === 'c') {
       // small, always right on his heels at the lower right, scurrying; lunges hard on a stumble
       this.pose.x = 0.36 - 0.12 * near - 0.1 * this.lunge + 0.05 * Math.sin(time * 4.3)
