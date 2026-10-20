@@ -61,11 +61,14 @@ export function towerMaterial(fogNear: number, fogFar: number) {
           float wx = smoothstep(0.16 - fw.x, 0.16 + fw.x, f.x) * (1.0 - smoothstep(0.84 - fw.x, 0.84 + fw.x, f.x));
           float wy = smoothstep(0.22 - fw.y, 0.22 + fw.y, f.y) * (1.0 - smoothstep(0.78 - fw.y, 0.78 + fw.y, f.y));
           // sub-pixel cells resolve to their average coverage instead of shimmering
-          float win = mix(wx * wy, 0.38, smoothstep(0.35, 0.8, max(fw.x, fw.y)));
+          float win = mix(wx * wy, 0.38, smoothstep(0.1, 0.38, max(fw.x, fw.y)));
           // mullion: thin dark frame split inside each lit pane
           win *= 1.0 - 0.55 * (1.0 - smoothstep(0.0, fw.x * 2.0 + 0.01, abs(f.x - 0.5))) * (1.0 - smoothstep(0.35, 0.8, max(fw.x, fw.y)));
           float density = mix(0.28, 0.62, fract(sd*11.3));
           float lit = step(1.0 - density, h21(cell + sd*91.7 + (abs(n.x) > 0.5 ? 13.0 : 0.0)));
+          // far away (cells under a pixel) the random on/off pattern becomes speckle: resolve it to the average
+          float aa = smoothstep(0.1, 0.38, max(fw.x, fw.y));
+          lit = mix(lit, density, aa);
           vec3 warm = vec3(1.0, 0.72, 0.38), cool = vec3(0.65, 0.8, 1.0), neonA = vec3(0.1, 1.0, 0.9), neonB = vec3(1.0, 0.35, 0.8);
           float pick = fract(sd*5.13);
           vec3 wc = pick < 0.45 ? warm : pick < 0.75 ? cool : pick < 0.88 ? neonA : neonB;

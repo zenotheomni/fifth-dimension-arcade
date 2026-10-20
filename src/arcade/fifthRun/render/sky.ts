@@ -44,21 +44,22 @@ export function voidSkyMaterial() {
         // ── Miami sunset ──
         float sd = max(dot(d, uSun), 0.0);
         vec3 zen = vec3(0.035, 0.03, 0.11);
-        vec3 hi = vec3(0.16, 0.06, 0.28);
-        vec3 mid = vec3(0.62, 0.16, 0.36);
-        vec3 hor = vec3(1.25, 0.42, 0.22);
-        vec3 sunset = mix(hor, mid, smoothstep(0.0, 0.1, h));
-        sunset = mix(sunset, hi, smoothstep(0.08, 0.35, h));
-        sunset = mix(sunset, zen, smoothstep(0.3, 0.9, h));
+        vec3 hi = vec3(0.075, 0.03, 0.16);
+        vec3 mid = vec3(0.24, 0.05, 0.2);
+        vec3 hor = vec3(0.56, 0.15, 0.15);
+        vec3 sunset = mix(hor, mid, smoothstep(0.0, 0.06, h));
+        sunset = mix(sunset, hi, smoothstep(0.04, 0.2, h));
+        sunset = mix(sunset, zen, smoothstep(0.16, 0.55, h));
         // thin cirrus streaks lit from below
         float cl = fbm3(vec3(d.x * 3.0, d.y * 14.0, d.z * 3.0) + vec3(uTime * 0.01, 0.0, 0.0));
         sunset += vec3(1.0, 0.45, 0.35) * smoothstep(0.55, 0.85, cl) * smoothstep(0.02, 0.1, h) * (1.0 - smoothstep(0.15, 0.4, h)) * 0.35;
         // below the horizon: warm haze over the dark sea, sun glitter
-        vec3 sea = mix(vec3(0.5, 0.16, 0.2), vec3(0.03, 0.02, 0.07), smoothstep(-0.0, -0.35, h));
+        // haze starts at the horizon colour (no seam) and sinks into a dark sea
+        vec3 sea = mix(hor * 0.62, vec3(0.025, 0.015, 0.06), smoothstep(0.0, -0.3, h));
         sea += vec3(1.0, 0.5, 0.25) * pow(max(dot(normalize(vec3(d.x, -d.y, d.z)), uSun), 0.0), 60.0) * 0.6 * smoothstep(0.0, -0.05, h);
         sunset = h < 0.0 ? sea : sunset;
         // sun disc + glow (sinking into the horizon)
-        sunset += vec3(1.4, 0.75, 0.35) * pow(sd, 18.0) * 0.9;
+        sunset += vec3(1.4, 0.7, 0.35) * pow(sd, 40.0) * 0.7 + vec3(0.5, 0.18, 0.12) * pow(sd, 6.0) * 0.25;
         sunset += vec3(2.4, 1.6, 0.9) * smoothstep(0.9993, 0.9996, sd) * step(-0.004, h);
         // ── deep space ──
         vec3 q = d * 2.2;
