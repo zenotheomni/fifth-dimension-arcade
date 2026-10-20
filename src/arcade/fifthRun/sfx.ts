@@ -204,3 +204,13 @@ export function sfxLineDone() {
   const t = a.currentTime
   ;[1046.5, 1318.5, 1568, 2093].forEach((f, i) => tone(a, t + i * 0.045, f, f, 0.18, 'triangle', 0.05))
 }
+
+/** Opening "RUN!" beat: deep boom + bright power chord stab. */
+export function sfxRunHit() {
+  const a = ac()
+  if (!a || muted) return
+  const t = a.currentTime
+  tone(a, t, 110, 38, 0.6, 'sine', 0.5, 0.004)
+  noise(a, t, 0.35, 'lowpass', 900, 120, 0.8, 0.35)
+  for (const f of [220, 277.2, 329.6, 440]) tone(a, t + 0.01, f, f * 1.01, 0.45, 'sawtooth', 0.06, 0.006)
+}

@@ -11,7 +11,7 @@ import { BloomEffect, Effect, EffectComposer, EffectPass, RenderPass, SMAAEffect
 import { CORNER, laneX } from '../sim/constants'
 import { keyPos, type Corner, type KeyItem, type Obstacle, type Pickup, type PowerKind } from '../sim/track'
 import { buildBarrier, buildPickup, buildPipe } from './props'
-import { UfoChaser } from './ufo'
+import { UfoChaser, pickUfoVariant } from './ufo'
 import { Cosmos } from './cosmos'
 import { Roadside } from './roadside'
 import { RunnerFigure, type PoseInput, type RunnerView } from './runnerFigure'
@@ -43,6 +43,8 @@ export type ViewState = {
   /** lost a life (not the last): playing the fall / crash before respawning in place */
   downed: boolean
   idle: boolean
+  /** opening cinematic progress 0..1 (1 = done / gameplay camera) */
+  opening?: number
   lives: number
   hand: number
   /** dark energy closeness 0..1 */
@@ -130,6 +132,19 @@ const hash = (n: number) => {
 type Chunk = { key: string; deck: THREE.Mesh; glow: THREE.Mesh; used: boolean }
 type Ghost = { id: number; s: number; cx: number; cz: number; fx: number; fz: number }
 
+/** live camera tuning (hidden ?tune=1 panel). Defaults = shipped values. */
+export const CAM_TUNE = {
+  /** camera height (m) */ height: 3.9,
+  /** camera distance behind the runner (m) */ dist: 6.4,
+  /** look-at height (pitch: lower = looks down more) */ lookY: 0.7,
+  /** base FOV offset (deg) */ fov: 0,
+  /** turn settle time (s) — critically damped spring */ turnS: 0.13,
+  /** how far the camera leans into a turn as soon as the swipe is accepted (0..1 of 90°) */ lead: 0.3,
+  /** FOV kick multiplier (speed-ups / boost) */ fovKick: 1,
+  /** camera shake multiplier */ shake: 1,
+}
+export const CAM_DEFAULTS = { ...CAM_TUNE }
+
 export class FrScene {
   renderer: THREE.WebGLRenderer
   scene = new THREE.Scene()
@@ -200,13 +215,14 @@ export class FrScene {
   private space = 0
   /** decaying offsets that hide the hop when the runner changes segment at a corner */
   private offO = new THREE.Vector2()
-  private offO0 = new THREE.Vector2()
-  private turnT = 1
-  private camYaw0 = 0
-  private runYaw0 = 0
+  /** spring state: yaw velocity, runner yaw velocity, origin hand-off velocity */
+  private camYawV = 0
+  private runYawV = 0
+  private offV = new THREE.Vector2()
+  /** queued turn: camera leans in the moment the swipe is accepted */
+  private lead: { dir: number; s: number } | null = null
   private fovKick = 0
   /** seconds for the camera to swing round a 90° corner */
-  static readonly TURN_S = 0.22
   private pendingTurn: { oldSeg: number; snap: boolean } | null = null
   private runnerLocal = new THREE.Vector3()
   private billQ = new THREE.Quaternion()
@@ -268,7 +284,7 @@ export class FrScene {
     this.scene.add(this.world)
     this.buildPools(logo ?? emblem)
     this.buildDecor()
-    this.dark = new UfoChaser()
+    this.dark = new UfoChaser(pickUfoVariant())
     this.scene.add(this.dark.group, this.dark.spotlight)
     this.buildKeys()
 
@@ -549,6 +565,14 @@ export class FrScene {
     if (this.layout.runnerSeg !== old) this.pendingTurn = { oldSeg: old, snap }
   }
 
+  /** A turn swipe was accepted for corner `id` (before the corner centre): start rotating now. */
+  preTurn(id: number, dir: number, corners: Corner[]) {
+    const c = corners.find((x) => x.id === id)
+    if (!c) return
+    if (c.kind !== 'T' && (c.kind === 'L') !== dir < 0) return // wrong way: no lean
+    this.lead = { dir, s: c.s }
+  }
+
   /** Speed-up beat: brief FOV punch. */
   punch() {
     this.fovKick = 7
@@ -631,32 +655,47 @@ export class FrScene {
     if (this.pendingTurn) {
       const pt = this.pendingTurn
       this.pendingTurn = null
+      this.lead = null
       if (pt.snap) {
-        this.turnT = 1
-        this.offO0.set(0, 0)
+        this.offO.set(0, 0)
+        this.offV.set(0, 0)
         this.camYaw = segYaw
         this.runYaw = segYaw
-        this.camYaw0 = segYaw
-        this.runYaw0 = segYaw
+        this.camYawV = 0
+        this.runYawV = 0
       } else {
         const b = L.pt(pt.oldSeg, this.lastS, 0, this.wp2)
-        // carry over whatever is left of a previous swing
-        this.offO0.set(b.x - ox + this.offO.x, b.z - oz + this.offO.y)
-        this.camYaw0 = this.camYaw
-        this.runYaw0 = this.runYaw
-        this.turnT = 0
+        // frame-origin hand-off: start from where the old frame was (plus whatever is left of a swing)
+        this.offO.set(b.x - ox + this.offO.x, b.z - oz + this.offO.y)
       }
     }
-    this.turnT = Math.min(1, this.turnT + Math.min(dt, 1 / 30) / FrScene.TURN_S)
-    const e = this.turnT * this.turnT * (3 - 2 * this.turnT)
-    const er = Math.min(1, this.turnT * 1.8)
-    const eR = er * er * (3 - 2 * er)
-    this.offO.copy(this.offO0).multiplyScalar(1 - e)
+    // the lean is dropped once the corner is behind us (missed / wrong-way turn)
+    if (this.lead && (S > this.lead.s + 4 || v.dead || v.idle)) this.lead = null
+    // critically damped springs (ω from the settle time), sub-stepped so 60 / 120 Hz and dt spikes all
+    // give the same curve; yaw targets are wrap-safe (shortest way round ±π)
+    const w = 5.8 / Math.max(0.05, CAM_TUNE.turnS)
+    const wr = w * 1.6
+    const leadYaw = this.lead ? -this.lead.dir * (Math.PI / 2) * CAM_TUNE.lead : 0
+    let rem = Math.min(dt, 1 / 15)
+    while (rem > 1e-6) {
+      const h = Math.min(rem, 1 / 240)
+      rem -= h
+      const ey = wrap(this.camYaw - (segYaw + leadYaw))
+      this.camYawV += (-w * w * ey - 2 * w * this.camYawV) * h
+      this.camYaw += this.camYawV * h
+      const er = wrap(this.runYaw - segYaw)
+      this.runYawV += (-wr * wr * er - 2 * wr * this.runYawV) * h
+      this.runYaw += this.runYawV * h
+      this.offV.x += (-w * w * this.offO.x - 2 * w * this.offV.x) * h
+      this.offV.y += (-w * w * this.offO.y - 2 * w * this.offV.y) * h
+      this.offO.x += this.offV.x * h
+      this.offO.y += this.offV.y * h
+    }
+    this.camYaw = wrap(this.camYaw)
+    this.runYaw = wrap(this.runYaw)
     ox += this.offO.x
     oz += this.offO.y
     this.lastS = S
-    this.camYaw = this.camYaw0 + wrap(segYaw - this.camYaw0) * e
-    this.runYaw = this.runYaw0 + wrap(segYaw - this.runYaw0) * eR
 
     // world → local frame: origin at the path centre under the runner, heading −Z under camYaw
     this.world.rotation.set(0, -this.camYaw, 0)
@@ -726,8 +765,16 @@ export class FrScene {
       const tgt = this.ufoNdc.set(po.x * tanH * this.camera.aspect * po.dist, po.y * tanH * po.dist, -po.dist).applyMatrix4(this.camera.matrixWorld)
       if (this.ufoInit) g.position.lerp(tgt, 1 - Math.exp(-dt * 6))
       else { g.position.copy(tgt); this.ufoInit = true }
+      if (this.openK < 1) {
+        // opening: the craft hangs big just behind / above him while the camera swoops past it
+        const k = this.openK
+        this.tmpV.set(this.runnerLocal.x + 0.5, 2.3, 3.0)
+        g.position.lerpVectors(this.tmpV, tgt, k * k)
+      }
+      const f = this.openK < 1 ? Math.sin(Math.min(1, this.openK * 1.25) * Math.PI) : 0
+      this.dark.flare += (f - this.dark.flare) * (1 - Math.exp(-dt * 10))
       this.tmpV.copy(this.runnerLocal).setY(this.runnerLocal.y + 0.9)
-      this.dark.aim(this.tmpV, !v.idle && this.darkFade > 0.3)
+      this.dark.aim(this.tmpV, !v.idle && (this.darkFade > 0.3 || this.openK < 1))
       this.dark.spotlight.position.y = this.runnerLocal.y + 0.03
     }
     const sh = this.deckMat.userData.shader as { uniforms: { uTime: { value: number } } } | undefined
@@ -1216,32 +1263,47 @@ export class FrScene {
 
   private camPush = 0
   private ufoInit = false
+  /** smoothed opening blend (0 = cinematic start, 1 = gameplay camera); a skip blends in ~0.25 s */
+  private openK = 1
+  private openPos = new THREE.Vector3()
+  private openLook = new THREE.Vector3()
   private ufoNdc = new THREE.Vector3()
   private updateCamera(v: ViewState, dt: number) {
     const rl = this.runnerLocal
     const k = 1 - Math.exp(-dt * 7)
     this.camX += (rl.x * 0.62 - this.camX) * k
-    const ty = 3.9 + Math.max(0, v.y) * 0.08 - (v.idle ? 0 : THREE.MathUtils.clamp(1 - (v.s - 8) / 55, 0, 1)) * 0.9
+    const ty = CAM_TUNE.height + Math.max(0, v.y) * 0.08
     this.camY += (ty - this.camY) * (1 - Math.exp(-dt * 6))
     const speedF = THREE.MathUtils.clamp((v.speed - 18) / 22, 0, 1)
     const aspect = this.camera.aspect
     const baseFov = aspect > 0.8 ? 52 : 66
     this.fovKick = Math.max(0, this.fovKick - dt * 9)
-    const tf = baseFov + speedF * 8 + (v.boost - 1) * 20 + this.fovKick
+    const tf = baseFov + CAM_TUNE.fov + (speedF * 8 + (v.boost - 1) * 20 + this.fovKick) * CAM_TUNE.fovKick
     this.fov += (tf - this.fov) * (1 - Math.exp(-dt * 3))
-    const sh = v.shake
+    const sh = v.shake * CAM_TUNE.shake
     const sx = sh ? (Math.sin(v.time * 61) + Math.sin(v.time * 37)) * 0.06 * sh : 0
     const sy = sh ? Math.sin(v.time * 53) * 0.05 * sh : 0
-    // opening shot: camera starts a little further back and lower so the pursuing UFO fills the frame
-    const intro = v.idle ? 0 : THREE.MathUtils.clamp(1 - (v.s - 8) / 55, 0, 1)
-    let dz = 6.4 - speedF * 0.4 + intro * 1.4
+    let dz = CAM_TUNE.dist - speedF * 0.4
     const push = v.dead ? Math.min(1.2, v.deadT * 1.5) : 0
     this.camPush += (push - this.camPush) * (v.dead ? 1 : 1 - Math.exp(-dt * 4))
     dz -= this.camPush
     // a fall: the camera stays at the rim and looks down after him
     const fall = v.dead && v.deathKind === 'gap' ? Math.min(1, v.deadT * 1.4) : 0
     this.camera.position.set(this.camX + sx, this.camY + sy, rl.z * 0 + dz)
-    this.lookT.set(rl.x * 0.5, 0.7 - fall * 3.5, -13 + fall * 8)
+    this.lookT.set(rl.x * 0.5, CAM_TUNE.lookY - fall * 3.5, -13 + fall * 8)
+    // ── opening cinematic: start high behind the chaser, swoop down past it onto the astronaut ──
+    const opn = v.idle ? 0 : (v.opening ?? 1)
+    const kT = opn >= 1 ? 1 : opn * opn * opn * (opn * (opn * 6 - 15) + 10)
+    this.openK = kT >= 1 && this.openK > 0.999 ? 1 : this.openK + (Math.max(this.openK, kT) - this.openK) * (1 - Math.exp(-dt * 14))
+    if (v.idle) this.openK = 0
+    if (this.openK < 1) {
+      const k = this.openK
+      const swing = Math.sin(k * Math.PI) // arc sideways as it passes the craft
+      this.openPos.set(this.camX + 2.4 * (1 - k) + 0.9 * swing, 5.6 - 1.7 * k + 0.6 * swing, dz + 9.5 * (1 - k))
+      this.openLook.set(rl.x * 0.5 * k + 0.4 * (1 - k), 1.0 * (1 - k) + this.lookT.y * k, -4 * (1 - k) + this.lookT.z * k)
+      this.camera.position.lerp(this.openPos, 1 - k)
+      this.lookT.lerp(this.openLook, 1 - k)
+    }
     this.camera.lookAt(this.lookT)
     this.camera.rotation.z += (this.runner.group.rotation.z || 0) * 0.15
     this.camera.fov = this.fov
