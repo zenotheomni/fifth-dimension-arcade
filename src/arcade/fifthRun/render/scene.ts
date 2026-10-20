@@ -12,12 +12,13 @@ import { CORNER, laneX } from '../sim/constants'
 import { keyPos, type Corner, type KeyItem, type Obstacle, type Pickup, type PowerKind } from '../sim/track'
 import { buildBarrier, buildBlock, buildGantry, buildPickup, buildPipe } from './props'
 import { UfoChaser } from './ufo'
+import { Cosmos } from './cosmos'
 import { RunnerFigure, type PoseInput, type RunnerView } from './runnerFigure'
 import { loadHumanRunner } from './humanRunner'
 import { neonEnvironment } from './env'
 import { mergeStatic } from './merge'
 import { glowMaterial, PALETTE, towerMaterial } from './shaders'
-import { blobTexture, chevronTexture, glowTexture, planetTexture, shootingStarTexture, streakTexture } from './textures'
+import { blobTexture, chevronTexture, glowTexture, shootingStarTexture, streakTexture } from './textures'
 import { PathLayout, turned, type WorldPt } from './layout'
 import { buildCornerSquare, buildDeckChunk, deckMaterial, DECK_HALF, glowStripMaterial } from './deck'
 import { voidSkyMaterial } from './sky'
@@ -157,6 +158,7 @@ export class FrScene {
   private skyline!: THREE.InstancedMesh
   private skylineMat!: THREE.ShaderMaterial
   private planets: THREE.Object3D[] = []
+  private cosmos = new Cosmos()
   private deckMat: THREE.MeshStandardMaterial
   private stripMat: THREE.MeshBasicMaterial
   private chunks = new Map<string, Chunk>()
@@ -210,7 +212,6 @@ export class FrScene {
   private wp: WorldPt = { x: 0, z: 0, yaw: 0 }
   private wp2: WorldPt = { x: 0, z: 0, yaw: 0 }
   private lastS = 0
-  private lastX = 0
   private emblem: THREE.Texture | null
 
   constructor(canvas: HTMLCanvasElement, tier: QualityTier, emblem: THREE.Texture | null, logo: THREE.Texture | null = null) {
@@ -237,7 +238,8 @@ export class FrScene {
     this.scene.add(this.skyGroup)
     this.buildEnv()
     this.buildStars()
-    this.buildPlanets()
+    this.skyGroup.add(this.cosmos.group)
+    this.scene.add(this.cosmos.flyers)
     this.buildComets()
     this.buildSkyline()
 
@@ -343,57 +345,6 @@ export class FrScene {
     this.skyGroup.add(this.stars)
   }
 
-  private planetMat(tex: THREE.Texture, tint: THREE.Color, rim: THREE.Color) {
-    return new THREE.ShaderMaterial({
-      transparent: true,
-      uniforms: { uTex: { value: tex }, uLight: { value: new THREE.Vector3(-0.6, 0.3, 0.75).normalize() }, uTint: { value: tint }, uRim: { value: rim }, uA: { value: 0 } },
-      vertexShader: 'varying vec2 vUv; varying vec3 vN; varying vec3 vV; void main(){ vUv = uv; vec4 mv = modelViewMatrix*vec4(position,1.0); vN = normalize(normalMatrix*normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix*mv; }',
-      fragmentShader: /* glsl */ `
-        uniform sampler2D uTex; uniform vec3 uLight; uniform vec3 uTint; uniform vec3 uRim; uniform float uA; varying vec2 vUv; varying vec3 vN; varying vec3 vV;
-        void main(){
-          vec3 albedo = texture2D(uTex, vUv).rgb;
-          float l = clamp(dot(vN, uLight) * 1.1 + 0.05, 0.0, 1.0);
-          float rim = pow(1.0 - clamp(dot(vN, vV), 0.0, 1.0), 3.0);
-          vec3 col = albedo * uTint * l + uRim * rim * (0.35 + l);
-          gl_FragColor = vec4(col, uA);
-          #include <tonemapping_fragment>
-          #include <colorspace_fragment>
-        }`,
-    })
-  }
-
-  private buildPlanets() {
-    const tex = planetTexture()
-    const add = (dir: THREE.Vector3, r: number, dist: number, tint: string, rim: string, rings = false) => {
-      const g = new THREE.Group()
-      const p = new THREE.Mesh(new THREE.SphereGeometry(r, 48, 32), this.planetMat(tex, new THREE.Color(tint), new THREE.Color(rim)))
-      p.rotation.set(0.4, rnd() * 6, 0.2)
-      g.add(p)
-      if (rings) {
-        const ring = new THREE.Mesh(
-          new THREE.RingGeometry(r * 1.35, r * 2.2, 96, 1),
-          new THREE.ShaderMaterial({
-            transparent: true,
-            side: THREE.DoubleSide,
-            depthWrite: false,
-            uniforms: { uA: { value: 0 }, uIn: { value: r * 1.35 }, uOut: { value: r * 2.2 } },
-            vertexShader: 'varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
-            fragmentShader:
-              'uniform float uA; uniform float uIn; uniform float uOut; varying vec3 vP; void main(){ float t = (length(vP.xy) - uIn) / (uOut - uIn); float b = 0.55 + 0.45*sin(t*70.0) * sin(t*13.0); float a = smoothstep(0.0,0.06,t)*smoothstep(1.0,0.85,t)*b*0.7; gl_FragColor = vec4(vec3(1.0,0.78,0.6)*a*1.2, a*uA); }',
-          }),
-        )
-        ring.rotation.set(1.2, 0.3, 0.1)
-        g.add(ring)
-      }
-      g.position.copy(dir.normalize().multiplyScalar(dist))
-      this.skyGroup.add(g)
-      this.planets.push(g)
-    }
-    add(new THREE.Vector3(0.45, 0.22, -1), 150, 1400, '#7090ff', '#5a8cff')
-    add(new THREE.Vector3(-1, 0.35, -0.3), 95, 1420, '#ffb080', '#ff7a50', true)
-    add(new THREE.Vector3(0.2, -0.55, 1), 380, 1500, '#4a8ad8', '#66b0ff')
-  }
-
   private buildComets() {
     const tex = streakTexture()
     for (let i = 0; i < 4; i++) {
@@ -410,23 +361,44 @@ export class FrScene {
     geo.translate(0, 0.5, 0)
     this.skylineMat = towerMaterial(700, 1600)
     ;(this.skylineMat.uniforms.uFog.value as THREE.Color).set('#4a1c3a')
-    const N = 170
+    // real skyline massing: each tower is a podium-free shaft plus up to two set-back tiers and a slim
+    // spire on the tallest, with narrower, deeper footprints (no uniform blocks)
+    const B = 150
+    const N = B * 3
     const mesh = new THREE.InstancedMesh(geo, this.skylineMat, N)
     const seeds = new Float32Array(N)
-    // one downtown waterfront cluster ahead-left of the start line, far below the path
     const dir = -Math.PI / 2 - 0.45
-    for (let i = 0; i < N; i++) {
+    let n = 0
+    const put = (x: number, y: number, z: number, yaw: number, w: number, h: number, d: number, sd: number) => {
+      if (n >= N) return
+      this.tmpQ.setFromEuler(this.tmpE.set(0, yaw, 0))
+      this.tmpM.compose(this.tmpV.set(x, y, z), this.tmpQ, this.tmpS.set(w, h, d))
+      mesh.setMatrixAt(n, this.tmpM)
+      seeds[n++] = sd
+    }
+    for (let i = 0; i < B; i++) {
       const u = (rnd() - 0.5) * 2
       const a = dir + u * 0.42
       const core = Math.exp(-u * u * 4)
       const r = 1150 + rnd() * 220 - core * 120
-      const h = 20 + rnd() * 40 + core * (60 + 120 * rnd() * rnd())
-      const w = 12 + rnd() * 20
-      this.tmpQ.setFromEuler(this.tmpE.set(0, rnd() * 3, 0))
-      this.tmpM.compose(this.tmpV.set(Math.cos(a) * r, -230, Math.sin(a) * r), this.tmpQ, this.tmpS.set(w, h + 120, w * (0.7 + rnd() * 0.6)))
-      mesh.setMatrixAt(i, this.tmpM)
-      seeds[i] = rnd()
+      const h = 18 + rnd() * 36 + core * (55 + 130 * rnd() * rnd())
+      const w = 9 + rnd() * 13
+      const d = w * (0.75 + rnd() * 0.5)
+      const yaw = rnd() * 3
+      const sd = rnd()
+      const x = Math.cos(a) * r
+      const z = Math.sin(a) * r
+      const base = -230
+      const shaft = 120 + h * 0.72
+      put(x, base, z, yaw, w, shaft, d, sd)
+      if (h > 45) {
+        const h2 = h * (0.18 + rnd() * 0.12)
+        put(x, base + shaft, z, yaw, w * 0.74, h2, d * 0.74, sd)
+        if (h > 110) put(x, base + shaft + h2, z, yaw, w * 0.12, h * 0.22, w * 0.12, (sd + 0.37) % 1)
+        else put(x, base + shaft + h2, z, yaw, w * 0.5, h * 0.08, d * 0.5, sd)
+      }
     }
+    mesh.count = n
     geo.setAttribute('aSeed', new THREE.InstancedBufferAttribute(seeds, 1))
     mesh.frustumCulled = false
     this.skyline = mesh
@@ -640,14 +612,15 @@ export class FrScene {
     if (this.pendingTurn) {
       const pt = this.pendingTurn
       this.pendingTurn = null
+      // the sim re-frames s / x onto the new heading with no position change, so there is nothing to
+      // blend: the runner stays planted on the corner square (no slide / airtime). Only the yaw swings.
+      // The camera frame origin (path centre) does move, so that one is still blended.
+      this.offR.set(0, 0)
       if (pt.snap) {
-        this.offR.set(0, 0)
         this.offO.set(0, 0)
         this.camYaw = segYaw
         this.runYaw = segYaw
       } else {
-        const a = L.pt(pt.oldSeg, this.lastS, this.lastX, this.wp2)
-        this.offR.set(a.x - rx, a.z - rz)
         const b = L.pt(pt.oldSeg, this.lastS, 0, this.wp2)
         this.offO.set(b.x - ox, b.z - oz)
       }
@@ -660,7 +633,6 @@ export class FrScene {
     ox += this.offO.x
     oz += this.offO.y
     this.lastS = S
-    this.lastX = v.x
     // smoothed yaw (wrap-safe): the camera swings round the corner, the runner pivots faster
     const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a))
     this.runYaw += wrap(segYaw - this.runYaw) * (1 - Math.exp(-dt * 16))
@@ -723,7 +695,7 @@ export class FrScene {
     this.updateSparks(dt)
     this.updateSky(v, dt)
     this.darkFade += ((v.invisible || v.idle ? 0 : 1) - this.darkFade) * (1 - Math.exp(-dt * (v.invisible ? 1.5 : 2.5)))
-    this.dark.update(t, dt, v.dead && v.deathKind === 'caught' ? 1.5 : v.threat, this.runnerLocal.x, v.idle ? 0 : Math.max(0.0, this.darkFade), this.camera.quaternion)
+    this.dark.update(t, dt, v.dead && v.deathKind === 'caught' ? 1.5 : v.dead && !v.idle ? 1 : v.threat, this.runnerLocal.x, v.idle ? 0 : Math.max(0.0, this.darkFade), this.camera.quaternion)
     {
       const g = this.dark.group
       const p = this.ufoNdc.copy(g.position).project(this.camera)
@@ -1171,7 +1143,7 @@ export class FrScene {
     this.starMat.uniforms.uTime.value = v.time
     this.skyMat.uniforms.uTime.value = v.time
     // Miami sunset → open space between ~250 m and ~1700 m
-    const target = THREE.MathUtils.smoothstep(v.s, 250, 1700)
+    const target = THREE.MathUtils.smoothstep(v.s, 150, 1100)
     this.space += (target - this.space) * Math.min(1, dt * 1.5)
     const sp = this.space
     this.skyMat.uniforms.uSpace.value = sp
@@ -1185,6 +1157,8 @@ export class FrScene {
       })
       p.visible = sp > 0.24
     }
+    this.cosmos.update(v.s, this.camYaw, sp, v.time, dt, this.camera, !v.idle)
+    this.cosmos.updateFlyers(dt, v.time, !v.idle && v.s > 60)
     const fog = this.scene.fog as THREE.FogExp2
     fog.color.setRGB(0.17 - sp * 0.13, 0.07 - sp * 0.045, 0.16 - sp * 0.07)
     fog.density = 0.0042 - sp * 0.0012

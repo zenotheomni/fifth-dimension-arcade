@@ -25,7 +25,7 @@ export const speedAt = (s: number) => SPEED.v0 + (SPEED.vmax - SPEED.v0) * (s / 
 export const WARM_M = 700
 export const warmAt = (s: number) => (s >= WARM_M ? 0 : s <= 0 ? 1 : 1 - s / WARM_M)
 /** Difficulty 0..1 (pattern mix + spacing). Held at 0 through the first LEVEL_OFFSET metres. */
-export const DIFF_K = 360
+export const DIFF_K = 650
 export const LEVEL_OFFSET = 360
 export const levelAt = (s: number) => (s <= LEVEL_OFFSET ? 0 : (s - LEVEL_OFFSET) / (s - LEVEL_OFFSET + DIFF_K))
 
@@ -97,7 +97,7 @@ export const CORNER = {
   postS: 0.8,
   postT: 70,
 }
-/** Path half width the runner can drift across (tilt) — lane centres are ±LANE_W. */
+/** Path half width the runner can occupy — lane centres are ±LANE_W. */
 export const PATH_HALF = 2.25
 
 /**

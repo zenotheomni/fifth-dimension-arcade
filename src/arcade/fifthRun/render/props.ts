@@ -244,32 +244,96 @@ export function buildPipe(metal: THREE.Material) {
   return { group, lamp: lampMat }
 }
 
-export function buildGantry(chev: THREE.Texture, metal: THREE.Material, glow: THREE.Texture) {
-  const group = new THREE.Group()
-  const beamMat = new THREE.MeshStandardMaterial({ color: '#1a1426', roughness: 0.4, metalness: 0.6 })
-  const beam = new THREE.Mesh(box(1.98, 0.5, 0.3), beamMat)
-  beam.position.y = 1.5
-  group.add(beam)
-  const signMat = new THREE.MeshStandardMaterial({ color: '#0d0a14', metalness: 0.6, emissive: new THREE.Color('#ff4d5e'), emissiveMap: chev, emissiveIntensity: 0.55, roughness: 0.35 })
-  const sign = new THREE.Mesh(box(1.86, 0.3, 0.02), signMat)
-  sign.position.set(0, 1.5, 0.16)
-  group.add(sign)
-  const tube = new THREE.MeshStandardMaterial({ color: '#7cf', emissive: new THREE.Color('#00e0d0'), emissiveIntensity: 3.2 })
-  const t1 = new THREE.Mesh(box(1.98, 0.045, 0.05), tube)
-  t1.position.set(0, 1.26, 0.16)
-  group.add(t1)
-  const tube2 = new THREE.MeshStandardMaterial({ color: '#f8a', emissive: new THREE.Color('#ff3d8a'), emissiveIntensity: 3.2 })
-  const t2 = new THREE.Mesh(box(1.98, 0.04, 0.05), tube2)
-  t2.position.set(0, 1.74, 0.16)
-  group.add(t2)
-  for (const x of [-0.98, 0.98]) {
-    const post = new THREE.Mesh(box(0.08, 1.75, 0.08), metal)
-    post.position.set(x, 0.875, 0)
-    group.add(post)
+let slideTex: THREE.CanvasTexture | null = null
+/** "SLIDE ▼" floor / curtain lettering (canvas, built once). */
+function slideTexture() {
+  if (slideTex) return slideTex
+  const c = document.createElement('canvas')
+  c.width = 512
+  c.height = 256
+  const g = c.getContext('2d')!
+  g.clearRect(0, 0, 512, 256)
+  g.fillStyle = '#ffffff'
+  g.font = '900 120px system-ui, -apple-system, Helvetica, Arial, sans-serif'
+  g.textAlign = 'center'
+  g.textBaseline = 'middle'
+  g.fillText('SLIDE', 256, 92)
+  g.beginPath()
+  for (const x of [176, 256, 336]) {
+    g.moveTo(x - 30, 170)
+    g.lineTo(x + 30, 170)
+    g.lineTo(x, 214)
+    g.closePath()
   }
-  const halo = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 0.9), glowMaterial(glow, '#00e0d0', 0.22))
-  halo.position.set(0, 1.26, 0.2)
+  g.fill()
+  slideTex = new THREE.CanvasTexture(c)
+  slideTex.colorSpace = THREE.SRGBColorSpace
+  slideTex.anisotropy = 8
+  return slideTex
+}
+
+/**
+ * SLIDE gate (overhead): a tall laser gate you can only duck under. Two dark pylons rise to 4 m; the
+ * whole span from OB.overhead.bottom (1.2 m, head height) up to the top is a red energy curtain — far
+ * above any jump — with a blazing laser bar on its bottom edge and a clearly open gap underneath.
+ * "SLIDE ▼" glows on the curtain and on the deck in front of it.
+ */
+export function buildGantry(chev: THREE.Texture, metal: THREE.Material, glow: THREE.Texture) {
+  void chev
+  const group = new THREE.Group()
+  const bottom = 1.2
+  const topY = 4.0
+  const w = 2.0
+  const pylon = new THREE.MeshStandardMaterial({ color: '#16121e', metalness: 0.8, roughness: 0.35 })
+  for (const x of [-w / 2 - 0.06, w / 2 + 0.06]) {
+    const post = new THREE.Mesh(box(0.14, topY + 0.15, 0.18), pylon)
+    post.position.set(x, (topY + 0.15) / 2, 0)
+    group.add(post)
+    const strip = new THREE.Mesh(box(0.03, topY - 0.2, 0.03), new THREE.MeshBasicMaterial({ color: '#ff3048' }))
+    strip.position.set(x, (topY - 0.2) / 2 + 0.1, 0.1)
+    group.add(strip)
+  }
+  const cap = new THREE.Mesh(box(w + 0.3, 0.16, 0.22), pylon)
+  cap.position.y = topY + 0.08
+  group.add(cap)
+  // energy curtain (additive, translucent, brighter toward the laser)
+  const curtainMat = new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+    uniforms: { uTex: { value: slideTexture() } },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+    fragmentShader: `uniform sampler2D uTex; varying vec2 vUv;
+      void main(){
+        float scan = 0.55 + 0.45 * step(0.5, fract(vUv.y * 38.0));
+        float edge = pow(1.0 - vUv.y, 3.0) * 0.9 + 0.22;
+        vec2 tuv = vec2(vUv.x, (vUv.y - 0.12) / 0.42);
+        float txt = (tuv.y > 0.0 && tuv.y < 1.0) ? texture2D(uTex, tuv).a : 0.0;
+        vec3 col = vec3(1.0, 0.12, 0.2) * edge * scan + vec3(1.0, 0.85, 0.85) * txt * 0.9;
+        gl_FragColor = vec4(col, 1.0);
+      }`,
+  })
+  const curtain = new THREE.Mesh(new THREE.PlaneGeometry(w, topY - bottom), curtainMat)
+  curtain.position.y = bottom + (topY - bottom) / 2
+  group.add(curtain)
+  // the laser bar itself (head height) + glow
+  const laser = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, w, 12), new THREE.MeshBasicMaterial({ color: '#fff0f2' }))
+  laser.rotation.z = Math.PI / 2
+  laser.position.y = bottom + 0.03
+  group.add(laser)
+  const halo = new THREE.Mesh(new THREE.PlaneGeometry(w + 0.8, 0.7), glowMaterial(glow, '#ff2a44', 0.85))
+  halo.position.set(0, bottom + 0.03, 0.02)
   group.add(halo)
+  // "SLIDE ▼" painted on the deck just before the gate
+  const decal = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.7, 0.85),
+    new THREE.MeshBasicMaterial({ map: slideTexture(), color: '#ff5468', transparent: true, depthWrite: false, opacity: 0.95 }),
+  )
+  decal.rotation.x = -Math.PI / 2
+  decal.position.set(0, 0.03, 2.6)
+  group.add(decal)
+  void metal
   return { group }
 }
 
@@ -352,59 +416,91 @@ export function buildPickup(kind: 'hand', glow: THREE.Texture, emblem: THREE.Tex
 /** Palm silhouette: curved trunk + drooping fronds (vertex-coloured, merged). */
 export function palmGeometry() {
   const geoms: THREE.BufferGeometry[] = []
-  const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0.15, 2.5, 0), new THREE.Vector3(0.55, 5.2, 0), new THREE.Vector3(1.0, 7.0, 0)])
-  const trunk = new THREE.TubeGeometry(curve, 16, 0.17, 7, false)
-  const tc = new Float32Array(trunk.attributes.position.count * 3)
-  for (let i = 0; i < tc.length; i += 3) {
-    tc[i] = 0.16
-    tc[i + 1] = 0.1
-    tc[i + 2] = 0.14
+  // slender, gently curved trunk that tapers, with ring scars (vertex colour bands) — royal / coconut palm
+  const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0.12, 2.6, 0), new THREE.Vector3(0.5, 5.3, 0), new THREE.Vector3(0.95, 7.2, 0)])
+  const SEGS = 40
+  const RAD = 12
+  const trunk = new THREE.TubeGeometry(curve, SEGS, 0.17, RAD, false)
+  const pa = trunk.attributes.position
+  const tc = new Float32Array(pa.count * 3)
+  const ctr = new THREE.Vector3()
+  for (let i = 0; i < pa.count; i++) {
+    const ring = Math.floor(i / (RAD + 1))
+    const t = ring / SEGS
+    curve.getPoint(t, ctr)
+    // taper: thicker flared base, thin under the crown
+    const k = 1.25 - 0.55 * t + 0.35 * Math.max(0, 0.08 - t) * 10
+    pa.setXYZ(i, ctr.x + (pa.getX(i) - ctr.x) * k, pa.getY(i), ctr.z + (pa.getZ(i) - ctr.z) * k)
+    const band = ring % 2 ? 0.78 : 1
+    tc[i * 3] = 0.3 * band
+    tc[i * 3 + 1] = 0.22 * band
+    tc[i * 3 + 2] = 0.17 * band
   }
   trunk.setAttribute('color', new THREE.BufferAttribute(tc, 3))
+  trunk.computeVertexNormals()
   geoms.push(trunk.toNonIndexed())
   const top = curve.getPoint(1)
-  const N = 9
+  // crown: 14 arching fronds, each a rachis with paired, drooping leaflets (feathery, not paddles)
+  const N = 14
   for (let i = 0; i < N; i++) {
-    const a = (i / N) * Math.PI * 2 + 0.3
-    const len = 2.6 + (i % 3) * 0.35
-    const seg = 7
+    const a = (i / N) * Math.PI * 2 + (i % 2) * 0.12
+    const len = 2.5 + ((i * 7) % 5) * 0.18
+    const lift = i % 3 === 0 ? 0.9 : 0.35
     const pos: number[] = []
     const col: number[] = []
-    for (let j = 0; j < seg; j++) {
-      const t0 = j / seg
-      const t1 = (j + 1) / seg
-      const pt = (t: number, side: number) => {
-        const r = t * len
-        const w = 0.42 * Math.sin(Math.PI * Math.min(1, t * 1.15)) * (1 - t * 0.6)
-        const droop = -1.6 * t * t + 0.5 * t
-        const x = Math.cos(a) * r - Math.sin(a) * w * side
-        const z = Math.sin(a) * r + Math.cos(a) * w * side
-        return [top.x + x, top.y + droop - Math.abs(side) * 0.08 * t, top.z + z]
+    const seg = 12
+    const at = (t: number): [number, number, number] => {
+      const r = t * len
+      const y = lift * t * 1.6 - (1.9 + lift) * t * t
+      return [top.x + Math.cos(a) * r, top.y + y, top.z + Math.sin(a) * r]
+    }
+    for (let j = 1; j < seg; j++) {
+      const t = j / seg
+      const p = at(t)
+      const q = at(t + 0.6 / seg)
+      const ll = 0.75 * Math.sin(Math.PI * Math.min(1, t * 1.1)) * (1 - t * 0.35) + 0.12
+      for (const side of [-1, 1]) {
+        // leaflet: thin triangle angled forward and drooping
+        const px = -Math.sin(a) * side
+        const pz = Math.cos(a) * side
+        const tip = [p[0] + px * ll + Math.cos(a) * ll * 0.45, p[1] - ll * 0.55, p[2] + pz * ll + Math.sin(a) * ll * 0.45]
+        pos.push(...p, ...q, ...tip)
+        const g = 0.2 + 0.08 * Math.sin(i * 3.1 + j)
+        col.push(0.06, g, 0.07, 0.06, g, 0.07, 0.1, g * 0.85, 0.05)
       }
-      const p00 = pt(t0, -1)
-      const p01 = pt(t0, 1)
-      const p10 = pt(t1, -1)
-      const p11 = pt(t1, 1)
-      const mid0 = pt(t0, 0)
-      const mid1 = pt(t1, 0)
-      mid0[1] += 0.06
-      mid1[1] += 0.06
-      pos.push(...p00, ...mid0, ...p10, ...mid0, ...mid1, ...p10, ...mid0, ...p01, ...mid1, ...p01, ...p11, ...mid1)
-      for (let k = 0; k < 12; k++) col.push(0.05, 0.16 + 0.05 * t0, 0.14)
+      // rachis
+      pos.push(p[0], p[1] + 0.03, p[2], q[0], q[1] + 0.03, q[2], p[0], p[1] - 0.04, p[2])
+      col.push(0.22, 0.2, 0.1, 0.22, 0.2, 0.1, 0.22, 0.2, 0.1)
     }
     const g = new THREE.BufferGeometry()
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
     g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3))
-    g.setAttribute('uv', new THREE.Float32BufferAttribute(new Array((pos.length / 3) * 2).fill(0), 2))
-    g.computeVertexNormals()
     geoms.push(g)
   }
-  for (const g of geoms) if (!g.attributes.uv) g.setAttribute('uv', new THREE.Float32BufferAttribute(new Array(g.attributes.position.count * 2).fill(0), 2))
-  const m = mergeGeometries(geoms.map((g) => { const n = g.index ? g.toNonIndexed() : g; n.deleteAttribute('uv'); return n }))!
+  // coconuts under the crown
+  for (let i = 0; i < 4; i++) {
+    const c = new THREE.SphereGeometry(0.13, 10, 8)
+    c.translate(top.x + Math.cos(i * 1.7) * 0.2, top.y - 0.25, top.z + Math.sin(i * 1.7) * 0.2)
+    const cc = new Float32Array(c.attributes.position.count * 3)
+    for (let k = 0; k < cc.length; k += 3) {
+      cc[k] = 0.2
+      cc[k + 1] = 0.14
+      cc[k + 2] = 0.06
+    }
+    c.setAttribute('color', new THREE.BufferAttribute(cc, 3))
+    geoms.push(c.toNonIndexed())
+  }
+  const m = mergeGeometries(
+    geoms.map((g) => {
+      const n = g.index ? g.toNonIndexed() : g
+      if (n.attributes.uv) n.deleteAttribute('uv')
+      if (n.attributes.normal) n.deleteAttribute('normal')
+      return n
+    }),
+  )!
   m.computeVertexNormals()
   return m
 }
-
 export function palmMaterial() {
   return addRim(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: THREE.DoubleSide }), new THREE.Color('#ff5ab4'), 0.4, 3.2)
 }

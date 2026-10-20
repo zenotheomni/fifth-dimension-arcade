@@ -64,6 +64,16 @@ export class HumanRunner implements RunnerView {
         seen.add(mat)
         const std = mat as THREE.MeshStandardMaterial
         this.mats.push(std)
+        if (std.name === 'patch') {
+          // the backpack patch wears the colour 5D logo (same art as the invincibility power-up)
+          new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}art/5d-logo-color.png`, (t) => {
+            t.flipY = false
+            t.colorSpace = THREE.SRGBColorSpace
+            t.anisotropy = 8
+            std.map = t
+            std.needsUpdate = true
+          })
+        }
         if (std.name === 'visor') std.envMapIntensity = 2.2
         else if (/metal|anodized/.test(std.name)) std.envMapIntensity = 1.4
         else std.envMapIntensity = 0.85

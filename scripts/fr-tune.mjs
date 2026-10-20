@@ -171,7 +171,7 @@ const check = (name, pass, detail) => {
 
 // ── 4. bots ──
 const bots = {}
-for (const name of ['rookie', 'novice', 'decent', 'expert', 'perfect']) {
+for (const name of ['rookie', 'mid', 'novice', 'decent', 'expert', 'perfect']) {
   const n = name === 'perfect' ? 40 : N_SEEDS
   const runs = seedList(n, 'bot').map((sd, i) => runBot(sd, SKILLS[name], name === 'perfect' ? 300 : 400, 1000 + i))
   const ts = runs.map((r) => r.t)

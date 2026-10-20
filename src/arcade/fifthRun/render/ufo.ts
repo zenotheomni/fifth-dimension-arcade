@@ -7,7 +7,8 @@
  */
 import * as THREE from 'three'
 
-const R = 0.32 // disc radius (m)
+const R = 0.32 // disc radius (m) before SCALE
+const SCALE = 1.55
 
 const GLOW_VERT = /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`
 const GLOW_FRAG = /* glsl */ `uniform vec3 uColor; uniform float uAmp; varying vec2 vUv;
@@ -42,10 +43,11 @@ export class UfoChaser {
   private x = 0
   private threatS = 0
   /** world size (QA): diameter × height */
-  static readonly SIZE = { w: R * 2, h: 0.42 }
+  static readonly SIZE = { w: R * 2 * SCALE, h: 0.42 * SCALE }
 
   constructor() {
     this.group.add(this.craft)
+    this.craft.scale.setScalar(SCALE)
     // disc hull: lathe profile (rim → top shoulder → bottom bowl)
     const prof = [
       new THREE.Vector2(0.0, -0.12),
@@ -100,7 +102,8 @@ export class UfoChaser {
    */
   update(time: number, dt: number, threat: number, runnerX: number, fade: number, _camQ?: THREE.Quaternion) {
     void _camQ
-    this.threatS += (threat - this.threatS) * (1 - Math.exp(-dt * 3))
+    // rush in fast on a hit, ease back out slowly (Temple Run monkeys)
+    this.threatS += (threat - this.threatS) * (1 - Math.exp(-dt * (threat > this.threatS ? 9 : 2.2)))
     const k = Math.min(1.5, this.threatS)
     const near = Math.min(1, k) // 0 clean … 1 on his heels
     const back = 1 - fade // logo surge / intro: hangs back a little (but stays in frame)
@@ -109,14 +112,15 @@ export class UfoChaser {
     // the screen). Clean: hangs back near the bottom edge. Stumble: surges up to his heels.
     // Caught (k > 1): overtakes him and beams him from just ahead/above.
     const over = Math.max(0, k - 1) * 2 // 0 → 1 across the catch
-    const zT = 2.85 - 0.85 * near - over * 4.3 + back * 0.2
-    const yT = 1.05 + 0.12 * near + over * 1.6
+    // always in the chase-cam frame: clean = hanging back low, hit = right on his heels, big in frame
+    const zT = 2.6 - 1.75 * near - over * 2.6 + back * 0.2
+    const yT = 1.55 + 0.05 * near + over * 1.1
     // side: toward the middle of the road so it never leaves the frame; flips smoothly
     if (runnerX > 0.3) this.sideT = -1
     else if (runnerX < -0.3) this.sideT = 1
     this.side += (this.sideT - this.side) * (1 - Math.exp(-dt * 3))
-    const off = (0.95 - 0.1 * near - over * 0.85) * this.side
-    this.z += (zT - this.z) * (1 - Math.exp(-dt * 3.5))
+    const off = (1.05 - 0.4 * near - over * 0.65) * this.side
+    this.z += (zT - this.z) * (1 - Math.exp(-dt * (zT < this.z ? 7 : 2.5)))
     this.y += (yT - this.y) * (1 - Math.exp(-dt * 3.5))
     this.x += (runnerX + off - this.x) * (1 - Math.exp(-dt * 4))
     const bob = 0.07 * Math.sin(time * 3.3)
@@ -131,8 +135,8 @@ export class UfoChaser {
     const beamOn = Math.max(0, Math.min(1, (k - 0.85) * 2.5))
     const hover = this.y + bob
     this.beam.visible = beamOn > 0.01
-    this.beam.scale.set(1, hover, 1)
-    this.beam.position.y = -0.13 - hover / 2
+    this.beam.scale.set(1, hover / SCALE, 1)
+    this.beam.position.y = -0.13 - hover / SCALE / 2
     this.beamMat.uniforms.uAmp.value = beamOn * 0.8
     this.beamMat.uniforms.uTime.value = time
   }
