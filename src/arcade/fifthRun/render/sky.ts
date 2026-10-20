@@ -72,7 +72,7 @@ export function voidSkyMaterial() {
         space += vec3(0.42, 0.12, 0.62) * pow(neb, 2.6) * 0.9;
         space += vec3(0.0, 0.45, 0.5) * pow(neb2, 3.5) * 0.7;
         space += vec3(1.0, 0.35, 0.28) * pow(neb * neb2, 2.4) * 0.8;
-        space += vec3(0.75, 0.62, 0.85) * band * (0.08 + 0.25 * fbm3(d * 9.0)) ;
+        space += vec3(0.75, 0.62, 0.85) * band * (0.14 + 0.5 * fbm3(d * 9.0)) ;
         space *= 1.0 - dust * 0.75;
         // fine star dust
         vec3 c = floor(d * 380.0);

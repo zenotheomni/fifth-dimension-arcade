@@ -244,32 +244,96 @@ export function buildPipe(metal: THREE.Material) {
   return { group, lamp: lampMat }
 }
 
-export function buildGantry(chev: THREE.Texture, metal: THREE.Material, glow: THREE.Texture) {
-  const group = new THREE.Group()
-  const beamMat = new THREE.MeshStandardMaterial({ color: '#1a1426', roughness: 0.4, metalness: 0.6 })
-  const beam = new THREE.Mesh(box(1.98, 0.5, 0.3), beamMat)
-  beam.position.y = 1.5
-  group.add(beam)
-  const signMat = new THREE.MeshStandardMaterial({ color: '#0d0a14', metalness: 0.6, emissive: new THREE.Color('#ff4d5e'), emissiveMap: chev, emissiveIntensity: 0.55, roughness: 0.35 })
-  const sign = new THREE.Mesh(box(1.86, 0.3, 0.02), signMat)
-  sign.position.set(0, 1.5, 0.16)
-  group.add(sign)
-  const tube = new THREE.MeshStandardMaterial({ color: '#7cf', emissive: new THREE.Color('#00e0d0'), emissiveIntensity: 3.2 })
-  const t1 = new THREE.Mesh(box(1.98, 0.045, 0.05), tube)
-  t1.position.set(0, 1.26, 0.16)
-  group.add(t1)
-  const tube2 = new THREE.MeshStandardMaterial({ color: '#f8a', emissive: new THREE.Color('#ff3d8a'), emissiveIntensity: 3.2 })
-  const t2 = new THREE.Mesh(box(1.98, 0.04, 0.05), tube2)
-  t2.position.set(0, 1.74, 0.16)
-  group.add(t2)
-  for (const x of [-0.98, 0.98]) {
-    const post = new THREE.Mesh(box(0.08, 1.75, 0.08), metal)
-    post.position.set(x, 0.875, 0)
-    group.add(post)
+let slideTex: THREE.CanvasTexture | null = null
+/** "SLIDE ▼" floor / curtain lettering (canvas, built once). */
+function slideTexture() {
+  if (slideTex) return slideTex
+  const c = document.createElement('canvas')
+  c.width = 512
+  c.height = 256
+  const g = c.getContext('2d')!
+  g.clearRect(0, 0, 512, 256)
+  g.fillStyle = '#ffffff'
+  g.font = '900 120px system-ui, -apple-system, Helvetica, Arial, sans-serif'
+  g.textAlign = 'center'
+  g.textBaseline = 'middle'
+  g.fillText('SLIDE', 256, 92)
+  g.beginPath()
+  for (const x of [176, 256, 336]) {
+    g.moveTo(x - 30, 170)
+    g.lineTo(x + 30, 170)
+    g.lineTo(x, 214)
+    g.closePath()
   }
-  const halo = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 0.9), glowMaterial(glow, '#00e0d0', 0.22))
-  halo.position.set(0, 1.26, 0.2)
+  g.fill()
+  slideTex = new THREE.CanvasTexture(c)
+  slideTex.colorSpace = THREE.SRGBColorSpace
+  slideTex.anisotropy = 8
+  return slideTex
+}
+
+/**
+ * SLIDE gate (overhead): a tall laser gate you can only duck under. Two dark pylons rise to 4 m; the
+ * whole span from OB.overhead.bottom (1.2 m, head height) up to the top is a red energy curtain — far
+ * above any jump — with a blazing laser bar on its bottom edge and a clearly open gap underneath.
+ * "SLIDE ▼" glows on the curtain and on the deck in front of it.
+ */
+export function buildGantry(chev: THREE.Texture, metal: THREE.Material, glow: THREE.Texture) {
+  void chev
+  const group = new THREE.Group()
+  const bottom = 1.2
+  const topY = 4.0
+  const w = 2.0
+  const pylon = new THREE.MeshStandardMaterial({ color: '#16121e', metalness: 0.8, roughness: 0.35 })
+  for (const x of [-w / 2 - 0.06, w / 2 + 0.06]) {
+    const post = new THREE.Mesh(box(0.14, topY + 0.15, 0.18), pylon)
+    post.position.set(x, (topY + 0.15) / 2, 0)
+    group.add(post)
+    const strip = new THREE.Mesh(box(0.03, topY - 0.2, 0.03), new THREE.MeshBasicMaterial({ color: '#ff3048' }))
+    strip.position.set(x, (topY - 0.2) / 2 + 0.1, 0.1)
+    group.add(strip)
+  }
+  const cap = new THREE.Mesh(box(w + 0.3, 0.16, 0.22), pylon)
+  cap.position.y = topY + 0.08
+  group.add(cap)
+  // energy curtain (additive, translucent, brighter toward the laser)
+  const curtainMat = new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+    uniforms: { uTex: { value: slideTexture() } },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+    fragmentShader: `uniform sampler2D uTex; varying vec2 vUv;
+      void main(){
+        float scan = 0.55 + 0.45 * step(0.5, fract(vUv.y * 38.0));
+        float edge = pow(1.0 - vUv.y, 3.0) * 0.9 + 0.22;
+        vec2 tuv = vec2(vUv.x, (vUv.y - 0.12) / 0.42);
+        float txt = (tuv.y > 0.0 && tuv.y < 1.0) ? texture2D(uTex, tuv).a : 0.0;
+        vec3 col = vec3(1.0, 0.12, 0.2) * edge * scan + vec3(1.0, 0.85, 0.85) * txt * 0.9;
+        gl_FragColor = vec4(col, 1.0);
+      }`,
+  })
+  const curtain = new THREE.Mesh(new THREE.PlaneGeometry(w, topY - bottom), curtainMat)
+  curtain.position.y = bottom + (topY - bottom) / 2
+  group.add(curtain)
+  // the laser bar itself (head height) + glow
+  const laser = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, w, 12), new THREE.MeshBasicMaterial({ color: '#fff0f2' }))
+  laser.rotation.z = Math.PI / 2
+  laser.position.y = bottom + 0.03
+  group.add(laser)
+  const halo = new THREE.Mesh(new THREE.PlaneGeometry(w + 0.8, 0.7), glowMaterial(glow, '#ff2a44', 0.85))
+  halo.position.set(0, bottom + 0.03, 0.02)
   group.add(halo)
+  // "SLIDE ▼" painted on the deck just before the gate
+  const decal = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.7, 0.85),
+    new THREE.MeshBasicMaterial({ map: slideTexture(), color: '#ff5468', transparent: true, depthWrite: false, opacity: 0.95 }),
+  )
+  decal.rotation.x = -Math.PI / 2
+  decal.position.set(0, 0.03, 2.6)
+  group.add(decal)
+  void metal
   return { group }
 }
 

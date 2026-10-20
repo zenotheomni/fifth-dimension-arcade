@@ -97,7 +97,7 @@ export const CORNER = {
   postS: 0.8,
   postT: 70,
 }
-/** Path half width the runner can drift across (tilt) — lane centres are ±LANE_W. */
+/** Path half width the runner can occupy — lane centres are ±LANE_W. */
 export const PATH_HALF = 2.25
 
 /**

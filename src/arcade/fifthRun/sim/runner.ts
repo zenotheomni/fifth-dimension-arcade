@@ -19,7 +19,6 @@ import {
   BOOST,
   CHASE,
   CORNER,
-  PATH_HALF,
   LANE_W,
   DOWN_S,
   SLOW_TICKS,
@@ -102,11 +101,10 @@ export type RunState = {
   queued: Action | null
   queuedAt: number
   latQ: Action | null
-  /** lateral target x (lane centre, or tilt) */
+  /** lateral target x (lane centre) */
   tx: number
-  /** device tilt −1..1 (NaN = not in use) and the swipe bias stacked on it */
-  tilt: number
-  tiltBias: number
+  /** metres banked by corner re-framing so the score never runs backwards */
+  sBank: number
   /** s of the last corner handled (turned / fallen at); the next corner is the first beyond it */
   cDone: number
   /** queued turn for the next corner (−1 / 1, 0 = none) */
@@ -160,8 +158,7 @@ export function newRun(): RunState {
     queuedAt: 0,
     latQ: null,
     tx: 0,
-    tilt: NaN,
-    tiltBias: 0,
+    sBank: 0,
     cDone: -1,
     turnQ: 0,
     pendTurn: 0,
@@ -175,7 +172,7 @@ export function newRun(): RunState {
 }
 
 /** Score = distance: metres run + STAR_M bonus metres per star. */
-export const scoreOf = (st: RunState) => Math.floor(st.s) + st.keys * STAR_M
+export const scoreOf = (st: RunState) => Math.floor(st.s + st.sBank) + st.keys * STAR_M
 
 /** Speed multiplier from stumble slow-down × logo surge (eased). */
 export function speedMul(st: RunState) {
@@ -241,8 +238,7 @@ function applyAction(st: RunState, a: Action, track: Track, ev: RunEvent[] | nul
       return true
     }
     st.lane = target
-    if (st.tilt === st.tilt) st.tiltBias = Math.max(-2 * LANE_W, Math.min(2 * LANE_W, st.tiltBias + dir * LANE_W))
-    else st.tx = laneX(target)
+    st.tx = laneX(target)
     ev?.push({ type: 'lane', dir })
     return true
   }
@@ -266,19 +262,6 @@ function applyAction(st: RunState, a: Action, track: Track, ev: RunEvent[] | nul
   return true
 }
 
-/** Device tilt −1..1 (NaN turns tilt steering off and snaps back to lanes). */
-export function setTilt(st: RunState, t: number) {
-  if (t !== t) {
-    if (st.tilt === st.tilt) {
-      st.tilt = NaN
-      st.tiltBias = 0
-      st.tx = laneX(st.lane)
-    }
-    return
-  }
-  st.tilt = Math.max(-1, Math.min(1, t))
-}
-
 /** The next corner not yet handled (null if none generated). */
 export function nextCorner(st: RunState, track: Track): Corner | null {
   for (const c of track.corners) if (c.s > st.cDone) return c
@@ -288,6 +271,18 @@ export function nextCorner(st: RunState, track: Track): Corner | null {
 const cornerDir = (c: Corner, want: number): -1 | 1 => (c.kind === 'L' ? -1 : c.kind === 'R' ? 1 : want < 0 ? -1 : 1)
 
 function doTurn(st: RunState, c: Corner, dir: -1 | 1, auto: boolean, ev: RunEvent[] | null | undefined) {
+  // Snap onto the new heading with NO position pop: the runner's point on the corner square is
+  // re-expressed in the new segment's frame (origin = corner centre). Old frame: p = c + d·F + x·R
+  // (d = s − c.s). New frame after turning `dir`: F' = dir·R, R' = −dir·F ⇒ d' = dir·x, x' = −dir·d.
+  // A late turn is clamped to the far edge of the square so the runner never stands over the void.
+  const d = Math.min(st.s - c.s, CORNER.half - 0.35)
+  const x = st.x
+  st.s = c.s + dir * x
+  st.x = -dir * d
+  st.sBank += c.s + d - st.s
+  // land in the lane nearest to where the body is now (it eases onto the lane centre from there)
+  st.lane = st.x < -LANE_W / 2 ? 0 : st.x > LANE_W / 2 ? 2 : 1
+  st.tx = laneX(st.lane)
   st.cDone = c.s
   st.turnQ = 0
   st.turns++
@@ -365,7 +360,6 @@ function respawn(st: RunState, track: Track, ev: RunEvent[] | null | undefined) 
     if (o.kind !== 'void' || o.s + o.len < st.s - 1 || o.lane !== st.lane) continue
     st.lane = 1
   }
-  st.tiltBias = 0
   st.tx = laneX(st.lane)
   st.x = laneX(st.lane)
   st.y = 0
@@ -460,10 +454,6 @@ export function step(st: RunState, track: Track, opts: StepOpts) {
     else if (st.tick - st.queuedAt > BUFFER_TICKS) st.queued = null
   }
 
-  if (st.tilt === st.tilt) {
-    st.tx = Math.max(-PATH_HALF, Math.min(PATH_HALF, st.tilt * PATH_HALF * 1.15 + st.tiltBias))
-    st.lane = st.tx < -LANE_W / 2 ? 0 : st.tx > LANE_W / 2 ? 2 : 1
-  }
   const tx = st.tx
   const dx = tx - st.x
   const maxStep = LANE_SPEED * FR_DT
