@@ -269,6 +269,7 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
         </div>
       ) : null}
 
+      <img className="fr-wordmark" src={`${import.meta.env.BASE_URL}art/5d-wordmark-white.png`} alt="Fifth Dimension" draggable={false} />
       <div className="fr-hud" aria-live="polite">
         <div className={`fr-board${hud.phase === 'intro' ? ' is-dim' : ''}`}>
           <div className="fr-cell">

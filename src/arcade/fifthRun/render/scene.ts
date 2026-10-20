@@ -361,23 +361,44 @@ export class FrScene {
     geo.translate(0, 0.5, 0)
     this.skylineMat = towerMaterial(700, 1600)
     ;(this.skylineMat.uniforms.uFog.value as THREE.Color).set('#4a1c3a')
-    const N = 170
+    // real skyline massing: each tower is a podium-free shaft plus up to two set-back tiers and a slim
+    // spire on the tallest, with narrower, deeper footprints (no uniform blocks)
+    const B = 150
+    const N = B * 3
     const mesh = new THREE.InstancedMesh(geo, this.skylineMat, N)
     const seeds = new Float32Array(N)
-    // one downtown waterfront cluster ahead-left of the start line, far below the path
     const dir = -Math.PI / 2 - 0.45
-    for (let i = 0; i < N; i++) {
+    let n = 0
+    const put = (x: number, y: number, z: number, yaw: number, w: number, h: number, d: number, sd: number) => {
+      if (n >= N) return
+      this.tmpQ.setFromEuler(this.tmpE.set(0, yaw, 0))
+      this.tmpM.compose(this.tmpV.set(x, y, z), this.tmpQ, this.tmpS.set(w, h, d))
+      mesh.setMatrixAt(n, this.tmpM)
+      seeds[n++] = sd
+    }
+    for (let i = 0; i < B; i++) {
       const u = (rnd() - 0.5) * 2
       const a = dir + u * 0.42
       const core = Math.exp(-u * u * 4)
       const r = 1150 + rnd() * 220 - core * 120
-      const h = 20 + rnd() * 40 + core * (60 + 120 * rnd() * rnd())
-      const w = 12 + rnd() * 20
-      this.tmpQ.setFromEuler(this.tmpE.set(0, rnd() * 3, 0))
-      this.tmpM.compose(this.tmpV.set(Math.cos(a) * r, -230, Math.sin(a) * r), this.tmpQ, this.tmpS.set(w, h + 120, w * (0.7 + rnd() * 0.6)))
-      mesh.setMatrixAt(i, this.tmpM)
-      seeds[i] = rnd()
+      const h = 18 + rnd() * 36 + core * (55 + 130 * rnd() * rnd())
+      const w = 9 + rnd() * 13
+      const d = w * (0.75 + rnd() * 0.5)
+      const yaw = rnd() * 3
+      const sd = rnd()
+      const x = Math.cos(a) * r
+      const z = Math.sin(a) * r
+      const base = -230
+      const shaft = 120 + h * 0.72
+      put(x, base, z, yaw, w, shaft, d, sd)
+      if (h > 45) {
+        const h2 = h * (0.18 + rnd() * 0.12)
+        put(x, base + shaft, z, yaw, w * 0.74, h2, d * 0.74, sd)
+        if (h > 110) put(x, base + shaft + h2, z, yaw, w * 0.12, h * 0.22, w * 0.12, (sd + 0.37) % 1)
+        else put(x, base + shaft + h2, z, yaw, w * 0.5, h * 0.08, d * 0.5, sd)
+      }
     }
+    mesh.count = n
     geo.setAttribute('aSeed', new THREE.InstancedBufferAttribute(seeds, 1))
     mesh.frustumCulled = false
     this.skyline = mesh

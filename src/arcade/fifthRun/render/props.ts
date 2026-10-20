@@ -416,59 +416,91 @@ export function buildPickup(kind: 'hand', glow: THREE.Texture, emblem: THREE.Tex
 /** Palm silhouette: curved trunk + drooping fronds (vertex-coloured, merged). */
 export function palmGeometry() {
   const geoms: THREE.BufferGeometry[] = []
-  const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0.15, 2.5, 0), new THREE.Vector3(0.55, 5.2, 0), new THREE.Vector3(1.0, 7.0, 0)])
-  const trunk = new THREE.TubeGeometry(curve, 16, 0.17, 7, false)
-  const tc = new Float32Array(trunk.attributes.position.count * 3)
-  for (let i = 0; i < tc.length; i += 3) {
-    tc[i] = 0.16
-    tc[i + 1] = 0.1
-    tc[i + 2] = 0.14
+  // slender, gently curved trunk that tapers, with ring scars (vertex colour bands) — royal / coconut palm
+  const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0.12, 2.6, 0), new THREE.Vector3(0.5, 5.3, 0), new THREE.Vector3(0.95, 7.2, 0)])
+  const SEGS = 40
+  const RAD = 12
+  const trunk = new THREE.TubeGeometry(curve, SEGS, 0.17, RAD, false)
+  const pa = trunk.attributes.position
+  const tc = new Float32Array(pa.count * 3)
+  const ctr = new THREE.Vector3()
+  for (let i = 0; i < pa.count; i++) {
+    const ring = Math.floor(i / (RAD + 1))
+    const t = ring / SEGS
+    curve.getPoint(t, ctr)
+    // taper: thicker flared base, thin under the crown
+    const k = 1.25 - 0.55 * t + 0.35 * Math.max(0, 0.08 - t) * 10
+    pa.setXYZ(i, ctr.x + (pa.getX(i) - ctr.x) * k, pa.getY(i), ctr.z + (pa.getZ(i) - ctr.z) * k)
+    const band = ring % 2 ? 0.78 : 1
+    tc[i * 3] = 0.3 * band
+    tc[i * 3 + 1] = 0.22 * band
+    tc[i * 3 + 2] = 0.17 * band
   }
   trunk.setAttribute('color', new THREE.BufferAttribute(tc, 3))
+  trunk.computeVertexNormals()
   geoms.push(trunk.toNonIndexed())
   const top = curve.getPoint(1)
-  const N = 9
+  // crown: 14 arching fronds, each a rachis with paired, drooping leaflets (feathery, not paddles)
+  const N = 14
   for (let i = 0; i < N; i++) {
-    const a = (i / N) * Math.PI * 2 + 0.3
-    const len = 2.6 + (i % 3) * 0.35
-    const seg = 7
+    const a = (i / N) * Math.PI * 2 + (i % 2) * 0.12
+    const len = 2.5 + ((i * 7) % 5) * 0.18
+    const lift = i % 3 === 0 ? 0.9 : 0.35
     const pos: number[] = []
     const col: number[] = []
-    for (let j = 0; j < seg; j++) {
-      const t0 = j / seg
-      const t1 = (j + 1) / seg
-      const pt = (t: number, side: number) => {
-        const r = t * len
-        const w = 0.42 * Math.sin(Math.PI * Math.min(1, t * 1.15)) * (1 - t * 0.6)
-        const droop = -1.6 * t * t + 0.5 * t
-        const x = Math.cos(a) * r - Math.sin(a) * w * side
-        const z = Math.sin(a) * r + Math.cos(a) * w * side
-        return [top.x + x, top.y + droop - Math.abs(side) * 0.08 * t, top.z + z]
+    const seg = 12
+    const at = (t: number): [number, number, number] => {
+      const r = t * len
+      const y = lift * t * 1.6 - (1.9 + lift) * t * t
+      return [top.x + Math.cos(a) * r, top.y + y, top.z + Math.sin(a) * r]
+    }
+    for (let j = 1; j < seg; j++) {
+      const t = j / seg
+      const p = at(t)
+      const q = at(t + 0.6 / seg)
+      const ll = 0.75 * Math.sin(Math.PI * Math.min(1, t * 1.1)) * (1 - t * 0.35) + 0.12
+      for (const side of [-1, 1]) {
+        // leaflet: thin triangle angled forward and drooping
+        const px = -Math.sin(a) * side
+        const pz = Math.cos(a) * side
+        const tip = [p[0] + px * ll + Math.cos(a) * ll * 0.45, p[1] - ll * 0.55, p[2] + pz * ll + Math.sin(a) * ll * 0.45]
+        pos.push(...p, ...q, ...tip)
+        const g = 0.2 + 0.08 * Math.sin(i * 3.1 + j)
+        col.push(0.06, g, 0.07, 0.06, g, 0.07, 0.1, g * 0.85, 0.05)
       }
-      const p00 = pt(t0, -1)
-      const p01 = pt(t0, 1)
-      const p10 = pt(t1, -1)
-      const p11 = pt(t1, 1)
-      const mid0 = pt(t0, 0)
-      const mid1 = pt(t1, 0)
-      mid0[1] += 0.06
-      mid1[1] += 0.06
-      pos.push(...p00, ...mid0, ...p10, ...mid0, ...mid1, ...p10, ...mid0, ...p01, ...mid1, ...p01, ...p11, ...mid1)
-      for (let k = 0; k < 12; k++) col.push(0.05, 0.16 + 0.05 * t0, 0.14)
+      // rachis
+      pos.push(p[0], p[1] + 0.03, p[2], q[0], q[1] + 0.03, q[2], p[0], p[1] - 0.04, p[2])
+      col.push(0.22, 0.2, 0.1, 0.22, 0.2, 0.1, 0.22, 0.2, 0.1)
     }
     const g = new THREE.BufferGeometry()
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
     g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3))
-    g.setAttribute('uv', new THREE.Float32BufferAttribute(new Array((pos.length / 3) * 2).fill(0), 2))
-    g.computeVertexNormals()
     geoms.push(g)
   }
-  for (const g of geoms) if (!g.attributes.uv) g.setAttribute('uv', new THREE.Float32BufferAttribute(new Array(g.attributes.position.count * 2).fill(0), 2))
-  const m = mergeGeometries(geoms.map((g) => { const n = g.index ? g.toNonIndexed() : g; n.deleteAttribute('uv'); return n }))!
+  // coconuts under the crown
+  for (let i = 0; i < 4; i++) {
+    const c = new THREE.SphereGeometry(0.13, 10, 8)
+    c.translate(top.x + Math.cos(i * 1.7) * 0.2, top.y - 0.25, top.z + Math.sin(i * 1.7) * 0.2)
+    const cc = new Float32Array(c.attributes.position.count * 3)
+    for (let k = 0; k < cc.length; k += 3) {
+      cc[k] = 0.2
+      cc[k + 1] = 0.14
+      cc[k + 2] = 0.06
+    }
+    c.setAttribute('color', new THREE.BufferAttribute(cc, 3))
+    geoms.push(c.toNonIndexed())
+  }
+  const m = mergeGeometries(
+    geoms.map((g) => {
+      const n = g.index ? g.toNonIndexed() : g
+      if (n.attributes.uv) n.deleteAttribute('uv')
+      if (n.attributes.normal) n.deleteAttribute('normal')
+      return n
+    }),
+  )!
   m.computeVertexNormals()
   return m
 }
-
 export function palmMaterial() {
   return addRim(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: THREE.DoubleSide }), new THREE.Color('#ff5ab4'), 0.4, 3.2)
 }
