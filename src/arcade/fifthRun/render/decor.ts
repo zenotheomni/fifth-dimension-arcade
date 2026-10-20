@@ -43,20 +43,15 @@ export function buildArch(glow: THREE.Texture, emblem: THREE.Texture | null) {
     }
   })
   if (emblem) {
-    const disc = new THREE.Mesh(new THREE.CircleGeometry(1.0, 40), new THREE.MeshStandardMaterial({ color: '#111', metalness: 0.9, roughness: 0.3 }))
-    disc.position.set(0, TOP + 1.05, 0.02)
-    group.add(disc)
+    // Fifth Dimension wordmark plate on top of the arch (white lettering with its own dark shadow)
     const e = new THREE.Mesh(
-      new THREE.PlaneGeometry(1.8, 1.8),
-      new THREE.MeshBasicMaterial({ map: emblem, transparent: true, depthWrite: false, alphaTest: 0.04, color: new THREE.Color(1.5, 1.4, 1.25), fog: false }),
+      new THREE.PlaneGeometry(4.4, 4.4 * 0.482),
+      new THREE.MeshBasicMaterial({ map: emblem, transparent: true, depthWrite: false, alphaTest: 0.04, color: new THREE.Color(1.25, 1.2, 1.15), fog: false }),
     )
-    e.position.set(0, TOP + 1.05, 0.06)
+    e.position.set(0, TOP + 1.45, 0.06)
     group.add(e)
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(1.02, 0.05, 8, 48), new THREE.MeshStandardMaterial({ color: '#ffc83c', emissive: new THREE.Color('#ffb020'), emissiveIntensity: 2.4, metalness: 1, roughness: 0.2 }))
-    ring.position.set(0, TOP + 1.05, 0.04)
-    group.add(ring)
-    const h = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 4.2), glowMaterial(glow, '#ffc83c', 0.18))
-    h.position.set(0, TOP + 1.05, -0.05)
+    const h = new THREE.Mesh(new THREE.PlaneGeometry(6.4, 3.4), glowMaterial(glow, '#8a4dff', 0.2))
+    h.position.set(0, TOP + 1.45, -0.05)
     group.add(h)
   }
   return { group, tubes }

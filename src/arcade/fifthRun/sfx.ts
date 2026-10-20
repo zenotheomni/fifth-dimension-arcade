@@ -178,3 +178,29 @@ export function sfxSurge() {
   noise(a, t, 0.7, 'bandpass', 400, 3200, 1.2, 0.35)
   tone(a, t, 220, 880, 0.6, 'triangle', 0.12, 0.02)
 }
+
+/** Near miss: quick air "fwip" + bright tick. */
+export function sfxNear() {
+  const a = ac()
+  if (!a || muted) return
+  const t = a.currentTime
+  noise(a, t, 0.16, 'bandpass', 1800, 5200, 1.4, 0.13)
+  tone(a, t + 0.02, 1320, 1760, 0.09, 'triangle', 0.05)
+}
+
+/** Speed-up whoosh (distance milestones). */
+export function sfxWhoosh() {
+  const a = ac()
+  if (!a || muted) return
+  const t = a.currentTime
+  noise(a, t, 0.9, 'bandpass', 300, 4200, 1.1, 0.3)
+  tone(a, t, 180, 720, 0.7, 'sawtooth', 0.05, 0.05)
+}
+
+/** Star-line complete: little arpeggio sparkle. */
+export function sfxLineDone() {
+  const a = ac()
+  if (!a || muted) return
+  const t = a.currentTime
+  ;[1046.5, 1318.5, 1568, 2093].forEach((f, i) => tone(a, t + i * 0.045, f, f, 0.18, 'triangle', 0.05))
+}

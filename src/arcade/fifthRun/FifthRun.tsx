@@ -12,10 +12,11 @@ import SharePanel from '../social/SharePanel'
 import StoryShareButton from '../social/StoryShareButton'
 import { requestAlertsRefresh } from '../social/alertStore'
 import { createFifthRun, type FifthRunHandle } from './engine'
-import { BLINK_S, BOOST, CHASE, FR_HZ, POWER_TICKS, START_LIVES, STAR_M } from './sim/constants'
+import { BLINK_S, BOOST, CHASE, FR_HZ, POWER_TICKS, START_LIVES, STAR_M, STREAK_EVERY, STREAK_M } from './sim/constants'
 import type { FrChallengeConfig, FrEndPayload, FrHudState } from './types'
 import './fifthRun.css'
-import BrandLockup, { BRAND_LOGO } from '../brand/BrandLockup'
+import { BRAND_LOGO } from '../brand/BrandLockup'
+import GlideWordmark, { WORDMARK } from '../brand/GlideWordmark'
 
 export type SeededRun = { ticketId: string; seed: string; rivalHandle?: string | null }
 
@@ -263,18 +264,18 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
 
       {hud.phase === 'loading' ? (
         <div className="fr-loading" aria-live="polite">
-          <BrandLockup size={96} />
+          <GlideWordmark width={200} />
           <span className="fr-loading__bar" />
           Lighting up the highway…
         </div>
       ) : null}
 
-      <img className="fr-wordmark" src={`${import.meta.env.BASE_URL}art/5d-wordmark-white.png`} alt="Fifth Dimension" draggable={false} />
+      <img className="fr-wordmark" src={WORDMARK} alt="Fifth Dimension" draggable={false} />
       <div className="fr-hud" aria-live="polite">
         <div className={`fr-board${hud.phase === 'intro' ? ' is-dim' : ''}`}>
           <div className="fr-cell">
             <span className="fr-cell__label">Stars</span>
-            <span className="fr-cell__value">
+            <span className="fr-cell__value fr-pop" key={hud.keys}>
               <i className="fr-staricon" aria-hidden>💫</i>
               {hud.keys}
             </span>
@@ -359,14 +360,14 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
       {howto && !ended ? (
         <div className="fr-howto" role="dialog" aria-label="How to play Fifth Glide">
           <div className="fr-howto__card">
-            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}><BrandLockup size={64} /></div>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}><GlideWordmark width={170} /></div>
             <p className="fr-howto__eyebrow">How to play</p>
             <h2 className="fr-howto__title">Fifth Glide</h2>
             <section>
               <h3>Controls</h3>
               <ul className="fr-howto__controls">
                 <li><b>↰&nbsp;↱</b>The path turns 90°. Swipe left / right at the corner to take it. Too late (or the wrong way) and you run off into the void. A glowing sign and arrows on the floor show which way, and at a T you pick either side</li>
-                <li><b>←&nbsp;→</b>Between corners, swipe left / right to switch lanes, dodge wrecks and grab stars</li>
+                <li><b>←&nbsp;→</b>Between corners, swipe left / right to switch lanes, dodge crystal pylons and crashed satellites and grab stars</li>
                 <li><b>↑</b>Swipe up to jump gaps and low rubble</li>
                 <li><b>↓</b>Swipe down to slide under the red SLIDE laser gates. You can’t jump them. Steel pipes: jump or slide</li>
               </ul>
@@ -375,9 +376,9 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
               <h3>Rules</h3>
               <ul>
                 <li><b>🛸</b>A UFO is right behind you. Stumble and it swoops in; run clean to keep it back</li>
-                <li><b>⚠</b>Watch for gaps, parts of the path that drop away, and narrow stretches. Crates and old Cadillac wrecks block a lane, so go around them</li>
+                <li><b>⚠</b>Watch for gaps, parts of the path that drop away, and narrow stretches. Crystal pylons and crashed satellites block a lane, so go around them</li>
                 <li><b>⚠</b>Hit an obstacle and you stumble: you slow down and it closes in. Stumble again before you pull away (about {Math.round((CHASE.hit - CHASE.catchAt) * CHASE.recoverS)} s of clean running) and the UFO catches you</li>
-                <li><b>{'♥'.repeat(START_LIVES)}</b>{START_LIVES} lives. Getting caught, falling off the path, or running into a crate or a wreck costs one. You flash and respawn right where you were, then keep running</li>
+                <li><b>{'♥'.repeat(START_LIVES)}</b>{START_LIVES} lives. Getting caught, falling off the path, or running into a pylon or a satellite costs one. You flash and respawn right where you were, then keep running</li>
                 <li><b>☠</b>Lose all {START_LIVES} and the run is over. It gets faster the farther you go</li>
               </ul>
             </section>
@@ -385,7 +386,7 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
               <h3>Scoring</h3>
               <ul>
                 <li><b>m</b>Your score is your distance, 1 point per metre</li>
-                <li><b>💫</b>Each shooting star adds +{STAR_M} m. They come in short lines; the ones arcing over rubble need a jump</li>
+                <li><b>💫</b>Each shooting star adds +{STAR_M} m. Every {STREAK_EVERY} in a row without missing one pays a streak bonus (+{STREAK_M} m, then +{STREAK_M * 2} m, +{STREAK_M * 3} m…). The ones arcing over obstacles need a jump</li>
                 <li><img src={BRAND_LOGO} alt="" width={28} height={28} style={{ borderRadius: '50%', verticalAlign: 'middle', marginRight: 6, boxShadow: '0 0 10px #ffc83c' }} />Rare 5D logo: {Math.round(POWER_TICKS.hand / FR_HZ)} s invincible plus a {BOOST.mul}× speed surge. Nothing can catch you, you can’t fall, corners take themselves, and you blast through everything without losing your star streak. You blink for the last {BLINK_S} s, still invincible, so you know it’s almost over</li>
               </ul>
             </section>

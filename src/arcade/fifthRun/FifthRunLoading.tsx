@@ -1,4 +1,4 @@
-import BrandLockup from '../brand/BrandLockup'
+import GlideWordmark from '../brand/GlideWordmark'
 /** Suspense fallback shown while the Fifth Glide chunk (three.js) streams in. Kept tiny + inline-styled. */
 export default function FifthRunLoading() {
   return (
@@ -17,7 +17,7 @@ export default function FifthRunLoading() {
       }}
     >
       <div style={{ display: 'grid', justifyItems: 'center', gap: 18 }}>
-        <BrandLockup size={120} />
+        <GlideWordmark width={220} />
         <span>Loading Fifth Glide…</span>
       </div>
     </div>

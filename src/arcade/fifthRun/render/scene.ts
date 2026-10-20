@@ -10,7 +10,7 @@ import * as THREE from 'three'
 import { BloomEffect, Effect, EffectComposer, EffectPass, RenderPass, SMAAEffect, SMAAPreset, ToneMappingEffect, ToneMappingMode } from 'postprocessing'
 import { CORNER, laneX } from '../sim/constants'
 import { keyPos, type Corner, type KeyItem, type Obstacle, type Pickup, type PowerKind } from '../sim/track'
-import { buildBarrier, buildBlock, buildGantry, buildPickup, buildPipe } from './props'
+import { buildBarrier, buildPickup, buildPipe } from './props'
 import { UfoChaser } from './ufo'
 import { Cosmos } from './cosmos'
 import { Roadside } from './roadside'
@@ -23,7 +23,7 @@ import { blobTexture, chevronTexture, glowTexture, shootingStarTexture, streakTe
 import { PathLayout, turned, type WorldPt } from './layout'
 import { buildCornerSquare, buildDeckChunk, deckMaterial, DECK_HALF, glowStripMaterial } from './deck'
 import { voidSkyMaterial } from './sky'
-import { buildCadillac } from './cadillac'
+import { buildCrystal, buildSatellite, buildTruss } from './relics'
 import { buildArch, buildIsland, buildTurnSign } from './decor'
 
 export type QualityTier = 'high' | 'low'
@@ -193,14 +193,20 @@ export class FrScene {
   private sparkGeo!: THREE.BufferGeometry
   private darkFade = 1
   private camX = 0
-  private camY = 5.6
+  private camY = 3.9
   private fov = 62
   private camYaw = 0
   private runYaw = 0
   private space = 0
   /** decaying offsets that hide the hop when the runner changes segment at a corner */
-  private offR = new THREE.Vector2()
   private offO = new THREE.Vector2()
+  private offO0 = new THREE.Vector2()
+  private turnT = 1
+  private camYaw0 = 0
+  private runYaw0 = 0
+  private fovKick = 0
+  /** seconds for the camera to swing round a 90° corner */
+  static readonly TURN_S = 0.22
   private pendingTurn: { oldSeg: number; snap: boolean } | null = null
   private runnerLocal = new THREE.Vector3()
   private billQ = new THREE.Quaternion()
@@ -349,11 +355,11 @@ export class FrScene {
 
   private buildComets() {
     const tex = streakTexture()
-    for (let i = 0; i < 4; i++) {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(190, 7), glowMaterial(tex, '#ffd27a', 1))
+    for (let i = 0; i < 12; i++) {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(150 + (i % 3) * 40, 6), glowMaterial(tex, i % 4 === 0 ? '#bfe8ff' : '#ffd27a', 1))
       m.visible = false
       this.skyGroup.add(m)
-      this.comets.push({ mesh: m, t: 0, dur: 1.4, x: 0, y: 0, dx: -1, dy: -0.5, wait: 0.4 + i * 1.3 })
+      this.comets.push({ mesh: m, t: 0, dur: 1.4, x: 0, y: 0, dx: -1, dy: -0.5, wait: 0.2 + i * 0.35 })
     }
   }
 
@@ -421,9 +427,9 @@ export class FrScene {
     }
     add(this.pools.pipe, () => buildPipe(metal), 18)
     add(this.pools.barrier, () => buildBarrier(chev, metal), 24)
-    add(this.pools.overhead, () => buildGantry(chev, metal, this.glow), 24)
-    add(this.pools.block, () => buildBlock(chev, metal), 16)
-    add(this.pools.car, () => buildCadillac(this.glow), 8, false)
+    add(this.pools.overhead, () => buildTruss(this.glow), 24)
+    add(this.pools.block, () => buildCrystal(this.glow), 16)
+    add(this.pools.car, () => buildSatellite(this.glow), 8)
     for (const k of ['hand'] as PowerKind[]) {
       for (let i = 0; i < 2; i++) {
         const p = buildPickup(k, this.glow, emblem)
@@ -543,6 +549,12 @@ export class FrScene {
     if (this.layout.runnerSeg !== old) this.pendingTurn = { oldSeg: old, snap }
   }
 
+  /** Speed-up beat: brief FOV punch. */
+  punch() {
+    this.fovKick = 7
+    this.fov += 3
+  }
+
   applyAnisotropy(root: THREE.Object3D = this.scene) {
     const max = this.renderer.capabilities.getMaxAnisotropy()
     root.traverse((o) => {
@@ -612,34 +624,39 @@ export class FrScene {
     const po = L.pt(seg, S, 0, this.wp2)
     let ox = po.x
     let oz = po.z
+    // ── turn swing: ONE time-based ease drives the camera yaw and the frame-origin hand-off together,
+    // so the camera can't snap, lag on a dt spike, or drift differently at 60 / 120 Hz. Yaw deltas are
+    // wrap-safe (shortest way round ±π). The runner is never moved: the sim re-frames him in place.
+    const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a))
     if (this.pendingTurn) {
       const pt = this.pendingTurn
       this.pendingTurn = null
-      // the sim re-frames s / x onto the new heading with no position change, so there is nothing to
-      // blend: the runner stays planted on the corner square (no slide / airtime). Only the yaw swings.
-      // The camera frame origin (path centre) does move, so that one is still blended.
-      this.offR.set(0, 0)
       if (pt.snap) {
-        this.offO.set(0, 0)
+        this.turnT = 1
+        this.offO0.set(0, 0)
         this.camYaw = segYaw
         this.runYaw = segYaw
+        this.camYaw0 = segYaw
+        this.runYaw0 = segYaw
       } else {
         const b = L.pt(pt.oldSeg, this.lastS, 0, this.wp2)
-        this.offO.set(b.x - ox, b.z - oz)
+        // carry over whatever is left of a previous swing
+        this.offO0.set(b.x - ox + this.offO.x, b.z - oz + this.offO.y)
+        this.camYaw0 = this.camYaw
+        this.runYaw0 = this.runYaw
+        this.turnT = 0
       }
     }
-    const kOff = Math.exp(-dt * 9)
-    this.offR.multiplyScalar(kOff)
-    this.offO.multiplyScalar(kOff)
-    rx += this.offR.x
-    rz += this.offR.y
+    this.turnT = Math.min(1, this.turnT + Math.min(dt, 1 / 30) / FrScene.TURN_S)
+    const e = this.turnT * this.turnT * (3 - 2 * this.turnT)
+    const er = Math.min(1, this.turnT * 1.8)
+    const eR = er * er * (3 - 2 * er)
+    this.offO.copy(this.offO0).multiplyScalar(1 - e)
     ox += this.offO.x
     oz += this.offO.y
     this.lastS = S
-    // smoothed yaw (wrap-safe): the camera swings round the corner, the runner pivots faster
-    const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a))
-    this.runYaw += wrap(segYaw - this.runYaw) * (1 - Math.exp(-dt * 16))
-    this.camYaw += wrap(segYaw - this.camYaw) * (1 - Math.exp(-dt * 6.5))
+    this.camYaw = this.camYaw0 + wrap(segYaw - this.camYaw0) * e
+    this.runYaw = this.runYaw0 + wrap(segYaw - this.runYaw0) * eR
 
     // world → local frame: origin at the path centre under the runner, heading −Z under camYaw
     this.world.rotation.set(0, -this.camYaw, 0)
@@ -698,22 +715,17 @@ export class FrScene {
     this.updateSparks(dt)
     this.updateSky(v, dt)
     this.darkFade += ((v.invisible || v.idle ? 0 : 1) - this.darkFade) * (1 - Math.exp(-dt * (v.invisible ? 1.5 : 2.5)))
-    this.dark.update(t, dt, v.dead && v.deathKind === 'caught' ? 1.5 : v.dead && !v.idle ? 1 : v.threat, this.runnerLocal.x, v.idle ? 0 : Math.max(0.0, this.darkFade), this.camera.quaternion)
+    // Temple Run opening: the UFO starts right on his heels, then falls back to its chase spot
+    const intro = v.idle ? 0 : THREE.MathUtils.clamp(1 - (v.s - 8) / 55, 0, 1)
+    this.dark.update(t, dt, v.dead && v.deathKind === 'caught' ? 1.5 : v.dead && !v.idle ? 1 : Math.max(v.threat, intro * 0.95), this.runnerLocal.x, v.idle ? 0 : Math.max(0.0, this.darkFade), this.camera.quaternion)
     {
       const g = this.dark.group
-      const p = this.ufoNdc.copy(g.position).project(this.camera)
-      const d = Math.max(1, this.camera.position.z - g.position.z)
-      const halfH = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)) * d
-      const mx = (UfoChaser.SIZE.w * 0.5 + 0.1) / (halfH * this.camera.aspect)
-      const my = (UfoChaser.SIZE.h * 0.5 + 0.08) / halfH
-      const cx = THREE.MathUtils.clamp(p.x, -1 + mx, 1 - mx)
-      const cy = THREE.MathUtils.clamp(p.y, -1 + my + 0.04, 1 - my)
-      if (cx !== p.x || cy !== p.y) {
-        p.x = cx
-        p.y = cy
-        p.unproject(this.camera)
-        g.position.copy(p)
-      }
+      // place the chaser in screen space so it always reads big at the lower right, whatever the turn / camera does
+      const po = this.dark.pose
+      const tanH = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2))
+      const tgt = this.ufoNdc.set(po.x * tanH * this.camera.aspect * po.dist, po.y * tanH * po.dist, -po.dist).applyMatrix4(this.camera.matrixWorld)
+      if (this.ufoInit) g.position.lerp(tgt, 1 - Math.exp(-dt * 6))
+      else { g.position.copy(tgt); this.ufoInit = true }
       this.tmpV.copy(this.runnerLocal).setY(this.runnerLocal.y + 0.9)
       this.dark.aim(this.tmpV, !v.idle && this.darkFade > 0.3)
       this.dark.spotlight.position.y = this.runnerLocal.y + 0.03
@@ -1096,7 +1108,7 @@ export class FrScene {
       if (!free) break
       free.slot = j
     }
-    const palmsOn = this.space < 0.55
+    const palmsOn = true
     for (const isl of this.islands) {
       if (isl.slot < 0) {
         isl.group.visible = false
@@ -1188,7 +1200,7 @@ export class FrScene {
       c.t += dt
       const f = c.t / c.dur
       if (f >= 1) {
-        c.wait = 0.8 + Math.random() * 3.2
+        c.wait = 0.3 + Math.random() * 1.6
         c.mesh.visible = false
         continue
       }
@@ -1203,30 +1215,33 @@ export class FrScene {
   }
 
   private camPush = 0
+  private ufoInit = false
   private ufoNdc = new THREE.Vector3()
   private updateCamera(v: ViewState, dt: number) {
     const rl = this.runnerLocal
     const k = 1 - Math.exp(-dt * 7)
     this.camX += (rl.x * 0.62 - this.camX) * k
-    // Temple Run framing: high and pitched down so the chaser right behind him is always in frame
-    const ty = 5.6 + Math.max(0, v.y) * 0.08
+    const ty = 3.9 + Math.max(0, v.y) * 0.08 - (v.idle ? 0 : THREE.MathUtils.clamp(1 - (v.s - 8) / 55, 0, 1)) * 0.9
     this.camY += (ty - this.camY) * (1 - Math.exp(-dt * 6))
     const speedF = THREE.MathUtils.clamp((v.speed - 18) / 22, 0, 1)
     const aspect = this.camera.aspect
     const baseFov = aspect > 0.8 ? 52 : 66
-    const tf = baseFov + speedF * 8 + (v.boost - 1) * 20
+    this.fovKick = Math.max(0, this.fovKick - dt * 9)
+    const tf = baseFov + speedF * 8 + (v.boost - 1) * 20 + this.fovKick
     this.fov += (tf - this.fov) * (1 - Math.exp(-dt * 3))
     const sh = v.shake
     const sx = sh ? (Math.sin(v.time * 61) + Math.sin(v.time * 37)) * 0.06 * sh : 0
     const sy = sh ? Math.sin(v.time * 53) * 0.05 * sh : 0
-    let dz = 7.2 - speedF * 0.4
+    // opening shot: camera starts a little further back and lower so the pursuing UFO fills the frame
+    const intro = v.idle ? 0 : THREE.MathUtils.clamp(1 - (v.s - 8) / 55, 0, 1)
+    let dz = 6.4 - speedF * 0.4 + intro * 1.4
     const push = v.dead ? Math.min(1.2, v.deadT * 1.5) : 0
     this.camPush += (push - this.camPush) * (v.dead ? 1 : 1 - Math.exp(-dt * 4))
     dz -= this.camPush
     // a fall: the camera stays at the rim and looks down after him
     const fall = v.dead && v.deathKind === 'gap' ? Math.min(1, v.deadT * 1.4) : 0
     this.camera.position.set(this.camX + sx, this.camY + sy, rl.z * 0 + dz)
-    this.lookT.set(rl.x * 0.5, 0.3 - fall * 3.5, -11 + fall * 6)
+    this.lookT.set(rl.x * 0.5, 0.7 - fall * 3.5, -13 + fall * 8)
     this.camera.lookAt(this.lookT)
     this.camera.rotation.z += (this.runner.group.rotation.z || 0) * 0.15
     this.camera.fov = this.fov

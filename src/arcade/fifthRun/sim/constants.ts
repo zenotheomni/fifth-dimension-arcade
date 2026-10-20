@@ -15,7 +15,7 @@ export const laneX = (lane: number) => (lane - 1) * LANE_W
  * Forward speed (m/s). Temple Run pace on a narrow sky path: brisk 21 m/s start, ramping toward vmax
  * (≈26 m/s at 1 km, ≈31 m/s at 2.5 km, ≈35 m/s at 5 km).
  */
-export const SPEED = { v0: 21, vmax: 54, k: 2200 }
+export const SPEED = { v0: 24, vmax: 54, k: 2200 }
 export const speedAt = (s: number) => SPEED.v0 + (SPEED.vmax - SPEED.v0) * (s / (s + SPEED.k))
 /**
  * Warm-up distance (≈ first 40 s, easing out linearly): sparse single-car rows, slower oncoming
@@ -25,8 +25,8 @@ export const speedAt = (s: number) => SPEED.v0 + (SPEED.vmax - SPEED.v0) * (s / 
 export const WARM_M = 700
 export const warmAt = (s: number) => (s >= WARM_M ? 0 : s <= 0 ? 1 : 1 - s / WARM_M)
 /** Difficulty 0..1 (pattern mix + spacing). Held at 0 through the first LEVEL_OFFSET metres. */
-export const DIFF_K = 650
-export const LEVEL_OFFSET = 360
+export const DIFF_K = 450
+export const LEVEL_OFFSET = 150
 export const levelAt = (s: number) => (s <= LEVEL_OFFSET ? 0 : (s - LEVEL_OFFSET) / (s - LEVEL_OFFSET + DIFF_K))
 
 /** Jump: fixed airtime / apex (feet height). */
@@ -62,7 +62,7 @@ export const OB = {
   overhead: { bottom: 1.2, len: 0.45, halfW: 0.95 },
   pipe: { bottom: 0.95, top: 1.2, len: 0.3, halfW: 0.95 },
   block: { h: 2.6, len: 1.6, halfW: 0.85 },
-  /** 1959 Cadillac wreck lying across a lane (switch lanes); hits cost a life like a boulder */
+  /** crashed satellite lying across a lane (switch lanes); hits cost a life like a boulder */
   car: { h: 1.5, len: 5.4, halfW: 0.9 },
   gap: { halfW: 1.0 },
 } as const
@@ -84,9 +84,9 @@ export const START_LIVES = 3
  */
 export const CORNER = {
   half: 3.2,
-  armS: 1.0,
+  armS: 1.3,
   /** extra time past the far edge of the corner square you may still turn (+ more during the warm-up) */
-  lateS: 0.1,
+  lateS: 0.28,
   lateWarmS: 0.15,
   segMin: 170,
   segMax: 260,
@@ -94,7 +94,7 @@ export const CORNER = {
   segMaxHard: 140,
   tP: 0.22,
   preS: 1.7,
-  postS: 0.8,
+  postS: 1.9,
   postT: 70,
 }
 /** Path half width the runner can occupy — lane centres are ±LANE_W. */
@@ -140,7 +140,10 @@ export const POWER_TICKS = {
 }
 
 /** Bonus metres per 💫 star. score (= distance) = floor(metres run) + stars × STAR_M */
-export const STAR_M = 3
+export const STAR_M = 5
+/** Streak bonus: every STREAK_EVERY stars in a row pays STREAK_M × (streak / STREAK_EVERY) bonus metres. */
+export const STREAK_EVERY = 10
+export const STREAK_M = 10
 /** Streak tiers (display callouts only). */
 export const COMBO_STEPS = [0, 10, 30, 60, 100]
 export const multFor = (combo: number) => {

@@ -175,7 +175,7 @@
 
 .fr-board {
   position: absolute;
-  top: calc(max(0.7rem, env(safe-area-inset-top)) + 2.25rem);
+  top: calc(max(0.7rem, env(safe-area-inset-top)) + 2.75rem);
   left: 50%;
   transform: translateX(-50%);
   width: min(92%, 360px);
@@ -290,7 +290,7 @@
 
 .fr-chips {
   position: absolute;
-  top: calc(max(0.7rem, env(safe-area-inset-top)) + 6.1rem);
+  top: calc(max(0.7rem, env(safe-area-inset-top)) + 6.6rem);
   left: 50%;
   transform: translateX(-50%);
   width: min(92%, 360px);
@@ -890,13 +890,17 @@
    the sunset, deep space and the white how-to card alike */
 .fr-wordmark {
   position: absolute;
-  top: calc(env(safe-area-inset-top, 0px) + 22px);
+  top: calc(env(safe-area-inset-top, 0px) + 3px);
   left: 50%;
   transform: translateX(-50%);
-  width: min(30vw, 132px);
+  width: min(26vw, 100px);
   height: auto;
   z-index: 6;
   pointer-events: none;
   user-select: none;
-  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.85)) drop-shadow(0 0 6px rgba(10, 4, 24, 0.75));
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.8)) drop-shadow(0 0 6px rgba(10, 4, 24, 0.6));
 }
+
+/* star / streak juice: the star count pops on every pickup */
+.fr-pop { animation: fr-pop 0.22s ease-out; display: inline-flex; }
+@keyframes fr-pop { 0% { transform: scale(1.32); filter: brightness(1.6); } 100% { transform: scale(1); filter: none; } }
