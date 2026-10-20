@@ -250,7 +250,7 @@ export function buildGantry(chev: THREE.Texture, metal: THREE.Material, glow: TH
   const beam = new THREE.Mesh(box(1.98, 0.5, 0.3), beamMat)
   beam.position.y = 1.5
   group.add(beam)
-  const signMat = new THREE.MeshStandardMaterial({ map: chev, emissive: new THREE.Color('#ffc83c'), emissiveMap: chev, emissiveIntensity: 0.9, roughness: 0.4 })
+  const signMat = new THREE.MeshStandardMaterial({ color: '#0d0a14', metalness: 0.6, emissive: new THREE.Color('#ff4d5e'), emissiveMap: chev, emissiveIntensity: 0.55, roughness: 0.35 })
   const sign = new THREE.Mesh(box(1.86, 0.3, 0.02), signMat)
   sign.position.set(0, 1.5, 0.16)
   group.add(sign)

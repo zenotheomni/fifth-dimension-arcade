@@ -690,8 +690,8 @@ export class FrScene {
     }
     this.runner.group.userData.prevX = v.x
     this.runner.update(pose)
-    // runner's yaw is applied on the group; RunnerView sets its own pose inside
-    this.runner.group.rotation.y = this.runYaw
+    // runner's yaw is applied on the group (keep the pose's small bank yaw on top)
+    this.runner.group.rotation.y += this.runYaw
     if (v.dead && v.deathKind === 'gap') this.runner.group.position.y = -Math.min(14, v.deadT * v.deadT * 11)
     this.runnerLocal.copy(this.runner.group.position).applyMatrix4(this.world.matrixWorld)
     if (this.runnerLight) {
