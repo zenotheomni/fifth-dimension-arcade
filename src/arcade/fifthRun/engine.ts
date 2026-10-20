@@ -5,6 +5,7 @@
 import { FIFTH_RUN_COPY } from '../copyLocks'
 import { RuleBot, SKILLS } from './sim/bot'
 import { hudTap, maybeOpenTuneFromUrl, toggleTunePanel } from './tunePanel'
+import { stepAt } from './sim/constants'
 import { BLINK_S, FR_DT, FR_HZ, POWER_TICKS, STAR_M } from './sim/constants'
 import { newRun, queueAction, resetCursors, scoreOf, speedMul, step, type Action, type RunEvent, type RunState } from './sim/runner'
 import { Track } from './sim/track'
@@ -422,8 +423,8 @@ class Engine {
         this.rumbleAt = this.clock
         sfxRumble(0.35 + this.run.threat * 0.4)
       }
-      // speed-up beats: every 450 m a whoosh + FOV punch (the pace keeps climbing)
-      const ms = Math.floor((this.run.s + this.run.sBank) / 450)
+      // speed-up beats: every ramp step (~30 s) a whoosh + FOV punch + 'Speed up!' (no cap)
+      const ms = stepAt(this.run.s)
       if (ms > this.speedMs) {
         this.speedMs = ms
         sfxWhoosh()
@@ -492,6 +493,7 @@ class Engine {
       deathKind: kind === 'fall' ? 'gap' : kind,
       downed,
       idle: this.phase === 'intro' || this.phase === 'loading',
+      slowed: b.slowT > 0 || b.stumble > 0,
       opening: this.phase === 'playing' ? Math.min(1, this.openT / FrEngineOpen.S) : 1,
       lives: b.lives,
       hand: b.hand / FR_HZ,

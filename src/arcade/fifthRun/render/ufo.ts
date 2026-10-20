@@ -214,6 +214,10 @@ export class UfoChaser {
     this.spot.frustumCulled = false
   }
 
+  /** v16: beam/spotlight only while he's slowed after a hit (eased on / off) */
+  beamOn = false
+  private beamK = 0
+
   /** opening flare (intro): 0..1 extra beam / glow */
   flare = 0
 
@@ -256,14 +260,14 @@ export class UfoChaser {
       this.pose.y = -0.74 + 0.1 * near + over * 0.35 + 0.025 * Math.sin(time * 2.2)
       this.pose.dist = 3.9 - 1.2 * near + hunt * 1.4 * (1 - near) + back * 1.5 - over * 1.2
     } else if (v === 'saucer') {
-      // v15 hybrid: B's looming swoop above / behind him (a bit higher), beam on the runner;
-      // a stumble brings it lower and closer, then it rises back as the threat eases
-      const sx = 0.4 * Math.sin(time * 0.75) + 0.08 * Math.sin(time * 1.9)
+      // v16: up high and a little BEHIND him (nearer the camera than he is), following and swooping
+      // gently; a hit no longer brings it in — the spotlight switching on is the threat cue
+      const sx = 0.26 * Math.sin(time * 0.75) + 0.05 * Math.sin(time * 1.9)
       this.swoopV = (sx - this.lastSwoopX) / Math.max(dt, 1e-3)
       this.lastSwoopX = sx
-      this.pose.x = sx * (1 - 0.55 * near)
-      this.pose.y = 0.34 - 0.62 * near - 0.15 * this.lunge + over * 0.2 + 0.04 * Math.sin(time * 1.6)
-      this.pose.dist = 4.9 - 2.0 * near - 0.6 * this.lunge + back * 2 - over * 1.4
+      this.pose.x = sx
+      this.pose.y = 0.52 + over * 0.1 + 0.035 * Math.sin(time * 1.6)
+      this.pose.dist = 4.4 + back * 2 - over * 1.4
     } else if (v === 'b') {
       // large and looming above and behind, swooping side to side; dives lower when it closes in
       const sx = 0.42 * Math.sin(time * 0.75) + 0.08 * Math.sin(time * 1.9)
@@ -303,7 +307,10 @@ export class UfoChaser {
   }
 
   /** Point the searchlight at the runner (local frame), after any on-screen clamping of the craft. */
-  aim(target: THREE.Vector3, visible: boolean) {
+  aim(target: THREE.Vector3, visible0: boolean) {
+    if (this.variant === 'saucer') this.beamK += ((this.beamOn ? 1 : 0) - this.beamK) * (this.beamOn ? 0.35 : 0.12)
+    else this.beamK = 1
+    const visible = visible0 && this.beamK > 0.02
     const g = this.group.position
     this.tmp.copy(target).sub(g)
     const len = Math.max(0.5, this.tmp.length())
@@ -312,9 +319,9 @@ export class UfoChaser {
     this.beam.lookAt(target)
     this.beam.scale.set(1, 1, len)
     this.beam.visible = visible
-    this.beamMat.uniforms.uAmp.value = visible ? (this.variant === 'a' || this.variant === 'saucer' ? 0.55 : 0.35) + 0.45 * this.near + 1.4 * this.flare : 0
+    this.beamMat.uniforms.uAmp.value = visible ? ((this.variant === 'a' || this.variant === 'saucer' ? 0.55 : 0.35) + 0.45 * this.near + 1.4 * this.flare) * this.beamK : 0
     this.spot.position.set(target.x, 0.03, target.z)
     this.spot.visible = visible
-    this.spotMat.uniforms.uAmp.value = 0.35 + 0.4 * this.near + 0.9 * this.flare
+    this.spotMat.uniforms.uAmp.value = (0.35 + 0.4 * this.near + 0.9 * this.flare) * this.beamK
   }
 }

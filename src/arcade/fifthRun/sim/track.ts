@@ -5,7 +5,7 @@
  * only on the seed (never on the player). The path is straight segments joined by 90° corners and
  * T-junctions (`corners`), all addressed by path distance `s`; which way the path bends in 3D is a
  * render concern (render/layout.ts). Kit: low rubble (jump), arches (slide), pipes (either), gaps
- * (jump), missing lanes (narrow sections / edge drop-offs), crystal pylons and crashed satellites
+ * (jump), missing lanes (narrow sections / edge drop-offs), crashed rockets and crashed satellites
  * (switch lanes). Power-up: the Fifth Dimension logo. Collectibles: shooting stars (💫).
  */
 import { hashSeed, mulberry32 } from '../../core/seededRandom'
@@ -77,7 +77,7 @@ export type Pickup = {
   takenTick: number
 }
 
-type Tok = 'E' | 'B' | 'O' | 'P' | 'K' | 'G'
+type Tok = 'E' | 'B' | 'O' | 'P' | 'K' | 'G' | 'H'
 
 type Pattern = { p: string; min: number; w: (L: number) => number }
 
@@ -105,6 +105,10 @@ const PATTERNS: Pattern[] = [
   { p: 'KKG', min: 0.26, w: (L) => 0.2 + 0.8 * L },
   { p: 'BOG', min: 0.3, w: (L) => 0.2 + 0.7 * L },
   { p: 'GKG', min: 0.34, w: (L) => 0.2 + 0.6 * L },
+  // H = pothole: a short missing piece of ONE lane (any lane, the middle one too) — switch round it
+  { p: 'HEE', min: 0.02, w: (L) => 0.9 + 0.3 * L },
+  { p: 'HBE', min: 0.15, w: (L) => 0.3 + 0.5 * L },
+  { p: 'HHE', min: 0.22, w: (L) => 0.2 + 0.6 * L },
 ]
 
 const PERMS = [
@@ -117,14 +121,14 @@ const PERMS = [
 ]
 
 const q = (x: number) => Math.round(x * 100) / 100
-const passable = (t: Tok) => t !== 'K'
+const passable = (t: Tok) => t !== 'K' && t !== 'H'
 
 /** Star coin lines (Temple Run): LINE_MIN..LINE_MAX stars STAR_SPACING m apart, then ≥ LINE_GAP_MIN m (and ≥ ~1.1 s) of nothing. */
 export const STAR_SPACING = 3
 export const LINE_MIN = 8
 /** base line length max; a jump arc / slide trio can add ≤ 2 more, so a line never exceeds 15 */
 export const LINE_MAX = 13
-export const LINE_GAP_MIN = 22
+export const LINE_GAP_MIN = 14
 
 export class Track {
   readonly seed: string
@@ -230,9 +234,10 @@ export class Track {
     const len = q(VOID.minLen + this.r() * (VOID.maxLen - VOID.minLen) * (0.6 + 0.4 * L))
     const end = start + len
     if (end + v * 1.1 + CORNER.half + 8 > this.nextCornerS) return false
-    const narrow = this.r() < 0.5
+    // narrow (only the middle left) · edge drop-off (a side lane gone) · centre hole (the MIDDLE lane gone)
+    const kr = this.r()
     const side = this.r() < 0.5 ? 0 : 2
-    const gone = narrow ? [0, 2] : [side]
+    const gone = kr < 0.3 ? [0, 2] : kr < 0.62 ? [side] : [1]
     for (const l of gone) this.addOb('void', l, start, len)
     this.voids++
     const open = [0, 1, 2].filter((l) => !gone.includes(l))
@@ -284,7 +289,7 @@ export class Track {
 
   private endLine(at: number, v: number) {
     this.lineLeft = 0
-    this.lineGapTo = q(at + Math.max(LINE_GAP_MIN, v * 0.8) + this.r() * 14)
+    this.lineGapTo = q(at + Math.max(LINE_GAP_MIN, v * 0.5) + this.r() * 8)
   }
 
   /** One star of the running line (or the rare 5D logo in its middle when one is due). */
@@ -336,7 +341,7 @@ export class Track {
       let w = L >= p.min ? Math.max(0, p.w(L)) : 0
       // warm-up: multi-car rows fade in only as the warm-up ends
       // warm-up: forced-lane combos (two crates, mixed rows) fade in only as the warm-up ends
-      if (W > 0 && /K.*K|BO|G.*G.*K|GKG/.test(p.p) && p.p !== 'GGG') w *= W > 0.5 ? 0 : 1 - 2 * W
+      if (W > 0 && /K.*K|BO|G.*G.*K|GKG|HH|HB/.test(p.p) && p.p !== 'GGG') w *= W > 0.5 ? 0 : 1 - 2 * W
       ws.push(w)
       total += w
     }
@@ -369,7 +374,7 @@ export class Track {
       let kept = false
       for (let i = 0; i < 3; i++) {
         if (toks[i] === 'E') continue
-        if (kept || toks[i] === 'K' || toks[i] === 'G') toks[i] = 'E'
+        if (kept || toks[i] === 'K' || toks[i] === 'G' || toks[i] === 'H') toks[i] = 'E'
         else kept = true
       }
     }
@@ -387,10 +392,11 @@ export class Track {
 
     // ── route validator: this row must leave at least one passable route from where the runner can be ──
     {
-      const lenOf = (t: Tok) => (t === 'B' ? OB.barrier.len : t === 'O' ? OB.overhead.len : t === 'P' ? OB.pipe.len : t === 'K' ? OB.car.len : t === 'G' ? gapLen : 0)
+      const holeLen = q(Math.min(7, Math.max(3.5, 0.13 * v)))
+      const lenOf = (t: Tok) => (t === 'B' ? OB.barrier.len : t === 'O' ? OB.overhead.len : t === 'P' ? OB.pipe.len : t === 'K' ? OB.car.len : t === 'G' ? gapLen : t === 'H' ? holeLen : 0)
       const mk = (at: number): Row => {
         const len = toks.map(lenOf)
-        return { s0: at, cells: toks as Cell[], len, end: at + Math.max(0, ...len) }
+        return { s0: at, cells: toks.map((t) => (t === 'H' ? 'X' : t)) as Cell[], len, end: at + Math.max(0, ...len) }
       }
       let nx = stepRow(this.reach, this.vEnd, mk(s0), v)
       // 1) give the row a little more room (keeps the pattern)
@@ -426,7 +432,7 @@ export class Track {
         this.addOb('pipe', lane, s0, OB.pipe.len)
         rowEnd = Math.max(rowEnd, s0 + OB.pipe.len)
       } else if (t === 'K') {
-        // crystal pylon or a crashed satellite across the lane
+        // crashed rocket or a crashed satellite across the lane
         if (this.r() < 0.4) {
           this.addOb('car', lane, s0, OB.car.len)
           this.cars++
@@ -435,6 +441,10 @@ export class Track {
           this.addOb('block', lane, s0, OB.block.len)
           rowEnd = Math.max(rowEnd, s0 + OB.block.len)
         }
+      } else if (t === 'H') {
+        const hl = q(Math.min(7, Math.max(3.5, 0.13 * v)))
+        this.addOb('void', lane, s0, hl)
+        rowEnd = Math.max(rowEnd, s0 + hl)
       } else if (t === 'G') {
         this.addOb('gap', lane, s0, gapLen)
         rowEnd = Math.max(rowEnd, s0 + gapLen)
