@@ -38,21 +38,21 @@ function glowMat(color: string, frag = GLOW_FRAG) {
  *   b  the red hunter, large and looming above / behind him, swooping side to side
  *   c  Temple Run "monkeys": a small, toxic-green hunter always on his heels at lower right, lunging in on stumbles
  */
-export type UfoVariant = 'v13' | 'a' | 'b' | 'c'
+export type UfoVariant = 'saucer' | 'v13' | 'a' | 'b' | 'c'
 const UFO_KEY = 'fr.ufoVariant'
+/**
+ * v15: everyone gets the hybrid "saucer" (silver flying saucer, B's looming swoop). The old variants
+ * stay as hidden dev-only options via ?ufo= (never remembered); any old stored pick is cleared.
+ */
 export function pickUfoVariant(): UfoVariant {
   try {
+    globalThis.localStorage?.removeItem(UFO_KEY)
     const q = new URLSearchParams(globalThis.location?.search ?? '').get('ufo')
-    if (q === 'a' || q === 'b' || q === 'c' || q === 'v13') {
-      globalThis.localStorage?.setItem(UFO_KEY, q)
-      return q
-    }
-    const s = globalThis.localStorage?.getItem(UFO_KEY)
-    if (s === 'a' || s === 'b' || s === 'c' || s === 'v13') return s
+    if (q === 'a' || q === 'b' || q === 'c' || q === 'v13') return q
   } catch {
     /* private mode */
   }
-  return 'v13'
+  return 'saucer'
 }
 
 /** live tuning (hidden ?tune=1 panel): chaser distance / size / catch-up speed multipliers */
@@ -86,12 +86,12 @@ export class UfoChaser {
   private lastSwoopX = 0
   private lunge = 0
 
-  constructor(variant: UfoVariant = 'v13') {
+  constructor(variant: UfoVariant = 'saucer') {
     this.variant = variant
     this.group.add(this.craft)
-    this.baseScale = variant === 'a' ? SCALE * 1.5 : variant === 'b' ? SCALE * 1.55 : variant === 'c' ? SCALE * 0.72 : SCALE
+    this.baseScale = variant === 'saucer' ? SCALE * 1.6 : variant === 'a' ? SCALE * 1.5 : variant === 'b' ? SCALE * 1.55 : variant === 'c' ? SCALE * 0.72 : SCALE
     this.craft.scale.setScalar(this.baseScale)
-    if (variant === 'a') {
+    if (variant === 'a' || variant === 'saucer') {
       this.buildSaucer()
       return
     }
@@ -200,7 +200,7 @@ export class UfoChaser {
     this.craft.add(ug)
     // wide tractor beam
     this.beamMat = glowMat('#8ff6ff', BEAM_FRAG)
-    const bg = new THREE.CylinderGeometry(0.12, 1.05, 1, 32, 1, true)
+    const bg = new THREE.CylinderGeometry(0.16, this.variant === 'saucer' ? 1.35 : 1.05, 1, 32, 1, true)
     bg.translate(0, -0.5, 0)
     bg.rotateX(-Math.PI / 2)
     this.beam = new THREE.Mesh(bg, this.beamMat)
@@ -255,6 +255,15 @@ export class UfoChaser {
       this.pose.x = 0.04 * Math.sin(time * 0.8)
       this.pose.y = -0.74 + 0.1 * near + over * 0.35 + 0.025 * Math.sin(time * 2.2)
       this.pose.dist = 3.9 - 1.2 * near + hunt * 1.4 * (1 - near) + back * 1.5 - over * 1.2
+    } else if (v === 'saucer') {
+      // v15 hybrid: B's looming swoop above / behind him (a bit higher), beam on the runner;
+      // a stumble brings it lower and closer, then it rises back as the threat eases
+      const sx = 0.4 * Math.sin(time * 0.75) + 0.08 * Math.sin(time * 1.9)
+      this.swoopV = (sx - this.lastSwoopX) / Math.max(dt, 1e-3)
+      this.lastSwoopX = sx
+      this.pose.x = sx * (1 - 0.55 * near)
+      this.pose.y = 0.34 - 0.62 * near - 0.15 * this.lunge + over * 0.2 + 0.04 * Math.sin(time * 1.6)
+      this.pose.dist = 4.9 - 2.0 * near - 0.6 * this.lunge + back * 2 - over * 1.4
     } else if (v === 'b') {
       // large and looming above and behind, swooping side to side; dives lower when it closes in
       const sx = 0.42 * Math.sin(time * 0.75) + 0.08 * Math.sin(time * 1.9)
@@ -277,14 +286,17 @@ export class UfoChaser {
     this.pose.dist = Math.max(1.6, this.pose.dist * CHASER_TUNE.dist)
     this.craft.scale.setScalar(this.baseScale * CHASER_TUNE.size)
     this.group.position.set(this.x, this.y + bob, this.z)
-    if (v === 'a') {
+    if (v === 'saucer') {
+      this.craft.rotation.set(-0.18, 0, THREE.MathUtils.clamp(-this.swoopV * 0.45, -0.4, 0.4))
+      if (this.ring) this.ring.rotation.y = time * 2.6
+    } else if (v === 'a') {
       this.craft.rotation.set(-0.3 + 0.03 * Math.sin(time * 1.4), 0, 0.04 * Math.sin(time * 1.1))
       if (this.ring) this.ring.rotation.y = time * 2.6
     } else if (v === 'b') this.craft.rotation.set(-0.25, time * 0.7, THREE.MathUtils.clamp(-this.swoopV * 0.5, -0.45, 0.45))
     else this.craft.rotation.set(-0.42 + 0.04 * Math.sin(time * 2.1), time * (v === 'c' ? 2.2 : 0.9), 0.05 * Math.sin(time * 1.7))
     this.group.visible = true
     const pulse = 0.5 + 0.5 * Math.sin(time * (5 + 6 * near))
-    this.eyeMat.emissiveIntensity = v === 'a' ? 1 + 0.8 * pulse + 2 * this.flare : 2.5 + 3 * pulse + 3 * this.flare
+    this.eyeMat.emissiveIntensity = v === 'a' || v === 'saucer' ? 1 + 0.8 * pulse + 2 * this.flare : 2.5 + 3 * pulse + 3 * this.flare
     for (let i = 0; i < this.bladeLights.length; i++) this.bladeLights[i].emissiveIntensity = (i + Math.floor(time * 8)) % 3 === 0 ? 5 : 1.8
     this.under.uniforms.uAmp.value = 0.7 + 0.6 * near + 1.2 * this.flare
     this.beamMat.uniforms.uTime.value = time
@@ -300,7 +312,7 @@ export class UfoChaser {
     this.beam.lookAt(target)
     this.beam.scale.set(1, 1, len)
     this.beam.visible = visible
-    this.beamMat.uniforms.uAmp.value = visible ? (this.variant === 'a' ? 0.5 : 0.35) + 0.45 * this.near + 1.4 * this.flare : 0
+    this.beamMat.uniforms.uAmp.value = visible ? (this.variant === 'a' || this.variant === 'saucer' ? 0.55 : 0.35) + 0.45 * this.near + 1.4 * this.flare : 0
     this.spot.position.set(target.x, 0.03, target.z)
     this.spot.visible = visible
     this.spotMat.uniforms.uAmp.value = 0.35 + 0.4 * this.near + 0.9 * this.flare
