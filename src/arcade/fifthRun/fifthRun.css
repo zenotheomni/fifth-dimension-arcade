@@ -900,3 +900,7 @@
   user-select: none;
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.8)) drop-shadow(0 0 6px rgba(10, 4, 24, 0.6));
 }
+
+/* star / streak juice: the star count pops on every pickup */
+.fr-pop { animation: fr-pop 0.22s ease-out; display: inline-flex; }
+@keyframes fr-pop { 0% { transform: scale(1.32); filter: brightness(1.6); } 100% { transform: scale(1); filter: none; } }

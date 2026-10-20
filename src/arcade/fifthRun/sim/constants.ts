@@ -62,7 +62,7 @@ export const OB = {
   overhead: { bottom: 1.2, len: 0.45, halfW: 0.95 },
   pipe: { bottom: 0.95, top: 1.2, len: 0.3, halfW: 0.95 },
   block: { h: 2.6, len: 1.6, halfW: 0.85 },
-  /** 1959 Cadillac wreck lying across a lane (switch lanes); hits cost a life like a boulder */
+  /** crashed satellite lying across a lane (switch lanes); hits cost a life like a boulder */
   car: { h: 1.5, len: 5.4, halfW: 0.9 },
   gap: { halfW: 1.0 },
 } as const

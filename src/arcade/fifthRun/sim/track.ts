@@ -5,13 +5,13 @@
  * only on the seed (never on the player). The path is straight segments joined by 90° corners and
  * T-junctions (`corners`), all addressed by path distance `s`; which way the path bends in 3D is a
  * render concern (render/layout.ts). Kit: low rubble (jump), arches (slide), pipes (either), gaps
- * (jump), missing lanes (narrow sections / edge drop-offs), crate stacks and 1959 Cadillac wrecks
+ * (jump), missing lanes (narrow sections / edge drop-offs), crystal pylons and crashed satellites
  * (switch lanes). Power-up: the Fifth Dimension logo. Collectibles: shooting stars (💫).
  */
 import { hashSeed, mulberry32 } from '../../core/seededRandom'
 import { CORNER, JUMP_APEX, JUMP_T, OB, VOID, laneX, START_CLEAR_M, levelAt, speedAt, voidChanceAt, warmAt } from './constants'
 
-/** void = a lane of the path is missing (narrow section / edge drop-off); car = static Cadillac wreck */
+/** void = a lane of the path is missing (narrow section / edge drop-off); car = crashed satellite (static, switch lanes) */
 export type ObKind = 'barrier' | 'overhead' | 'pipe' | 'block' | 'gap' | 'void' | 'car'
 
 /** 90° corner (L / R) or T-junction (either way), centred at path distance `s`. */
@@ -374,7 +374,7 @@ export class Track {
         this.addOb('pipe', lane, s0, OB.pipe.len)
         rowEnd = Math.max(rowEnd, s0 + OB.pipe.len)
       } else if (t === 'K') {
-        // crate stack or a wrecked '59 Cadillac across the lane
+        // crystal pylon or a crashed satellite across the lane
         if (this.r() < 0.4) {
           this.addOb('car', lane, s0, OB.car.len)
           this.cars++

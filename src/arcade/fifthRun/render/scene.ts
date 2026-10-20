@@ -1115,7 +1115,7 @@ export class FrScene {
       if (!free) break
       free.slot = j
     }
-    const palmsOn = this.space < 0.55
+    const palmsOn = true
     for (const isl of this.islands) {
       if (isl.slot < 0) {
         isl.group.visible = false

@@ -275,7 +275,7 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
         <div className={`fr-board${hud.phase === 'intro' ? ' is-dim' : ''}`}>
           <div className="fr-cell">
             <span className="fr-cell__label">Stars</span>
-            <span className="fr-cell__value">
+            <span className="fr-cell__value fr-pop" key={hud.keys}>
               <i className="fr-staricon" aria-hidden>💫</i>
               {hud.keys}
             </span>
@@ -367,7 +367,7 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
               <h3>Controls</h3>
               <ul className="fr-howto__controls">
                 <li><b>↰&nbsp;↱</b>The path turns 90°. Swipe left / right at the corner to take it. Too late (or the wrong way) and you run off into the void. A glowing sign and arrows on the floor show which way, and at a T you pick either side</li>
-                <li><b>←&nbsp;→</b>Between corners, swipe left / right to switch lanes, dodge wrecks and grab stars</li>
+                <li><b>←&nbsp;→</b>Between corners, swipe left / right to switch lanes, dodge crystal pylons and crashed satellites and grab stars</li>
                 <li><b>↑</b>Swipe up to jump gaps and low rubble</li>
                 <li><b>↓</b>Swipe down to slide under the red SLIDE laser gates. You can’t jump them. Steel pipes: jump or slide</li>
               </ul>
