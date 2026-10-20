@@ -10,7 +10,7 @@
  */
 import { hashSeed, mulberry32 } from '../../core/seededRandom'
 import { type Cell, type Reach, type Row, anyReach, fresh, stepRow } from './validate'
-import { CORNER, JUMP_APEX, JUMP_T, OB, VOID, laneX, START_CLEAR_M, levelAt, speedAt, voidChanceAt, warmAt } from './constants'
+import { CORNER, JUMP_APEX, JUMP_T, OB, VOID, laneX, START_CLEAR_M, levelAt, pressureAt, speedAt, voidChanceAt, warmAt } from './constants'
 
 /** void = a lane of the path is missing (narrow section / edge drop-off); car = crashed satellite (static, switch lanes) */
 export type ObKind = 'barrier' | 'overhead' | 'pipe' | 'block' | 'gap' | 'void' | 'car'
@@ -128,7 +128,7 @@ export const STAR_SPACING = 3
 export const LINE_MIN = 8
 /** base line length max; a jump arc / slide trio can add ≤ 2 more, so a line never exceeds 15 */
 export const LINE_MAX = 13
-export const LINE_GAP_MIN = 14
+export const LINE_GAP_MIN = 8
 
 export class Track {
   readonly seed: string
@@ -284,6 +284,44 @@ export class Track {
     return true
   }
 
+  /**
+   * v17 bait clusters in a lane other than the safe star line: an arc over a jump obstacle, a low
+   * line under a slide truss, a short run straight up to a rocket / palm or hole (swerve late), or a
+   * lane-switching trail across an open row. Stars only; never inside an obstacle footprint.
+   */
+  private bait(toks: Tok[], path: number, s0: number, v: number, gapLen: number) {
+    const lanes = [0, 1, 2].filter((l) => l !== path).sort(() => this.r() - 0.5)
+    for (const l of lanes) {
+      const t = toks[l]
+      if (t === 'B' || t === 'P' || t === 'G') {
+        const len = t === 'B' ? OB.barrier.len : t === 'P' ? OB.pipe.len : gapLen
+        const mid = s0 + len / 2
+        const half = (v * JUMP_T) / 2
+        for (const f of [-0.5, -0.25, 0, 0.25, 0.5]) this.addKey(l, mid + f * half, JUMP_APEX * (1 - f * f) + 0.85)
+        return
+      }
+      if (t === 'O') {
+        for (const d of [-3.2, -1.5, 0.2, 1.9]) this.addKey(l, s0 + d, 0.45)
+        return
+      }
+      if (t === 'K' || t === 'H') {
+        // a short run that ends right before the hazard: grab and dive out at the last moment
+        const n = 3 + Math.floor(this.r() * 2)
+        for (let i = n; i >= 1; i--) this.addKey(l, s0 - 1.2 - (i - 1) * STAR_SPACING, 0.9)
+        return
+      }
+    }
+    // open row: a lane-switching trail (two lanes, staggered) just before the row
+    const free = [0, 1, 2].filter((l) => toks[l] === 'E' && l !== path)
+    if (free.length >= 1 && this.r() < 0.6) {
+      // zig-zag across the lanes beside the safe line (never on top of it)
+      const a = free[0]
+      const b = free.length > 1 ? free[1] : free[0]
+      const from = s0 - 6 * STAR_SPACING
+      for (let i = 0; i < 6; i++) this.addKey(i < 3 ? a : b, from + i * STAR_SPACING, 0.9)
+    }
+  }
+
   private startLine() {
     this.lineLen = LINE_MIN + Math.floor(this.r() * (LINE_MAX - LINE_MIN + 1))
     this.lineLeft = this.lineLen
@@ -292,7 +330,7 @@ export class Track {
 
   private endLine(at: number, v: number) {
     this.lineLeft = 0
-    this.lineGapTo = q(at + Math.max(LINE_GAP_MIN, v * 0.5) + this.r() * 8)
+    this.lineGapTo = q(at + Math.max(LINE_GAP_MIN, v * 0.3) + this.r() * 6)
   }
 
   /** One star of the running line (or the rare 5D logo in its middle when one is due). */
@@ -515,6 +553,8 @@ export class Track {
       this.starFloor = lastS + STAR_SPACING
       if (this.lineLeft <= 0) this.endLine(lastS, v)
     }
+    // ── v17 risk / reward: bait stars off the safe line, so grabbing them means flirting with danger ──
+    if (this.postCorner <= 0 && W < 0.5 && this.r() < 0.55 + 0.25 * L) this.bait(toks, path, s0, v, gapLen)
     // keep keys sorted by s (bait / floaters can land out of order); only the freshly generated
     // tail (far ahead of the runner) is touched
     const n0 = Math.max(0, this.keys.length - 40)
@@ -527,7 +567,9 @@ export class Track {
     const base = 0.78 - 0.5 * L
     // warm-up: up to ~2.9× the gap between waves at the start line, tapering by WARM_M; a little
     // extra breathing room while the level is still low (fades out as L → 1)
-    const T = Math.max(0.28, base * (0.7 + 0.35 * this.r()) * (1 + 1.6 * W + 0.3 * (1 - L)))
+    // after top speed, waves keep tightening (density-only difficulty); the validator still guards every row
+    const P = pressureAt(s0)
+    const T = Math.max(0.28 - 0.08 * P, base * (0.7 + 0.35 * this.r()) * (1 + 1.6 * W + 0.3 * (1 - L)) * (1 - P))
     this.cursor = q(rowEnd + Math.max(rocketRow ? Math.max(9, v * 0.5) : 5.2, v * T))
     this.rows++
   }

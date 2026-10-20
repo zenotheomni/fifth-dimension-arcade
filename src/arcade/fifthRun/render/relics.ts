@@ -382,3 +382,217 @@ export function buildRocket(glow: THREE.Texture) {
   group.traverse((o) => (o.frustumCulled = false))
   return { group, lamp, pose }
 }
+
+/**
+ * v17: the lane obstacle is a realistic coconut palm standing on the runway (replaces the rocket):
+ * ringed, curved trunk (bark map + bump), a full crown of drooping pinnate fronds (alpha leaf map,
+ * yellowing tips), a coconut cluster, planted in a small patch of cracked, upheaved deck tiles.
+ * Same footprint as before (OB.block); `pose` varies yaw / bend per obstacle. No fire, no smoke.
+ */
+let barkTex: THREE.CanvasTexture | null = null
+let leafTex: THREE.CanvasTexture | null = null
+let soilTex: THREE.CanvasTexture | null = null
+function palmTextures() {
+  if (barkTex && leafTex && soilTex) return { bark: barkTex, leaf: leafTex, soil: soilTex }
+  // bark: grey-brown with leaf-scar rings and fibrous streaks
+  {
+    const c = document.createElement('canvas')
+    c.width = 256
+    c.height = 1024
+    const x = c.getContext('2d')!
+    x.fillStyle = '#6b5a48'
+    x.fillRect(0, 0, 256, 1024)
+    for (let i = 0; i < 900; i++) {
+      const v = 70 + rnd() * 70
+      x.fillStyle = `rgba(${v},${v * 0.85},${v * 0.68},0.25)`
+      x.fillRect(rnd() * 256, rnd() * 1024, 1 + rnd() * 2, 6 + rnd() * 30)
+    }
+    for (let y = 0; y < 1024; y += 26 + rnd() * 10) {
+      x.fillStyle = 'rgba(30,22,16,0.75)'
+      x.fillRect(0, y, 256, 3 + rnd() * 2)
+      x.fillStyle = 'rgba(170,150,120,0.35)'
+      x.fillRect(0, y + 4, 256, 2)
+    }
+    barkTex = new THREE.CanvasTexture(c)
+    barkTex.colorSpace = THREE.SRGBColorSpace
+    barkTex.wrapS = barkTex.wrapT = THREE.RepeatWrapping
+    barkTex.anisotropy = 8
+  }
+  // frond: pinnate leaflets either side of a midrib (alpha), deep green → yellow-brown at the tip
+  {
+    const W = 256
+    const H = 1024
+    const c = document.createElement('canvas')
+    c.width = W
+    c.height = H
+    const x = c.getContext('2d')!
+    x.clearRect(0, 0, W, H)
+    for (let y = 30; y < H - 10; y += 9) {
+      const t = y / H
+      const len = (W / 2 - 6) * Math.sin(Math.PI * Math.min(1, 0.15 + t * 0.95)) * (0.85 + rnd() * 0.15)
+      const g = Math.round(95 + 40 * t + rnd() * 20)
+      const r = Math.round(40 + 120 * Math.max(0, t - 0.75) * 4 * 0.25 + rnd() * 15)
+      x.strokeStyle = `rgb(${r},${g},${Math.round(35 + rnd() * 15)})`
+      x.lineWidth = 4 + rnd() * 2
+      for (const side of [-1, 1]) {
+        x.beginPath()
+        x.moveTo(W / 2, y)
+        x.quadraticCurveTo(W / 2 + side * len * 0.5, y + 8, W / 2 + side * len, y + 26 + rnd() * 10)
+        x.stroke()
+      }
+    }
+    x.strokeStyle = '#8a7a45'
+    x.lineWidth = 6
+    x.beginPath()
+    x.moveTo(W / 2, 0)
+    x.lineTo(W / 2, H)
+    x.stroke()
+    leafTex = new THREE.CanvasTexture(c)
+    leafTex.colorSpace = THREE.SRGBColorSpace
+    leafTex.anisotropy = 8
+  }
+  // planting patch: dark soil with cracked tile edges
+  {
+    const S = 512
+    const c = document.createElement('canvas')
+    c.width = c.height = S
+    const x = c.getContext('2d')!
+    const g = x.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S / 2)
+    g.addColorStop(0, 'rgba(40,30,22,1)')
+    g.addColorStop(0.45, 'rgba(48,36,26,0.95)')
+    g.addColorStop(0.8, 'rgba(25,20,22,0.55)')
+    g.addColorStop(1, 'rgba(0,0,0,0)')
+    x.fillStyle = g
+    x.fillRect(0, 0, S, S)
+    for (let i = 0; i < 18; i++) {
+      let px = S / 2
+      let py = S / 2
+      let a = (i / 18) * Math.PI * 2 + rnd() * 0.3
+      x.beginPath()
+      x.moveTo(px, py)
+      for (let d = 0; d < S * (0.25 + rnd() * 0.2); d += 9) {
+        a += (rnd() - 0.5) * 0.5
+        px += Math.cos(a) * 9
+        py += Math.sin(a) * 9
+        x.lineTo(px, py)
+      }
+      x.strokeStyle = 'rgba(8,6,6,0.85)'
+      x.lineWidth = 1.5 + rnd() * 2
+      x.stroke()
+    }
+    soilTex = new THREE.CanvasTexture(c)
+    soilTex.colorSpace = THREE.SRGBColorSpace
+  }
+  return { bark: barkTex!, leaf: leafTex!, soil: soilTex! }
+}
+
+/** a frond: a ribbon along a drooping arc, wider in the middle, slightly V-folded */
+function frondGeometry(len: number, width: number, droop: number) {
+  const N = 14
+  const pos: number[] = []
+  const uv: number[] = []
+  const idx: number[] = []
+  for (let i = 0; i <= N; i++) {
+    const t = i / N
+    const z = len * t
+    const y = len * (0.35 * t - droop * t * t)
+    const w = width * Math.sin(Math.PI * Math.min(1, 0.12 + t * 0.95))
+    const fold = w * 0.18
+    pos.push(-w / 2, y + fold, z, 0, y, z, w / 2, y + fold, z)
+    uv.push(0, t, 0.5, t, 1, t)
+    if (i < N) {
+      const a = i * 3
+      idx.push(a, a + 3, a + 1, a + 1, a + 3, a + 4, a + 1, a + 4, a + 2, a + 2, a + 4, a + 5)
+    }
+  }
+  const g = new THREE.BufferGeometry()
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
+  g.setIndex(idx)
+  g.computeVertexNormals()
+  return g
+}
+
+export function buildPalmObstacle() {
+  const group = new THREE.Group()
+  const tx = palmTextures()
+  // planting patch + upheaved tiles
+  const patch = new THREE.Mesh(new THREE.CircleGeometry(0.95, 40), new THREE.MeshStandardMaterial({ map: tx.soil, transparent: true, depthWrite: false, roughness: 0.95 }))
+  patch.rotation.x = -Math.PI / 2
+  patch.position.y = 0.012
+  group.add(patch)
+  const tileMat = new THREE.MeshStandardMaterial({ color: '#2a2433', metalness: 0.3, roughness: 0.6 })
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2 + rnd() * 0.35
+    const tile = new THREE.Mesh(new THREE.BoxGeometry(0.3 + rnd() * 0.18, 0.05, 0.2 + rnd() * 0.12), tileMat)
+    tile.position.set(Math.cos(a) * 0.55, 0.05 + rnd() * 0.04, Math.sin(a) * 0.55)
+    tile.rotation.set((rnd() - 0.5) * 0.6, -a, 0.25 + rnd() * 0.35)
+    group.add(tile)
+  }
+  const pivot = new THREE.Group()
+  group.add(pivot)
+  // trunk: tapered, ringed, bent along a gentle curve
+  const H = 3.9
+  const trunkGeo = new THREE.CylinderGeometry(0.13, 0.21, H, 18, 40)
+  trunkGeo.translate(0, H / 2, 0)
+  const p = trunkGeo.getAttribute('position') as THREE.BufferAttribute
+  for (let i = 0; i < p.count; i++) {
+    const y = p.getY(i)
+    const t = y / H
+    const ring = 1 + 0.06 * Math.max(0, Math.sin(t * 150)) // leaf-scar ridges
+    const flare = 1 + 0.5 * Math.max(0, 0.12 - t) * 8 // root flare at the base
+    p.setX(i, p.getX(i) * ring * flare + 0.55 * t * t)
+    p.setZ(i, p.getZ(i) * ring * flare)
+  }
+  trunkGeo.computeVertexNormals()
+  const bark = tx.bark.clone()
+  bark.needsUpdate = true
+  bark.repeat.set(2, 3)
+  const trunk = new THREE.Mesh(trunkGeo, new THREE.MeshStandardMaterial({ map: bark, bumpMap: bark, bumpScale: 3, roughness: 0.92, color: '#b5a693' }))
+  pivot.add(trunk)
+  // crown: fibrous boot + coconuts + fronds
+  const top = new THREE.Vector3(0.55, H, 0)
+  const boot = new THREE.Mesh(new THREE.SphereGeometry(0.22, 16, 12), new THREE.MeshStandardMaterial({ color: '#5a4a30', roughness: 1 }))
+  boot.position.copy(top).add(new THREE.Vector3(0, -0.08, 0))
+  boot.scale.set(1, 0.8, 1)
+  pivot.add(boot)
+  const nutMat = new THREE.MeshStandardMaterial({ color: '#4b5a22', roughness: 0.55 })
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2
+    const n = new THREE.Mesh(new THREE.SphereGeometry(0.1, 14, 10), nutMat)
+    n.position.copy(top).add(new THREE.Vector3(Math.cos(a) * 0.17, -0.24 - (i % 2) * 0.06, Math.sin(a) * 0.17))
+    n.scale.set(1, 1.15, 1)
+    pivot.add(n)
+  }
+  const leafMat = new THREE.MeshStandardMaterial({ map: tx.leaf, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.68, color: '#cfe0b0' })
+  const leafOld = new THREE.MeshStandardMaterial({ map: tx.leaf, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.8, color: '#b8a066' })
+  const fronds = 15
+  for (let i = 0; i < fronds; i++) {
+    const a = (i / fronds) * Math.PI * 2 + rnd() * 0.25
+    const lower = i % 3 === 0
+    const f = new THREE.Mesh(frondGeometry(1.7 + rnd() * 0.5, 0.6 + rnd() * 0.15, lower ? 0.95 : 0.6 + rnd() * 0.2), lower && rnd() < 0.5 ? leafOld : leafMat)
+    f.position.copy(top)
+    f.rotation.order = 'YXZ'
+    f.rotation.y = a
+    f.rotation.x = lower ? 0.35 : -0.15 - rnd() * 0.2
+    f.rotation.z = (rnd() - 0.5) * 0.4
+    pivot.add(f)
+  }
+  // young spear fronds pointing up
+  for (let i = 0; i < 3; i++) {
+    const f = new THREE.Mesh(frondGeometry(1.1, 0.4, 0.15), leafMat)
+    f.position.copy(top)
+    f.rotation.order = 'YXZ'
+    f.rotation.y = (i / 3) * Math.PI * 2
+    f.rotation.x = -1.0
+    pivot.add(f)
+  }
+  const pose = (variant: number) => {
+    // bend direction + yaw vary per obstacle; the trunk base stays on the patch centre
+    pivot.rotation.y = ((variant % 16) / 16) * Math.PI * 2
+    pivot.scale.setScalar(0.92 + ((variant >> 4) % 5) * 0.04)
+  }
+  pose(0)
+  group.traverse((o) => (o.frustumCulled = false))
+  return { group, pose }
+}

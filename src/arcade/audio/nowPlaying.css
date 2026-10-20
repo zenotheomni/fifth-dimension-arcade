@@ -86,3 +86,5 @@
 }
 .fdnp:not(.is-open) .fdnp__btn { height: 2.25rem; padding: 0 0.3rem; }
 .fdnp:not(.is-open) .fdnp__text { max-height: 1.6rem; overflow: hidden; }
+.fdnp.is-unlocked .fdnp__label { color: #ffc94a; text-shadow: 0 0 8px rgba(255, 201, 74, 0.6); }
+.fdnp.is-unlocked.is-open .fdnp__btn { box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45), 0 0 22px rgba(255, 201, 74, 0.45); }

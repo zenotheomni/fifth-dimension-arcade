@@ -31,6 +31,7 @@ import {
   laneX,
   multFor,
   speedAt,
+  RAMP,
 } from './constants'
 import { keyPos, obstacleS, type Corner, type ObKind, type Obstacle, type PowerKind, type Track } from './track'
 
@@ -494,7 +495,8 @@ export function step(st: RunState, track: Track, opts: StepOpts) {
   } else if (st.slide > 0) st.slide--
 
   st.s += st.v * FR_DT
-  st.v = speedAt(st.s) * speedMul(st)
+  // hard top speed: boosts can't push past RAMP.vMax
+  st.v = Math.min(RAMP.vMax, speedAt(st.s) * speedMul(st))
 
   // ── corners ──
   if (corner) {

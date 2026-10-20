@@ -17,14 +17,20 @@ export const laneX = (lane: number) => (lane - 1) * LANE_W
  */
 export const SPEED = { v0: 24, vmax: 54, k: 2200 }
 /**
- * v16 speed ramp: clear steps, one about every RAMP.stepS seconds, no cap. Step k runs at
- * v0 + k·inc; it lasts stepS seconds at that speed, so its length is stepS·v_k metres. Each step
- * blends in over RAMP.blendM metres (no jolt). Speed is a pure function of distance (deterministic).
+ * v17 speed ramp: clear steps, one every RAMP.stepS seconds of running (+inc m/s each), up to a hard
+ * cap RAMP.vMax (≈ the old ×1.5 invincibility surge: fast, not crazy). Step k lasts stepS·v_k metres
+ * and blends in over RAMP.blendM. After the cap, difficulty keeps rising through obstacle density
+ * only (pressureAt). Pure function of distance (deterministic).
  */
-export const RAMP = { v0: 26, inc: 3.8, stepS: 30, blendM: 40 }
+export const RAMP = { v0: 26, inc: 4.2, stepS: 22, blendM: 40, vMax: 48 }
+/** last step index (the one that reaches vMax) */
+export const RAMP_KMAX = Math.ceil((RAMP.vMax - RAMP.v0) / RAMP.inc)
+const vStep = (k: number) => Math.min(RAMP.vMax, RAMP.v0 + RAMP.inc * k)
 const STEP_AT: number[] = [0]
-for (let k = 0; k < 400; k++) STEP_AT.push(STEP_AT[k] + RAMP.stepS * (RAMP.v0 + RAMP.inc * k))
-/** index of the speed step at path distance s (0 = start) */
+for (let k = 0; k < RAMP_KMAX; k++) STEP_AT.push(STEP_AT[k] + RAMP.stepS * vStep(k))
+/** distance where top speed is reached */
+export const CAP_S = STEP_AT[RAMP_KMAX]
+/** index of the speed step at path distance s (0 = start, RAMP_KMAX = top speed) */
 export function stepAt(s: number): number {
   let lo = 0
   let hi = STEP_AT.length - 1
@@ -40,8 +46,11 @@ export const speedAt = (s: number) => {
   const into = Math.max(0, s) - STEP_AT[k]
   const b = k === 0 ? 1 : Math.min(1, into / RAMP.blendM)
   const e = b * b * (3 - 2 * b)
-  return RAMP.v0 + RAMP.inc * (k - 1 + e)
+  return k === 0 ? RAMP.v0 : vStep(k - 1) + (vStep(k) - vStep(k - 1)) * e
 }
+/** post-cap pressure 0..PRESSURE.max: shrinks the gap between obstacle waves after top speed */
+export const PRESSURE = { max: 0.42, overM: 9000 }
+export const pressureAt = (s: number) => (s <= CAP_S ? 0 : Math.min(PRESSURE.max, (PRESSURE.max * (s - CAP_S)) / PRESSURE.overM))
 /**
  * Warm-up distance (≈ first 40 s, easing out linearly): sparse single-car rows, slower oncoming
  * traffic, wider spacing.

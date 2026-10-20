@@ -9,6 +9,7 @@
 - **We Outside** (Jenks ft. Val Underwood) — lobby · `public/audio/lobby-theme.{m4a,mp3}`
 - **Zeno 5** (Jenks) — Court Vision · `public/audio/court-vision-theme.{m4a,mp3}`
 - **Thousand Yard Stare** (Jenks) — Fifth Glide · `public/audio/fifth-glide-theme.{m4a,mp3}`
+- **Song 2** (Jenks, title TBC) — Fifth Glide unlock track · `public/audio/fifth-glide-2.{m4a,mp3}`
 - All © Fifth Dimension Imperial, used with owner permission; details in `public/audio/CREDITS.md`.
 
 ## Engine / runtime

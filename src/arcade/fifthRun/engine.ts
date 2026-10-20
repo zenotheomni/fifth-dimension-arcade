@@ -5,7 +5,7 @@
 import { FIFTH_RUN_COPY } from '../copyLocks'
 import { RuleBot, SKILLS } from './sim/bot'
 import { hudTap, maybeOpenTuneFromUrl, toggleTunePanel } from './tunePanel'
-import { stepAt } from './sim/constants'
+import { RAMP_KMAX, stepAt } from './sim/constants'
 import { BLINK_S, FR_DT, FR_HZ, POWER_TICKS, STAR_M } from './sim/constants'
 import { newRun, queueAction, resetCursors, scoreOf, speedMul, step, type Action, type RunEvent, type RunState } from './sim/runner'
 import { Track } from './sim/track'
@@ -429,7 +429,7 @@ class Engine {
         this.speedMs = ms
         sfxWhoosh()
         this.view?.punch()
-        if (!this.callout) this.say('Speed up!', 'teal', 0.9)
+        if (!this.callout) this.say(ms >= RAMP_KMAX ? 'Top speed!' : 'Speed up!', 'teal', 0.9)
       }
     }
 

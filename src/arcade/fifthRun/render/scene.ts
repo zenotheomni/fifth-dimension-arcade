@@ -23,7 +23,7 @@ import { blobTexture, chevronTexture, glowTexture, shootingStarTexture, streakTe
 import { PathLayout, turned, type Seg, type WorldPt } from './layout'
 import { buildCornerSquare, buildDeckChunk, deckMaterial, DECK_HALF, glowStripMaterial } from './deck'
 import { voidSkyMaterial } from './sky'
-import { buildRocket, buildSatellite, buildTruss } from './relics'
+import { buildPalmObstacle, buildSatellite, buildTruss } from './relics'
 import { buildArch, buildIsland, buildTurnSign } from './decor'
 
 export type QualityTier = 'high' | 'low'
@@ -191,7 +191,7 @@ export class FrScene {
     barrier: { group: THREE.Group; lamp: THREE.MeshStandardMaterial }[]
     overhead: { group: THREE.Group }[]
     pipe: { group: THREE.Group; lamp: THREE.MeshStandardMaterial }[]
-    block: { group: THREE.Group; lamp: THREE.MeshStandardMaterial }[]
+    block: { group: THREE.Group; lamp?: THREE.MeshStandardMaterial; pose?: (variant: number, time: number) => void }[]
     car: { group: THREE.Group }[]
   } = { barrier: [], overhead: [], pipe: [], block: [], car: [] }
   private arches: { group: THREE.Group; tubes: THREE.MeshStandardMaterial[] }[] = []
@@ -451,7 +451,7 @@ export class FrScene {
     add(this.pools.pipe, () => buildPipe(metal), 18)
     add(this.pools.barrier, () => buildBarrier(chev, metal), 24)
     add(this.pools.overhead, () => buildTruss(this.glow), 24)
-    add(this.pools.block, () => buildRocket(this.glow), 16)
+    add(this.pools.block, () => buildPalmObstacle(), 16)
     add(this.pools.car, () => buildSatellite(this.glow), 8)
     for (const k of ['hand'] as PowerKind[]) {
       for (let i = 0; i < 2; i++) {
