@@ -129,8 +129,8 @@ export class UfoChaser {
     const back = 1 - fade
     const over = Math.max(0, k - 1) * 2
     // directly behind him, a little above the deck, so the high chase cam always frames it under / behind him
-    const zT = 2.3 - 1.45 * near - over * 2.4 + back * 0.6
-    const yT = 1.55 + 0.1 * near + over * 1.0 + back * 0.2
+    const zT = 2.3 - 1.2 * near - over * 2.4 + back * 0.6
+    const yT = 1.55 - 0.45 * near + over * 1.0 + back * 0.2
     this.z += (zT - this.z) * (1 - Math.exp(-dt * (zT < this.z ? 7 : 2.5)))
     this.y += (yT - this.y) * (1 - Math.exp(-dt * 3.5))
     const off = 0.55 * Math.sin(time * 0.7) * (1 - near * 0.6)
