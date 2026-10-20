@@ -13,6 +13,7 @@ import { keyPos, type Corner, type KeyItem, type Obstacle, type Pickup, type Pow
 import { buildBarrier, buildBlock, buildGantry, buildPickup, buildPipe } from './props'
 import { UfoChaser } from './ufo'
 import { Cosmos } from './cosmos'
+import { Roadside } from './roadside'
 import { RunnerFigure, type PoseInput, type RunnerView } from './runnerFigure'
 import { loadHumanRunner } from './humanRunner'
 import { neonEnvironment } from './env'
@@ -159,6 +160,7 @@ export class FrScene {
   private skylineMat!: THREE.ShaderMaterial
   private planets: THREE.Object3D[] = []
   private cosmos = new Cosmos()
+  private roadside = new Roadside(DECK_HALF, VIEW_AHEAD)
   private deckMat: THREE.MeshStandardMaterial
   private stripMat: THREE.MeshBasicMaterial
   private chunks = new Map<string, Chunk>()
@@ -191,7 +193,7 @@ export class FrScene {
   private sparkGeo!: THREE.BufferGeometry
   private darkFade = 1
   private camX = 0
-  private camY = 3.9
+  private camY = 5.6
   private fov = 62
   private camYaw = 0
   private runYaw = 0
@@ -261,7 +263,7 @@ export class FrScene {
     this.buildPools(logo ?? emblem)
     this.buildDecor()
     this.dark = new UfoChaser()
-    this.scene.add(this.dark.group)
+    this.scene.add(this.dark.group, this.dark.spotlight)
     this.buildKeys()
 
     // ── runner + fx ──
@@ -433,6 +435,7 @@ export class FrScene {
   }
 
   private buildDecor() {
+    this.world.add(this.roadside.palms, this.roadside.pots, this.roadside.towers)
     for (let i = 0; i < 4; i++) {
       const a = buildArch(this.glow, this.emblem)
       a.group.visible = false
@@ -711,6 +714,9 @@ export class FrScene {
         p.unproject(this.camera)
         g.position.copy(p)
       }
+      this.tmpV.copy(this.runnerLocal).setY(this.runnerLocal.y + 0.9)
+      this.dark.aim(this.tmpV, !v.idle && this.darkFade > 0.3)
+      this.dark.spotlight.position.y = this.runnerLocal.y + 0.03
     }
     const sh = this.deckMat.userData.shader as { uniforms: { uTime: { value: number } } } | undefined
     if (sh) sh.uniforms.uTime.value = t
@@ -1030,6 +1036,7 @@ export class FrScene {
 
   /** Arches at every segment start + every ~150 m, turn signs at corners, floating islands. */
   private updateDecor(v: ViewState) {
+    this.roadside.update(v.s, VIEW_AHEAD, this.layout, v.corners, v.time)
     const S = v.s
     const L = this.layout
     const t = v.time
@@ -1201,7 +1208,8 @@ export class FrScene {
     const rl = this.runnerLocal
     const k = 1 - Math.exp(-dt * 7)
     this.camX += (rl.x * 0.62 - this.camX) * k
-    const ty = 3.9 + Math.max(0, v.y) * 0.08
+    // Temple Run framing: high and pitched down so the chaser right behind him is always in frame
+    const ty = 5.6 + Math.max(0, v.y) * 0.08
     this.camY += (ty - this.camY) * (1 - Math.exp(-dt * 6))
     const speedF = THREE.MathUtils.clamp((v.speed - 18) / 22, 0, 1)
     const aspect = this.camera.aspect
@@ -1211,14 +1219,14 @@ export class FrScene {
     const sh = v.shake
     const sx = sh ? (Math.sin(v.time * 61) + Math.sin(v.time * 37)) * 0.06 * sh : 0
     const sy = sh ? Math.sin(v.time * 53) * 0.05 * sh : 0
-    let dz = 6.4 - speedF * 0.4
+    let dz = 7.2 - speedF * 0.4
     const push = v.dead ? Math.min(1.2, v.deadT * 1.5) : 0
     this.camPush += (push - this.camPush) * (v.dead ? 1 : 1 - Math.exp(-dt * 4))
     dz -= this.camPush
     // a fall: the camera stays at the rim and looks down after him
     const fall = v.dead && v.deathKind === 'gap' ? Math.min(1, v.deadT * 1.4) : 0
     this.camera.position.set(this.camX + sx, this.camY + sy, rl.z * 0 + dz)
-    this.lookT.set(rl.x * 0.5, 0.7 - fall * 3.5, -13 + fall * 8)
+    this.lookT.set(rl.x * 0.5, 0.3 - fall * 3.5, -11 + fall * 6)
     this.camera.lookAt(this.lookT)
     this.camera.rotation.z += (this.runner.group.rotation.z || 0) * 0.15
     this.camera.fov = this.fov

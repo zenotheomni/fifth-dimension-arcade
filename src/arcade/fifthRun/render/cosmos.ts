@@ -171,12 +171,12 @@ function makeSaucer() {
   const g = new THREE.Group()
   const prof = [new THREE.Vector2(0, -0.12), new THREE.Vector2(0.45, -0.1), new THREE.Vector2(0.92, -0.03), new THREE.Vector2(1, 0), new THREE.Vector2(0.9, 0.05), new THREE.Vector2(0.5, 0.1), new THREE.Vector2(0, 0.11)]
   g.add(new THREE.Mesh(new THREE.LatheGeometry(prof, 40), new THREE.MeshStandardMaterial({ color: '#c8ccd8', metalness: 0.7, roughness: 0.3, emissive: new THREE.Color('#1f2944'), emissiveIntensity: 1 })))
-  const dome = new THREE.Mesh(new THREE.SphereGeometry(0.42, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshStandardMaterial({ color: '#9ff', emissive: new THREE.Color('#2ad8ff'), emissiveIntensity: 2.5, transparent: true, opacity: 0.9 }))
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(0.42, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshStandardMaterial({ color: '#b8c4d0', emissive: new THREE.Color('#6a8090'), emissiveIntensity: 0.6, metalness: 0.4, roughness: 0.3 }))
   dome.position.y = 0.08
   g.add(dome)
-  const lightMat = new THREE.MeshBasicMaterial({ color: '#ff5ad0' })
+  const lightMat = new THREE.MeshBasicMaterial({ color: '#d8dce6' })
   for (let i = 0; i < 10; i++) {
-    const b = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), i % 2 ? lightMat : new THREE.MeshBasicMaterial({ color: '#7ff6ff' }))
+    const b = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), lightMat)
     const a = (i / 10) * Math.PI * 2
     b.position.set(Math.cos(a), 0, Math.sin(a))
     g.add(b)
@@ -186,7 +186,7 @@ function makeSaucer() {
     new THREE.ShaderMaterial({
       transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
       vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
-      fragmentShader: 'varying vec2 vUv; void main(){ float r = length(vUv-0.5)*2.0; float g = 1.0 - smoothstep(0.0,1.0,r); gl_FragColor = vec4(vec3(0.6,0.35,1.0)*g*g, 1.0); }',
+      fragmentShader: 'varying vec2 vUv; void main(){ float r = length(vUv-0.5)*2.0; float g = 1.0 - smoothstep(0.0,1.0,r); gl_FragColor = vec4(vec3(0.35,0.4,0.5)*g*g, 1.0); }',
     }),
   )
   glow.rotation.x = Math.PI / 2
@@ -372,7 +372,7 @@ export class Cosmos {
           u.b.set(dir * (40 + Math.random() * 25), y + (Math.random() - 0.5) * 10, z + (Math.random() - 0.3) * 40)
           u.t = 0
           u.dur = 2.2 + Math.random() * 1.6
-          u.g.scale.setScalar(1.6 + Math.random() * 1.4)
+          u.g.scale.setScalar(0.9 + Math.random() * 0.5)
         }
         continue
       }
