@@ -167,6 +167,10 @@ function blackHoleMaterial() {
         float shadow = 1.0 - smoothstep(0.27, 0.29, r);
         float a = max(shadow * (1.0 - front), max(max(ring, arc), photon) * 0.95);
         c = mix(c, vec3(0.0), shadow * (1.0 - front));
+        // gravitational lensing: a thin bright Einstein ring and a soft bluish halo of bent starlight
+        float ein = smoothstep(0.035, 0.0, abs(r - 0.52)) * (0.7 + 0.3 * sin(atan(q.y, q.x) * 7.0 + uTime));
+        c += vec3(0.75, 0.85, 1.0) * ein * 0.9 + vec3(0.35, 0.45, 0.9) * exp(-abs(r - 0.55) * 9.0) * 0.35;
+        a = max(a, ein * 0.8);
         a = max(a, smoothstep(1.0, 0.3, r) * 0.15);
         gl_FragColor = vec4(c, a * uA);
       }`,
@@ -180,6 +184,8 @@ type Body = {
   az: number
   el: number
   dist: number
+  /** scale multiplier for this pass (close flybys are huge) */
+  big?: number
   /** −1 / 1: the side of the heading it drifts toward */
   side: number
   rate: number
@@ -216,6 +222,43 @@ function makeSaucer() {
   return g
 }
 
+/** Sleek starship: tapered hull, swept wings, cockpit glint, twin engine glows + a fading trail. */
+function makeShip(tint: string) {
+  const g = new THREE.Group()
+  const hullMat = new THREE.MeshStandardMaterial({ color: '#9aa3b4', metalness: 0.85, roughness: 0.28, emissive: new THREE.Color('#141a2a'), emissiveIntensity: 1 })
+  const hull = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.32, 3.2, 10), hullMat)
+  hull.rotation.x = -Math.PI / 2 // nose along −Z
+  g.add(hull)
+  const wingGeo = new THREE.BufferGeometry()
+  wingGeo.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, -0.4, 1.9, 0, 1.2, 0, 0, 1.3, 0, 0, -0.4, 0, 0, 1.3, -1.9, 0, 1.2], 3))
+  wingGeo.computeVertexNormals()
+  g.add(new THREE.Mesh(wingGeo, new THREE.MeshStandardMaterial({ color: '#6d7588', metalness: 0.8, roughness: 0.35, side: THREE.DoubleSide })))
+  const cock = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 8), new THREE.MeshStandardMaterial({ color: '#0a1a2a', emissive: new THREE.Color('#5fd8ff'), emissiveIntensity: 1.2, metalness: 0.3, roughness: 0.1 }))
+  cock.scale.set(1, 0.7, 2)
+  cock.position.set(0, 0.16, -0.5)
+  g.add(cock)
+  const glowMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(tint).multiplyScalar(3), toneMapped: false })
+  for (const x of [-0.22, 0.22]) {
+    const e = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), glowMat)
+    e.position.set(x, 0, 1.62)
+    g.add(e)
+  }
+  const trail = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.5, 7),
+    new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+      uniforms: { uC: { value: new THREE.Color(tint) } },
+      vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
+      fragmentShader: 'uniform vec3 uC; varying vec2 vUv; void main(){ float a = pow(vUv.y, 2.0) * (1.0 - smoothstep(0.1, 0.5, abs(vUv.x-0.5))); gl_FragColor = vec4(uC * a * 1.6, 1.0); }',
+    }),
+  )
+  trail.rotation.x = -Math.PI / 2
+  trail.position.z = 5.1
+  g.add(trail)
+  g.traverse((o) => (o.frustumCulled = false))
+  return g
+}
+
 const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a))
 
 export class Cosmos {
@@ -229,6 +272,7 @@ export class Cosmos {
   private lastS = 0
   private rng = 1
   private saucers: { g: THREE.Group; t: number; dur: number; wait: number; a: THREE.Vector3; b: THREE.Vector3; spin: number }[] = []
+  private ships: { g: THREE.Group; t: number; dur: number; wait: number; a: THREE.Vector3; b: THREE.Vector3; spin: number }[] = []
   private tmp = new THREE.Vector3()
   private camPos = new THREE.Vector3()
   /** world-space flyby root (scene child, camera frame) */
@@ -240,9 +284,9 @@ export class Cosmos {
       const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), blackHoleMaterial())
       this.holes.push(this.body(m, [m.material as THREE.ShaderMaterial], true))
     }
-    const tints = ['#b48cff', '#7fd4ff', '#ffb8d8', '#9fffe0']
+    const gt = ['#b48cff', '#7fd4ff', '#ffb8d8', '#9fffe0']
     for (let i = 0; i < 8; i++) {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), galaxyMaterial(i * 1.7, new THREE.Color(tints[i % 4])))
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), galaxyMaterial(i * 1.7, new THREE.Color(gt[i % 4])))
       const b = this.body(m, [m.material as THREE.ShaderMaterial], true)
       b.live = true
       b.az = (i / 8) * Math.PI * 2 + 0.25
@@ -251,6 +295,13 @@ export class Cosmos {
       m.scale.set(230 + (i % 4) * 40, 140 + (i % 3) * 30, 1)
       m.userData.roll = i * 0.9
       this.galaxies.push(b)
+    }
+    const tints = ['#2de2e6', '#ff6f61', '#9d4dff', '#ffc94a', '#2de2e6']
+    for (let i = 0; i < 5; i++) {
+      const g = makeShip(tints[i])
+      g.visible = false
+      this.flyers.add(g)
+      this.ships.push({ g, t: 0, dur: 3, wait: 2 + i * 2.6, a: new THREE.Vector3(), b: new THREE.Vector3(), spin: 0 })
     }
     for (let i = 0; i < 2; i++) {
       const g = makeSaucer()
@@ -291,6 +342,7 @@ export class Cosmos {
     }
     const size: Record<PlanetKind, number> = { earth: 70, saturn: 85, jupiter: 120, mars: 48, neptune: 62, moon: 36, mercury: 32, venus: 64, uranus: 66, pluto: 26, io: 30, europa: 30 }
     g.scale.setScalar(size[kind])
+    g.userData.base = size[kind]
     return this.body(g, mats, false)
   }
 
@@ -300,8 +352,13 @@ export class Cosmos {
     // portrait view is only ~±0.3 rad wide: spawn inside it, a little off the path's vanishing point
     b.az = camYaw + b.side * (near ? 0.12 + this.r() * 0.08 : 0.05 + this.r() * 0.12)
     b.el = 0.1 + this.r() * 0.22
-    b.dist = 900 + this.r() * 300
-    b.rate = 0.00035 + this.r() * 0.00025 // rad per metre run → ~15–25 s to drift out of frame
+    // varied depths: a third pass HUGE and close (sweeping by fast), the rest mid or far and slow
+    const roll = this.r()
+    const close = !near && roll < 0.34
+    b.dist = close ? 520 + this.r() * 120 : roll > 0.75 ? 1500 + this.r() * 300 : 900 + this.r() * 300
+    b.big = close ? 2.6 + this.r() * 1.4 : roll > 0.75 ? 0.7 : 1
+    if (close) b.az = camYaw + b.side * (0.16 + this.r() * 0.08)
+    b.rate = close ? 0.0011 + this.r() * 0.0005 : 0.00035 + this.r() * 0.00025 // rad per metre run
     b.live = true
   }
 
@@ -325,7 +382,7 @@ export class Cosmos {
     this.group.updateMatrixWorld(true)
     const vis = THREE.MathUtils.smoothstep(space, 0.05, 0.45)
     // keep up to two planets and (deeper in) one black hole in the sky
-    const want = space > 0.6 ? 3 : space > 0.05 ? 2 : 1
+    const want = space > 0.5 ? 3 : 2
     let live = 0
     for (const p of this.planets) if (p.live) live++
     if (active && live < want) {
@@ -339,8 +396,8 @@ export class Cosmos {
         this.next++
       }
     }
-    if (active && space > 0.4 && !this.holes.some((h) => h.live) && Math.floor(s / 600) % 2 === 1) {
-      const h = this.holes[Math.floor(s / 1200) % 2]
+    if (active && space > 0.2 && !this.holes.some((h) => h.live) && Math.floor(s / 400) % 2 === 1) {
+      const h = this.holes[Math.floor(s / 800) % 2]
       this.spawn(h, camYaw, false)
       h.el = 0.2 + this.r() * 0.12
       h.az = camYaw - Math.sign(wrap(h.az - camYaw) || 1) * 0.08
@@ -373,6 +430,7 @@ export class Cosmos {
       }
       const fadeIn = 1
       const fadeOut = 1 - THREE.MathUtils.smoothstep(Math.abs(rel), 0.4, 0.55)
+      if (!b.billboard && b.g.userData.base) b.g.scale.setScalar(b.g.userData.base * (b.big ?? 1))
       const base = this.holes.includes(b) ? vis : Math.max(0.75, vis)
       place(b, base * fadeIn * fadeOut)
     }
@@ -382,6 +440,37 @@ export class Cosmos {
 
   /** Extra UFOs zipping across the sky (camera frame, not the chaser). */
   updateFlyers(dt: number, time: number, active: boolean) {
+    // starships at varied depths: near ones streak by big, far ones crawl across small
+    for (const u of this.ships) {
+      if (u.wait > 0) {
+        u.wait -= active ? dt : 0
+        u.g.visible = false
+        if (u.wait <= 0) {
+          const depth = Math.random()
+          const z = -30 - depth * depth * 380
+          const span = 30 + -z * 0.7
+          const dir = Math.random() < 0.5 ? -1 : 1
+          const y = 5 + Math.random() * (10 + -z * 0.12)
+          u.a.set(-dir * span, y, z + (Math.random() - 0.5) * 20)
+          u.b.set(dir * span, y + (Math.random() - 0.5) * 8, z - 10 - Math.random() * 40)
+          u.t = 0
+          u.dur = 2.0 + depth * 6 + Math.random() * 1.5
+          u.g.scale.setScalar(1.2 + depth * 4)
+        }
+        continue
+      }
+      u.t += dt
+      const f = u.t / u.dur
+      if (f >= 1) {
+        u.wait = 1.5 + Math.random() * 5
+        u.g.visible = false
+        continue
+      }
+      u.g.visible = true
+      u.g.position.lerpVectors(u.a, u.b, f)
+      this.tmp.subVectors(u.b, u.a)
+      u.g.rotation.set(0, Math.atan2(-this.tmp.x, -this.tmp.z), (u.b.x > u.a.x ? -1 : 1) * 0.35)
+    }
     for (const u of this.saucers) {
       if (u.wait > 0) {
         u.wait -= active ? dt : 0

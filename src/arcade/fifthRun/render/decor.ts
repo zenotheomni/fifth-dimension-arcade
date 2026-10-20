@@ -115,6 +115,42 @@ let palmGeo: THREE.BufferGeometry | null = null
 let palmMat: THREE.Material | null = null
 
 /** Floating island: a jagged rock with a flat grassy top and palms (or a bare asteroid). */
+const NEON = ['#2de2e6', '#ff6f61', '#9d4dff', '#ffc94a']
+const SIGN_WORDS = ['5D', 'ARCADE', 'FIFTH', 'GLIDE', 'OPEN', 'VOID']
+let signTex: THREE.CanvasTexture | null = null
+/** one shared neon-sign atlas (6 words × 1 row), glow baked in */
+function neonSignTexture() {
+  if (signTex) return signTex
+  const c = document.createElement('canvas')
+  c.width = 1536
+  c.height = 128
+  const x = c.getContext('2d')!
+  x.fillStyle = '#000'
+  x.fillRect(0, 0, c.width, c.height)
+  SIGN_WORDS.forEach((w, i) => {
+    const col = NEON[i % 4]
+    x.font = '900 70px system-ui, sans-serif'
+    x.textAlign = 'center'
+    x.textBaseline = 'middle'
+    x.shadowColor = col
+    for (const [b, a] of [[28, 0.9], [12, 1]] as const) {
+      x.shadowBlur = b
+      x.globalAlpha = a
+      x.fillStyle = col
+      x.fillText(w, i * 256 + 128, 66)
+    }
+    x.shadowBlur = 0
+    x.fillStyle = '#fff'
+    x.globalAlpha = 0.85
+    x.fillText(w, i * 256 + 128, 66)
+    x.globalAlpha = 1
+  })
+  signTex = new THREE.CanvasTexture(c)
+  signTex.colorSpace = THREE.SRGBColorSpace
+  signTex.anisotropy = 4
+  return signTex
+}
+
 export function buildIsland(seed: number) {
   const group = new THREE.Group()
   const g = rockGeometry(seed, 1, 1, 1, 3)
@@ -146,5 +182,27 @@ export function buildIsland(seed: number) {
     group.add(p)
     palms.push(p)
   }
+  // neon: a glowing rim strip round the top edge + a hanging strip under it, and a sign on a mast
+  const k = Math.abs(Math.floor(seed * 7)) % 4
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(0.84, 0.012, 6, 64), new THREE.MeshBasicMaterial({ color: new THREE.Color(NEON[k]).multiplyScalar(2.2), toneMapped: false }))
+  rim.rotation.x = Math.PI / 2
+  rim.position.y = 0.265
+  group.add(rim)
+  const rim2 = new THREE.Mesh(new THREE.TorusGeometry(0.7, 0.008, 6, 48), new THREE.MeshBasicMaterial({ color: new THREE.Color(NEON[(k + 2) % 4]).multiplyScalar(1.8), toneMapped: false }))
+  rim2.rotation.x = Math.PI / 2
+  rim2.position.y = 0.05
+  group.add(rim2)
+  const word = Math.abs(Math.floor(seed * 13)) % SIGN_WORDS.length
+  const tex = neonSignTexture().clone()
+  tex.needsUpdate = true
+  tex.repeat.set(1 / SIGN_WORDS.length, 1)
+  tex.offset.set(word / SIGN_WORDS.length, 0)
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.155), new THREE.MeshBasicMaterial({ map: tex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }))
+  sign.position.set(-0.3, 0.62, 0.35)
+  sign.rotation.y = 0.4
+  group.add(sign)
+  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.36, 5), new THREE.MeshStandardMaterial({ color: '#222', metalness: 0.8, roughness: 0.4 }))
+  mast.position.set(-0.3, 0.44, 0.35)
+  group.add(mast)
   return { group, rock, top, palms }
 }
