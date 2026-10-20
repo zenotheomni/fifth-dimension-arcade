@@ -4,6 +4,7 @@
  */
 import { FIFTH_RUN_COPY } from '../copyLocks'
 import { RuleBot, SKILLS } from './sim/bot'
+import { hudTap, maybeOpenTuneFromUrl, toggleTunePanel } from './tunePanel'
 import { BLINK_S, FR_DT, FR_HZ, POWER_TICKS, STAR_M } from './sim/constants'
 import { newRun, queueAction, resetCursors, scoreOf, speedMul, step, type Action, type RunEvent, type RunState } from './sim/runner'
 import { Track } from './sim/track'
@@ -26,6 +27,7 @@ import {
   sfxLineDone,
   sfxSlide,
   sfxStart,
+  sfxRunHit,
   unlockSfx,
 } from './sfx'
 import type { FrBridge, FrHudState, FrMode, FrPhase } from './types'
@@ -69,6 +71,8 @@ function detectTier(): QualityTier {
   return 'high'
 }
 
+
+const FrEngineOpen = { S: 2.6 }
 
 class Engine {
   host: HTMLElement
@@ -157,6 +161,7 @@ class Engine {
     this.ro.observe(this.canvas)
     window.addEventListener('orientationchange', this.onOrient)
     window.addEventListener('pointerdown', this.onDown)
+    maybeOpenTuneFromUrl()
     window.addEventListener('pointermove', this.onMove)
     window.addEventListener('pointerup', this.onUp)
     window.addEventListener('pointercancel', this.onCancel)
@@ -181,7 +186,9 @@ class Engine {
   private onDown = (e: PointerEvent) => {
     // swipes may start anywhere on the game (HUD, callouts…), just not on real controls / overlays
     const tg = e.target as Element | null
-    if (tg && tg.closest && tg.closest('button, a, input, label, .fr-howto, .fr-end')) return
+    if (tg && tg.closest && tg.closest('button, a, input, label, .fr-howto, .fr-end, .fr-tune')) return
+    // the HUD is pointer-events:none, so a tap on its strip (top of the screen) counts as a HUD tap
+    if (e.clientY < window.innerHeight * 0.17) hudTap()
     unlockSfx()
     if (this.phase === 'paused') {
       this.resume()
@@ -213,6 +220,7 @@ class Engine {
     const dt = performance.now() - tc.t
     if (d >= 12 && d / Math.max(dt, 1) > 0.25) this.swipe(dx, dy)
     else if (this.phase === 'intro' && !this.locked) this.start(null)
+    else if (this.phase === 'playing') this.skipOpening()
   }
 
   private swipe(dx: number, dy: number) {
@@ -274,6 +282,21 @@ class Engine {
   }
 
   private speedMs = 0
+  /** opening cinematic clock (s); OPEN_S = done. A tap skips it. */
+  private openT = 99
+  private runHit = true
+  private skipOpening() {
+    if (this.openT >= FrEngineOpen.S) return
+    this.openT = FrEngineOpen.S
+    this.fireRun()
+  }
+  private fireRun() {
+    if (this.runHit) return
+    this.runHit = true
+    sfxRunHit()
+    this.shake = Math.max(this.shake, 0.5)
+    this.say('RUN!', 'coral', 0.9)
+  }
   private nearAt = -10
   /** While true (pre-run how-to screen is up), swipes/keys/taps don't start the run. */
   locked = false
@@ -296,9 +319,10 @@ class Engine {
     if (this.phase !== 'intro') return
     this.phase = 'playing'
     this.startedAt = this.clock
-    sfxStart()
+    sfxWhoosh()
     this.biomeCalled = 0
-    this.say(FIFTH_RUN_COPY.START, 'teal', 1.6)
+    this.openT = 0
+    this.runHit = false
     if (first) queueAction(this.run, first)
     this.emitHud(true)
   }
@@ -389,6 +413,10 @@ class Engine {
       if (this.deadT > 1.45) this.finish()
     }
 
+    if (this.phase === 'playing' && this.openT < FrEngineOpen.S) {
+      this.openT += dt
+      if (this.openT >= FrEngineOpen.S * 0.56) this.fireRun()
+    }
     if (this.phase === 'playing') {
       if (this.run.threat > 0.3 && this.clock - this.rumbleAt > 1.6) {
         this.rumbleAt = this.clock
@@ -464,6 +492,7 @@ class Engine {
       deathKind: kind === 'fall' ? 'gap' : kind,
       downed,
       idle: this.phase === 'intro' || this.phase === 'loading',
+      opening: this.phase === 'playing' ? Math.min(1, this.openT / FrEngineOpen.S) : 1,
       lives: b.lives,
       hand: b.hand / FR_HZ,
       threat: b.threat,
@@ -550,6 +579,8 @@ class Engine {
         if (!e.respawn) sfxLane()
         break
       case 'turnQ':
+        // the camera starts rotating the instant the swipe is accepted, not at the corner centre
+        this.view?.preTurn(e.id, e.dir, this.track.corners)
         break
       case 'near': {
         sfxNear()
@@ -755,6 +786,7 @@ class Engine {
     document.documentElement.style.overscrollBehavior = this.prevOverscroll
     this.dbg?.destroy()
     window.removeEventListener('pointerdown', this.onDown)
+    toggleTunePanel(false)
     window.removeEventListener('pointermove', this.onMove)
     window.removeEventListener('pointerup', this.onUp)
     window.removeEventListener('pointercancel', this.onCancel)

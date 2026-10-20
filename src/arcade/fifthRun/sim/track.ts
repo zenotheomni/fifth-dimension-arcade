@@ -9,6 +9,7 @@
  * (switch lanes). Power-up: the Fifth Dimension logo. Collectibles: shooting stars (💫).
  */
 import { hashSeed, mulberry32 } from '../../core/seededRandom'
+import { type Cell, type Reach, type Row, anyReach, fresh, stepRow } from './validate'
 import { CORNER, JUMP_APEX, JUMP_T, OB, VOID, laneX, START_CLEAR_M, levelAt, speedAt, voidChanceAt, warmAt } from './constants'
 
 /** void = a lane of the path is missing (narrow section / edge drop-off); car = crashed satellite (static, switch lanes) */
@@ -154,6 +155,11 @@ export class Track {
   private lastTurns: CornerKind[] = []
   voids = 0
   cars = 0
+  /** route validator state: per-lane reach after the last row, and the last row's far end */
+  private reach: Reach = fresh(0)
+  private vEnd = 0
+  /** rows the validator had to push back or thin out (should be rare) */
+  repairs = 0
 
   constructor(seed: string) {
     this.seed = seed
@@ -203,6 +209,8 @@ export class Track {
     this.cursor = after
     this.prevEnd = after
     this.postCorner = 2
+    this.reach = fresh(after)
+    this.vEnd = after
     this.starFloor = after + 2
     const segMin = CORNER.segMin + (CORNER.segMinHard - CORNER.segMin) * L
     const segMax = CORNER.segMax + (CORNER.segMaxHard - CORNER.segMax) * L
@@ -228,6 +236,10 @@ export class Track {
     for (const l of gone) this.addOb('void', l, start, len)
     this.voids++
     const open = [0, 1, 2].filter((l) => !gone.includes(l))
+    // route check: the open lanes must be reachable in time, else no void here
+    const vcells = [0, 1, 2].map((l) => (gone.includes(l) ? 'X' : 'E')) as Cell[]
+    const vReach = stepRow(this.reach, this.vEnd, { s0: start, cells: vcells, len: [len, len, len], end }, v)
+    if (!anyReach(vReach)) return false
     // stars run the open lane (the one nearest the current line)
     let path = open[0]
     for (const l of open) if (Math.abs(l - this.pathLane) < Math.abs(path - this.pathLane)) path = l
@@ -237,6 +249,18 @@ export class Track {
       mid = q(start + len * (0.4 + this.r() * 0.2))
       const kind = this.r() < 0.5 ? 'barrier' : 'overhead'
       for (const l of open) this.addOb(kind, l, mid, kind === 'barrier' ? OB.barrier.len : OB.overhead.len)
+    }
+    {
+      let r = vReach
+      if (mid > 0) {
+        const tk = this.obstacles[this.obstacles.length - 1].kind === 'barrier' ? 'B' : 'O'
+        const ml = tk === 'B' ? OB.barrier.len : OB.overhead.len
+        const mc = [0, 1, 2].map((l) => (gone.includes(l) ? 'X' : tk)) as Cell[]
+        r = stepRow(r, start, { s0: mid, cells: mc, len: [ml, ml, ml], end: mid + ml }, v)
+      }
+      // a void stretch with a mid hurdle is always passable in-lane; keep the reach state honest
+      this.reach = anyReach(r) ? r.map((l) => l.map((x) => ({ mv: Math.max(x.mv, end), act: x.act }))) : fresh(end)
+      this.vEnd = end
     }
     if (this.lineLeft <= 0 && start >= this.lineGapTo) this.startLine()
     for (let s = Math.max(start + 3, this.starFloor); s <= end - 2 && this.lineLeft > 0; s += STAR_SPACING) {
@@ -328,7 +352,7 @@ export class Track {
   }
 
   private genRow() {
-    const s0 = this.cursor
+    let s0 = this.cursor
     const L = levelAt(s0)
     const W = warmAt(s0)
     const v = speedAt(s0)
@@ -359,6 +383,34 @@ export class Track {
     if (W > 0.62 && toks.includes('P')) {
       // warm-up: teach jump and slide separately first
       for (let i = 0; i < 3; i++) if (toks[i] === 'P') toks[i] = 'O'
+    }
+
+    // ── route validator: this row must leave at least one passable route from where the runner can be ──
+    {
+      const lenOf = (t: Tok) => (t === 'B' ? OB.barrier.len : t === 'O' ? OB.overhead.len : t === 'P' ? OB.pipe.len : t === 'K' ? OB.car.len : t === 'G' ? gapLen : 0)
+      const mk = (at: number): Row => {
+        const len = toks.map(lenOf)
+        return { s0: at, cells: toks as Cell[], len, end: at + Math.max(0, ...len) }
+      }
+      let nx = stepRow(this.reach, this.vEnd, mk(s0), v)
+      // 1) give the row a little more room (keeps the pattern)
+      for (let k = 0; k < 18 && !anyReach(nx); k++) {
+        s0 = q(s0 + 1)
+        nx = stepRow(this.reach, this.vEnd, mk(s0), v)
+        if (anyReach(nx)) this.repairs++
+      }
+      // 2) still blocked: open the blocker nearest to a reachable lane
+      while (!anyReach(nx)) {
+        const best = [0, 1, 2].filter((l) => this.reach[l].length > 0)[0] ?? 1
+        let pick = -1
+        for (const l of [best, 1, 0, 2]) if (toks[l] !== 'E') { pick = l; break }
+        if (pick < 0) break
+        toks[pick] = 'E'
+        this.repairs++
+        nx = stepRow(this.reach, this.vEnd, mk(s0), v)
+      }
+      this.reach = anyReach(nx) ? nx : fresh(s0)
+      this.vEnd = mk(s0).end
     }
 
     let rowEnd = s0
