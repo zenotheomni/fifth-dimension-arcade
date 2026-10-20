@@ -1,6 +1,6 @@
 /**
  * Fifth Glide — sky-path set dressing: 5-emblem arches over the path, holographic turn signs at
- * corners, and floating islands (palms near Miami, bare asteroids out in space).
+ * corners, and floating islands (palms near the start, bare asteroids out in space).
  */
 import * as THREE from 'three'
 import { glowMaterial } from './shaders'

@@ -27,7 +27,7 @@ export const cabinets: Cabinet[] = [
   {
     id: 'fifth-run',
     title: 'Fifth Glide',
-    tagline: 'Miami to the galaxies. Swipe. Jump. Slide.',
+    tagline: 'Run the Fifth Dimension. Swipe. Jump. Slide.',
     status: 'lit',
     route: '/fifth-run',
   },

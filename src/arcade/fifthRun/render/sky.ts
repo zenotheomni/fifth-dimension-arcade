@@ -1,5 +1,5 @@
 /**
- * Fifth Glide — the void: Miami sunset at the start line, opening into deep space as distance grows.
+ * Fifth Glide — the void: Fifth Dimension dusk at the start line, opening into deep space as distance grows.
  * Full-sphere sky (the path floats, so you see below the horizon too): sunset gradient + sun over a
  * dusk sea haze, crossfading (uSpace 0 → 1) to a nebula galaxy with dust lanes and a Milky-Way band.
  */
@@ -41,7 +41,7 @@ export function voidSkyMaterial() {
       void main(){
         vec3 d = normalize(vDir);
         float h = d.y;
-        // ── Miami sunset ──
+        // ── Fifth Dimension dusk ──
         float sd = max(dot(d, uSun), 0.0);
         vec3 zen = vec3(0.035, 0.03, 0.11);
         vec3 hi = vec3(0.075, 0.03, 0.16);

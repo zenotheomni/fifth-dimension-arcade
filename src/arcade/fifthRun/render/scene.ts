@@ -355,7 +355,7 @@ export class FrScene {
     }
   }
 
-  /** Miami skyline far below the path at the start line (sinks away as the run heads into space). */
+  /** Dusk skyline far below the path at the start line (sinks away as the run heads into space). */
   private buildSkyline() {
     const geo = new THREE.BoxGeometry(1, 1, 1)
     geo.translate(0, 0.5, 0)
@@ -1142,7 +1142,7 @@ export class FrScene {
     this.skyGroup.rotation.set(0, -this.camYaw, 0)
     this.starMat.uniforms.uTime.value = v.time
     this.skyMat.uniforms.uTime.value = v.time
-    // Miami sunset → open space between ~250 m and ~1700 m
+    // dusk → open space between ~250 m and ~1700 m
     const target = THREE.MathUtils.smoothstep(v.s, 150, 1100)
     this.space += (target - this.space) * Math.min(1, dt * 1.5)
     const sp = this.space
