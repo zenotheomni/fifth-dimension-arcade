@@ -146,6 +146,7 @@ export const CAM_TUNE = {
   /** camera shake multiplier */ shake: 1,
 }
 export const CAM_DEFAULTS = { ...CAM_TUNE }
+;(globalThis as unknown as { __FR_CAM?: typeof CAM_TUNE }).__FR_CAM = CAM_TUNE
 
 export class FrScene {
   renderer: THREE.WebGLRenderer
@@ -1005,14 +1006,17 @@ export class FrScene {
         lift = k * 2
       }
       const p = L.pt(seg, mid, laneX(o.lane), this.wp2)
-      const pool = this.pools[o.kind as keyof typeof this.pools] as { group: THREE.Group; lamp?: THREE.MeshStandardMaterial }[]
+      const pool = this.pools[o.kind as keyof typeof this.pools] as { group: THREE.Group; lamp?: THREE.MeshStandardMaterial; pose?: (variant: number, time: number) => void }[]
       const item = pool?.[idx[o.kind as keyof typeof idx]++]
       if (!item) continue
       item.group.visible = true
       item.group.position.set(p.x, lift, p.z)
       item.group.rotation.set(0, p.yaw + (o.kind === 'car' ? ((o.variant % 9) - 4) * 0.035 : o.kind === 'block' ? ((o.variant % 7) - 3) * 0.02 : 0), 0)
       item.group.scale.setScalar(scale)
-      if (item.lamp) item.lamp.emissiveIntensity = Math.floor(now * 3 + o.id) % 2 ? 3.2 : 1.2
+      if (item.pose) {
+        item.pose(o.variant, now)
+        if (item.lamp) item.lamp.emissiveIntensity = 2 + 0.8 * Math.sin(now * 9 + o.id) + 0.4 * Math.sin(now * 23 + o.id * 3)
+      } else if (item.lamp) item.lamp.emissiveIntensity = Math.floor(now * 3 + o.id) % 2 ? 3.2 : 1.2
     }
     for (const k of ['barrier', 'overhead', 'pipe', 'block', 'car'] as const) {
       const pool = this.pools[k] as { group: THREE.Group }[]

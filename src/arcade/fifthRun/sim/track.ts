@@ -87,12 +87,12 @@ type Pattern = { p: string; min: number; w: (L: number) => number }
 const PATTERNS: Pattern[] = [
   { p: 'BEE', min: 0, w: (L) => 2.0 - 0.8 * L },
   { p: 'OEE', min: 0, w: (L) => 1.6 - 0.6 * L },
-  { p: 'KEE', min: 0, w: (L) => 1.6 - 0.6 * L },
+  { p: 'KEE', min: 0, w: (L) => 1.6 + 0.6 * L },
   { p: 'GEE', min: 0, w: (L) => 1.0 - 0.3 * L },
   { p: 'BBB', min: 0, w: (L) => 1.3 + 0.4 * L },
   { p: 'OOO', min: 0.02, w: (L) => 1.1 + 0.4 * L },
   { p: 'GGG', min: 0.05, w: (L) => 0.9 + 0.6 * L },
-  { p: 'KKE', min: 0.04, w: (L) => 1.0 + 0.6 * L },
+  { p: 'KKE', min: 0.04, w: (L) => 1.2 + 1.0 * L },
   { p: 'KBE', min: 0.08, w: (L) => 0.6 + 0.6 * L },
   { p: 'KOE', min: 0.08, w: (L) => 0.6 + 0.6 * L },
   { p: 'BOE', min: 0.14, w: (L) => 0.5 + 0.6 * L },
@@ -140,6 +140,8 @@ export class Track {
   generatedTo = 0
   private rng: () => number
   private cursor = START_CLEAR_M
+  /** end of the last jump/slide obstacle — rockets keep a clear gap from them */
+  private lastJS = -1e9
   private prevEnd = 0
   private pathLane = 1
   private nextId = 1
@@ -185,6 +187,7 @@ export class Track {
   }
 
   private addOb(kind: ObKind, lane: number, s: number, len: number, vs = 0) {
+    if (kind === 'barrier' || kind === 'overhead' || kind === 'pipe' || kind === 'gap') this.lastJS = Math.max(this.lastJS, s + len)
     const variant = Math.floor(this.r() * 1000)
     this.obstacles.push({ id: this.nextId++, kind, lane, s: q(s), len: q(len), vs, variant, smashed: false })
   }
@@ -384,6 +387,11 @@ export class Track {
       toks[1] = toks[e]
       toks[e] = 'K'
     }
+    // crashed-rocket rows (K with no jump/slide): hold them back a clear gap from the last jump/slide
+    if (toks.includes('K') && !toks.some((x) => x === 'B' || x === 'O' || x === 'P' || x === 'G')) {
+      const want = q(this.lastJS + Math.max(9, v * 0.5))
+      if (want > s0 && want + 8 <= this.nextCornerS - CORNER.half - v * CORNER.preS && this.r() < 0.85) s0 = want
+    }
     const gapLen = q(Math.min(5, Math.max(2.6, 0.3 * v)))
     if (W > 0.62 && toks.includes('P')) {
       // warm-up: teach jump and slide separately first
@@ -420,6 +428,7 @@ export class Track {
     }
 
     let rowEnd = s0
+    let rocketRow = false
     for (let lane = 0; lane < 3; lane++) {
       const t = toks[lane]
       if (t === 'B') {
@@ -433,13 +442,17 @@ export class Track {
         rowEnd = Math.max(rowEnd, s0 + OB.pipe.len)
       } else if (t === 'K') {
         // crashed rocket or a crashed satellite across the lane
-        if (this.r() < 0.4) {
+        // rockets never share a row with, or sit right after, a jump/slide obstacle
+        const jsRow = toks.some((x) => x === 'B' || x === 'O' || x === 'P' || x === 'G')
+        const rocketOk = !jsRow && s0 - this.lastJS > Math.max(9, v * 0.5)
+        if (this.r() < 0.15 || !rocketOk) {
           this.addOb('car', lane, s0, OB.car.len)
           this.cars++
           rowEnd = Math.max(rowEnd, s0 + OB.car.len)
         } else {
           this.addOb('block', lane, s0, OB.block.len)
           rowEnd = Math.max(rowEnd, s0 + OB.block.len)
+          rocketRow = true
         }
       } else if (t === 'H') {
         const hl = q(Math.min(7, Math.max(3.5, 0.13 * v)))
@@ -515,7 +528,7 @@ export class Track {
     // warm-up: up to ~2.9× the gap between waves at the start line, tapering by WARM_M; a little
     // extra breathing room while the level is still low (fades out as L → 1)
     const T = Math.max(0.28, base * (0.7 + 0.35 * this.r()) * (1 + 1.6 * W + 0.3 * (1 - L)))
-    this.cursor = q(rowEnd + Math.max(5.2, v * T))
+    this.cursor = q(rowEnd + Math.max(rocketRow ? Math.max(9, v * 0.5) : 5.2, v * T))
     this.rows++
   }
 }
