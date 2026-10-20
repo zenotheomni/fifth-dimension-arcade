@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { track } from '../analytics'
 import { useArcadeAudio } from '../audio/AudioProvider'
+import { unlockMusic } from '../audio/sceneMusic'
 import { END_DOORS } from '../brandPlacement'
 import { COPY, FIFTH_RUN_COPY } from '../copyLocks'
 import { challengeFromScore, newRunId, submitRun, type ChallengeInfo, type RunResult } from '../core/arcadeApi'
@@ -103,10 +104,22 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
 
   useEffect(() => onPlayerChange(setPlayer), [])
 
+  // Lobby song plays through loading + how-to; START (inside the tap, for iOS) crossfades to
+  // "Thousand Yard Stare", which stays through the end screen + restarts. Leaving releases it.
+  const { claimScene, duck } = audio
   useEffect(() => {
-    audio.duck(true)
-    return () => audio.duck(false)
-  }, [audio])
+    return () => {
+      duck(false)
+      claimScene(null)
+    }
+  }, [claimScene, duck])
+  useEffect(() => {
+    duck(Boolean(ended))
+  }, [ended, duck])
+  // any other way into gameplay (challenge link, restart) also claims the Glide song
+  useEffect(() => {
+    if (hud.phase === 'playing') claimScene('fifth-run')
+  }, [hud.phase, claimScene])
 
   useEffect(() => {
     mutedRef.current = audio.muted
@@ -184,6 +197,8 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
 
   const startFromHowto = () => {
     setHowto(false)
+    unlockMusic()
+    claimScene('fifth-run')
     gameRef.current?.start()
     track('arcade_fifth_run_howto_start')
   }
@@ -286,6 +301,14 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
               {hud.score.toLocaleString('en-US')}
               <small>m</small>
             </span>
+            {/* v16: hearts sit centred BELOW the distance box (never over the number) */}
+            <div className="fr-lives" aria-label={`${hud.lives} lives`}>
+          {[0, 1, 2].map((i) => (
+            <span key={i} className={`fr-life${i < hud.lives ? ' is-on' : ''}`} aria-hidden>
+              ♥
+            </span>
+          ))}
+        </div>
           </div>
           <div className="fr-cell fr-cell--right">
             <span className="fr-cell__label">Time</span>
@@ -305,14 +328,6 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
               {hud.score > hud.target ? 'Ahead' : `Target ${hud.target.toLocaleString('en-US')} m`}
             </span>
           ) : null}
-        </div>
-
-        <div className="fr-lives" aria-label={`${hud.lives} lives`}>
-          {[0, 1, 2].map((i) => (
-            <span key={i} className={`fr-life${i < hud.lives ? ' is-on' : ''}`} aria-hidden>
-              ♥
-            </span>
-          ))}
         </div>
 
         <div className="fr-powers">
@@ -367,7 +382,7 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
               <h3>Controls</h3>
               <ul className="fr-howto__controls">
                 <li><b>↰&nbsp;↱</b>The path turns 90°. Swipe left / right at the corner to take it. Too late (or the wrong way) and you run off into the void. A glowing sign and arrows on the floor show which way, and at a T you pick either side</li>
-                <li><b>←&nbsp;→</b>Between corners, swipe left / right to switch lanes, dodge crystal pylons and crashed satellites and grab stars</li>
+                <li><b>←&nbsp;→</b>Between corners, swipe left / right to switch lanes, dodge crashed rockets and crashed satellites and grab stars</li>
                 <li><b>↑</b>Swipe up to jump gaps and low rubble</li>
                 <li><b>↓</b>Swipe down to slide under the red SLIDE laser gates. You can’t jump them. Steel pipes: jump or slide</li>
               </ul>
@@ -376,7 +391,7 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
               <h3>Rules</h3>
               <ul>
                 <li><b>🛸</b>A UFO is right behind you. Stumble and it swoops in; run clean to keep it back</li>
-                <li><b>⚠</b>Watch for gaps, parts of the path that drop away, and narrow stretches. Crystal pylons and crashed satellites block a lane, so go around them</li>
+                <li><b>⚠</b>Watch for gaps, parts of the path that drop away, and narrow stretches. Crashed rockets and crashed satellites block a lane, so go around them</li>
                 <li><b>⚠</b>Hit an obstacle and you stumble: you slow down and it closes in. Stumble again before you pull away (about {Math.round((CHASE.hit - CHASE.catchAt) * CHASE.recoverS)} s of clean running) and the UFO catches you</li>
                 <li><b>{'♥'.repeat(START_LIVES)}</b>{START_LIVES} lives. Getting caught, falling off the path, or running into a pylon or a satellite costs one. You flash and respawn right where you were, then keep running</li>
                 <li><b>☠</b>Lose all {START_LIVES} and the run is over. It gets faster the farther you go</li>

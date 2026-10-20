@@ -22,7 +22,7 @@ const BASE = import.meta.env.BASE_URL
 /** "ZENO 5" — Jenks / Fifth Dimension Imperial. Court Vision only. */
 export const COURT_VISION_THEME: MusicTrack = {
   id: 'court-vision-theme',
-  title: 'ZENO 5',
+  title: 'Jenks - Zeno 5',
   sources: [
     { src: `${BASE}audio/court-vision-theme.m4a`, type: 'audio/mp4; codecs="mp4a.40.2"' },
     { src: `${BASE}audio/court-vision-theme.mp3`, type: 'audio/mpeg' },
@@ -34,22 +34,32 @@ export const COURT_VISION_THEME: MusicTrack = {
 /** Lobby / home screen — "We Outside" (Jenks / Fifth Dimension Imperial). */
 export const LOBBY_THEME: MusicTrack = {
   id: 'lobby-theme',
-  title: 'We Outside',
+  title: 'Jenks ft. Val Underwood - We Outside',
   sources: [
     { src: `${BASE}audio/lobby-theme.m4a`, type: 'audio/mp4; codecs="mp4a.40.2"' },
     { src: `${BASE}audio/lobby-theme.mp3`, type: 'audio/mpeg' },
   ],
   level: 0.35,
-  // Fifth Glide (no track yet) asks for a duck on mount; the lobby song keeps
-  // its normal level there instead of dipping.
+  // Fifth Glide ducks on its end screen; the lobby song keeps its level on the how-to.
   duckedLevel: 0.35,
+}
+
+/** Fifth Glide gameplay — "Thousand Yard Stare" (Jenks / Fifth Dimension Imperial). */
+export const FIFTH_GLIDE_THEME: MusicTrack = {
+  id: 'fifth-glide-theme',
+  title: 'Jenks - Thousand Yard Stare',
+  sources: [
+    { src: `${BASE}audio/fifth-glide-theme.m4a`, type: 'audio/mp4; codecs="mp4a.40.2"' },
+    { src: `${BASE}audio/fifth-glide-theme.mp3`, type: 'audio/mpeg' },
+  ],
+  level: 0.38,
+  duckedLevel: 0.22,
 }
 
 export const SCENE_TRACKS: Record<MusicScene, MusicTrack | null> = {
   lobby: LOBBY_THEME,
   'court-vision': COURT_VISION_THEME,
-  /** Fifth Glide — empty slot for now. */
-  'fifth-run': null,
+  'fifth-run': FIFTH_GLIDE_THEME,
   none: null,
 }
 

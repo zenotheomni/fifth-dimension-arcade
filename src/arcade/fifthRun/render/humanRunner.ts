@@ -66,10 +66,12 @@ export class HumanRunner implements RunnerView {
         this.mats.push(std)
         if (std.name === 'patch') {
           // the backpack patch wears the colour 5D logo (same art as the invincibility power-up)
-          new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}art/5d-logo-color.png`, (t) => {
+          new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}art/5d-logo-exact.png`, (t) => {
             t.flipY = false
             t.colorSpace = THREE.SRGBColorSpace
             t.anisotropy = 8
+            t.generateMipmaps = true
+            t.minFilter = THREE.LinearMipmapLinearFilter
             std.map = t
             std.needsUpdate = true
           })

@@ -290,7 +290,7 @@
 
 .fr-chips {
   position: absolute;
-  top: calc(max(0.7rem, env(safe-area-inset-top)) + 6.6rem);
+  top: calc(max(0.7rem, env(safe-area-inset-top)) + 7.5rem);
   left: 50%;
   transform: translateX(-50%);
   width: min(92%, 360px);
@@ -405,13 +405,20 @@
 
 .fr-lives {
   position: absolute;
-  top: calc(max(0.7rem, env(safe-area-inset-top)) + 4.55rem);
+  top: calc(100% + 0.4rem);
   left: 50%;
   transform: translateX(-50%);
   display: flex;
   gap: 0.35rem;
+  padding: 0.14rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(10, 6, 24, 0.55);
   z-index: 6;
   pointer-events: none;
+  white-space: nowrap;
+}
+.fr-cell--main {
+  position: relative;
 }
 .fr-life {
   font-size: 0.95rem;

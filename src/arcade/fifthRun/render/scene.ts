@@ -23,7 +23,7 @@ import { blobTexture, chevronTexture, glowTexture, shootingStarTexture, streakTe
 import { PathLayout, turned, type Seg, type WorldPt } from './layout'
 import { buildCornerSquare, buildDeckChunk, deckMaterial, DECK_HALF, glowStripMaterial } from './deck'
 import { voidSkyMaterial } from './sky'
-import { buildCrystal, buildSatellite, buildTruss } from './relics'
+import { buildRocket, buildSatellite, buildTruss } from './relics'
 import { buildArch, buildIsland, buildTurnSign } from './decor'
 
 export type QualityTier = 'high' | 'low'
@@ -43,6 +43,8 @@ export type ViewState = {
   /** lost a life (not the last): playing the fall / crash before respawning in place */
   downed: boolean
   idle: boolean
+  /** slowed after a hit / stumble: the chaser's spotlight locks on until he recovers */
+  slowed?: boolean
   /** opening cinematic progress 0..1 (1 = done / gameplay camera) */
   opening?: number
   lives: number
@@ -136,7 +138,7 @@ type Ghost = { id: number; s: number; cx: number; cz: number; fx: number; fz: nu
 export const CAM_TUNE = {
   /** camera height (m) */ height: 3.9,
   /** camera distance behind the runner (m) */ dist: 6.4,
-  /** look-at height (pitch: lower = looks down more) */ lookY: 0.7,
+  /** look-at height (pitch: lower = looks down more) */ lookY: 0.35,
   /** base FOV offset (deg) */ fov: 0,
   /** turn settle time (s) — critically damped spring */ turnS: 0.13,
   /** how far the camera leans into a turn as soon as the swipe is accepted (0..1 of 90°) */ lead: 0.3,
@@ -144,6 +146,7 @@ export const CAM_TUNE = {
   /** camera shake multiplier */ shake: 1,
 }
 export const CAM_DEFAULTS = { ...CAM_TUNE }
+;(globalThis as unknown as { __FR_CAM?: typeof CAM_TUNE }).__FR_CAM = CAM_TUNE
 
 export class FrScene {
   renderer: THREE.WebGLRenderer
@@ -448,7 +451,7 @@ export class FrScene {
     add(this.pools.pipe, () => buildPipe(metal), 18)
     add(this.pools.barrier, () => buildBarrier(chev, metal), 24)
     add(this.pools.overhead, () => buildTruss(this.glow), 24)
-    add(this.pools.block, () => buildCrystal(this.glow), 16)
+    add(this.pools.block, () => buildRocket(this.glow), 16)
     add(this.pools.car, () => buildSatellite(this.glow), 8)
     for (const k of ['hand'] as PowerKind[]) {
       for (let i = 0; i < 2; i++) {
@@ -786,6 +789,7 @@ export class FrScene {
       const f = this.openK < 1 ? Math.sin(Math.min(1, this.openK * 1.25) * Math.PI) : 0
       this.dark.flare += (f - this.dark.flare) * (1 - Math.exp(-dt * 10))
       this.tmpV.copy(this.runnerLocal).setY(this.runnerLocal.y + 0.9)
+      this.dark.beamOn = !v.idle && !v.dead && (!!v.slowed || this.openK < 1)
       this.dark.aim(this.tmpV, !v.idle && (this.darkFade > 0.3 || this.openK < 1))
       this.dark.spotlight.position.y = this.runnerLocal.y + 0.03
     }
@@ -1002,14 +1006,17 @@ export class FrScene {
         lift = k * 2
       }
       const p = L.pt(seg, mid, laneX(o.lane), this.wp2)
-      const pool = this.pools[o.kind as keyof typeof this.pools] as { group: THREE.Group; lamp?: THREE.MeshStandardMaterial }[]
+      const pool = this.pools[o.kind as keyof typeof this.pools] as { group: THREE.Group; lamp?: THREE.MeshStandardMaterial; pose?: (variant: number, time: number) => void }[]
       const item = pool?.[idx[o.kind as keyof typeof idx]++]
       if (!item) continue
       item.group.visible = true
       item.group.position.set(p.x, lift, p.z)
       item.group.rotation.set(0, p.yaw + (o.kind === 'car' ? ((o.variant % 9) - 4) * 0.035 : o.kind === 'block' ? ((o.variant % 7) - 3) * 0.02 : 0), 0)
       item.group.scale.setScalar(scale)
-      if (item.lamp) item.lamp.emissiveIntensity = Math.floor(now * 3 + o.id) % 2 ? 3.2 : 1.2
+      if (item.pose) {
+        item.pose(o.variant, now)
+        if (item.lamp) item.lamp.emissiveIntensity = 2 + 0.8 * Math.sin(now * 9 + o.id) + 0.4 * Math.sin(now * 23 + o.id * 3)
+      } else if (item.lamp) item.lamp.emissiveIntensity = Math.floor(now * 3 + o.id) % 2 ? 3.2 : 1.2
     }
     for (const k of ['barrier', 'overhead', 'pipe', 'block', 'car'] as const) {
       const pool = this.pools[k] as { group: THREE.Group }[]

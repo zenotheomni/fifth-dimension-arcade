@@ -16,7 +16,32 @@ export const laneX = (lane: number) => (lane - 1) * LANE_W
  * (≈26 m/s at 1 km, ≈31 m/s at 2.5 km, ≈35 m/s at 5 km).
  */
 export const SPEED = { v0: 24, vmax: 54, k: 2200 }
-export const speedAt = (s: number) => SPEED.v0 + (SPEED.vmax - SPEED.v0) * (s / (s + SPEED.k))
+/**
+ * v16 speed ramp: clear steps, one about every RAMP.stepS seconds, no cap. Step k runs at
+ * v0 + k·inc; it lasts stepS seconds at that speed, so its length is stepS·v_k metres. Each step
+ * blends in over RAMP.blendM metres (no jolt). Speed is a pure function of distance (deterministic).
+ */
+export const RAMP = { v0: 26, inc: 3.8, stepS: 30, blendM: 40 }
+const STEP_AT: number[] = [0]
+for (let k = 0; k < 400; k++) STEP_AT.push(STEP_AT[k] + RAMP.stepS * (RAMP.v0 + RAMP.inc * k))
+/** index of the speed step at path distance s (0 = start) */
+export function stepAt(s: number): number {
+  let lo = 0
+  let hi = STEP_AT.length - 1
+  while (lo < hi) {
+    const m = (lo + hi + 1) >> 1
+    if (STEP_AT[m] <= s) lo = m
+    else hi = m - 1
+  }
+  return lo
+}
+export const speedAt = (s: number) => {
+  const k = stepAt(Math.max(0, s))
+  const into = Math.max(0, s) - STEP_AT[k]
+  const b = k === 0 ? 1 : Math.min(1, into / RAMP.blendM)
+  const e = b * b * (3 - 2 * b)
+  return RAMP.v0 + RAMP.inc * (k - 1 + e)
+}
 /**
  * Warm-up distance (≈ first 40 s, easing out linearly): sparse single-car rows, slower oncoming
  * traffic, wider spacing.
@@ -25,7 +50,7 @@ export const speedAt = (s: number) => SPEED.v0 + (SPEED.vmax - SPEED.v0) * (s / 
 export const WARM_M = 700
 export const warmAt = (s: number) => (s >= WARM_M ? 0 : s <= 0 ? 1 : 1 - s / WARM_M)
 /** Difficulty 0..1 (pattern mix + spacing). Held at 0 through the first LEVEL_OFFSET metres. */
-export const DIFF_K = 450
+export const DIFF_K = 330
 export const LEVEL_OFFSET = 150
 export const levelAt = (s: number) => (s <= LEVEL_OFFSET ? 0 : (s - LEVEL_OFFSET) / (s - LEVEL_OFFSET + DIFF_K))
 
@@ -126,7 +151,7 @@ export const CHASE = { hit: 0.75, catchAt: 0.3, recoverS: 7, warmRecoverCut: 0.4
 export const SLOW_TICKS = Math.round(CHASE.slowS * FR_HZ)
 
 /** Logo pickup: 10 s invincible + speed surge. */
-export const BOOST = { mul: 1.5, easeInS: 0.4, easeOutS: 1.0 }
+export const BOOST = { mul: 1.08, easeInS: 0.4, easeOutS: 1.0 }
 
 export const POWER_TICKS = {
   /** Fifth Dimension logo — 10 s invincible + 1.5× speed surge */

@@ -5,7 +5,7 @@
  * only on the seed (never on the player). The path is straight segments joined by 90° corners and
  * T-junctions (`corners`), all addressed by path distance `s`; which way the path bends in 3D is a
  * render concern (render/layout.ts). Kit: low rubble (jump), arches (slide), pipes (either), gaps
- * (jump), missing lanes (narrow sections / edge drop-offs), crystal pylons and crashed satellites
+ * (jump), missing lanes (narrow sections / edge drop-offs), crashed rockets and crashed satellites
  * (switch lanes). Power-up: the Fifth Dimension logo. Collectibles: shooting stars (💫).
  */
 import { hashSeed, mulberry32 } from '../../core/seededRandom'
@@ -77,7 +77,7 @@ export type Pickup = {
   takenTick: number
 }
 
-type Tok = 'E' | 'B' | 'O' | 'P' | 'K' | 'G'
+type Tok = 'E' | 'B' | 'O' | 'P' | 'K' | 'G' | 'H'
 
 type Pattern = { p: string; min: number; w: (L: number) => number }
 
@@ -87,12 +87,12 @@ type Pattern = { p: string; min: number; w: (L: number) => number }
 const PATTERNS: Pattern[] = [
   { p: 'BEE', min: 0, w: (L) => 2.0 - 0.8 * L },
   { p: 'OEE', min: 0, w: (L) => 1.6 - 0.6 * L },
-  { p: 'KEE', min: 0, w: (L) => 1.6 - 0.6 * L },
+  { p: 'KEE', min: 0, w: (L) => 1.4 + 0.8 * L },
   { p: 'GEE', min: 0, w: (L) => 1.0 - 0.3 * L },
   { p: 'BBB', min: 0, w: (L) => 1.3 + 0.4 * L },
   { p: 'OOO', min: 0.02, w: (L) => 1.1 + 0.4 * L },
   { p: 'GGG', min: 0.05, w: (L) => 0.9 + 0.6 * L },
-  { p: 'KKE', min: 0.04, w: (L) => 1.0 + 0.6 * L },
+  { p: 'KKE', min: 0.04, w: (L) => 1.0 + 1.2 * L },
   { p: 'KBE', min: 0.08, w: (L) => 0.6 + 0.6 * L },
   { p: 'KOE', min: 0.08, w: (L) => 0.6 + 0.6 * L },
   { p: 'BOE', min: 0.14, w: (L) => 0.5 + 0.6 * L },
@@ -105,6 +105,10 @@ const PATTERNS: Pattern[] = [
   { p: 'KKG', min: 0.26, w: (L) => 0.2 + 0.8 * L },
   { p: 'BOG', min: 0.3, w: (L) => 0.2 + 0.7 * L },
   { p: 'GKG', min: 0.34, w: (L) => 0.2 + 0.6 * L },
+  // H = pothole: a short missing piece of ONE lane (any lane, the middle one too) — switch round it
+  { p: 'HEE', min: 0.02, w: (L) => 0.9 + 0.3 * L },
+  { p: 'HBE', min: 0.15, w: (L) => 0.3 + 0.5 * L },
+  { p: 'HHE', min: 0.22, w: (L) => 0.2 + 0.6 * L },
 ]
 
 const PERMS = [
@@ -117,14 +121,14 @@ const PERMS = [
 ]
 
 const q = (x: number) => Math.round(x * 100) / 100
-const passable = (t: Tok) => t !== 'K'
+const passable = (t: Tok) => t !== 'K' && t !== 'H'
 
 /** Star coin lines (Temple Run): LINE_MIN..LINE_MAX stars STAR_SPACING m apart, then ≥ LINE_GAP_MIN m (and ≥ ~1.1 s) of nothing. */
 export const STAR_SPACING = 3
 export const LINE_MIN = 8
 /** base line length max; a jump arc / slide trio can add ≤ 2 more, so a line never exceeds 15 */
 export const LINE_MAX = 13
-export const LINE_GAP_MIN = 22
+export const LINE_GAP_MIN = 14
 
 export class Track {
   readonly seed: string
@@ -136,6 +140,8 @@ export class Track {
   generatedTo = 0
   private rng: () => number
   private cursor = START_CLEAR_M
+  /** end of the last jump/slide obstacle — rockets keep a clear gap from them */
+  private lastJS = -1e9
   private prevEnd = 0
   private pathLane = 1
   private nextId = 1
@@ -181,6 +187,7 @@ export class Track {
   }
 
   private addOb(kind: ObKind, lane: number, s: number, len: number, vs = 0) {
+    if (kind === 'barrier' || kind === 'overhead' || kind === 'pipe' || kind === 'gap') this.lastJS = Math.max(this.lastJS, s + len)
     const variant = Math.floor(this.r() * 1000)
     this.obstacles.push({ id: this.nextId++, kind, lane, s: q(s), len: q(len), vs, variant, smashed: false })
   }
@@ -230,9 +237,10 @@ export class Track {
     const len = q(VOID.minLen + this.r() * (VOID.maxLen - VOID.minLen) * (0.6 + 0.4 * L))
     const end = start + len
     if (end + v * 1.1 + CORNER.half + 8 > this.nextCornerS) return false
-    const narrow = this.r() < 0.5
+    // narrow (only the middle left) · edge drop-off (a side lane gone) · centre hole (the MIDDLE lane gone)
+    const kr = this.r()
     const side = this.r() < 0.5 ? 0 : 2
-    const gone = narrow ? [0, 2] : [side]
+    const gone = kr < 0.3 ? [0, 2] : kr < 0.62 ? [side] : [1]
     for (const l of gone) this.addOb('void', l, start, len)
     this.voids++
     const open = [0, 1, 2].filter((l) => !gone.includes(l))
@@ -284,7 +292,7 @@ export class Track {
 
   private endLine(at: number, v: number) {
     this.lineLeft = 0
-    this.lineGapTo = q(at + Math.max(LINE_GAP_MIN, v * 0.8) + this.r() * 14)
+    this.lineGapTo = q(at + Math.max(LINE_GAP_MIN, v * 0.5) + this.r() * 8)
   }
 
   /** One star of the running line (or the rare 5D logo in its middle when one is due). */
@@ -336,7 +344,7 @@ export class Track {
       let w = L >= p.min ? Math.max(0, p.w(L)) : 0
       // warm-up: multi-car rows fade in only as the warm-up ends
       // warm-up: forced-lane combos (two crates, mixed rows) fade in only as the warm-up ends
-      if (W > 0 && /K.*K|BO|G.*G.*K|GKG/.test(p.p) && p.p !== 'GGG') w *= W > 0.5 ? 0 : 1 - 2 * W
+      if (W > 0 && /K.*K|BO|G.*G.*K|GKG|HH|HB/.test(p.p) && p.p !== 'GGG') w *= W > 0.5 ? 0 : 1 - 2 * W
       ws.push(w)
       total += w
     }
@@ -369,7 +377,7 @@ export class Track {
       let kept = false
       for (let i = 0; i < 3; i++) {
         if (toks[i] === 'E') continue
-        if (kept || toks[i] === 'K' || toks[i] === 'G') toks[i] = 'E'
+        if (kept || toks[i] === 'K' || toks[i] === 'G' || toks[i] === 'H') toks[i] = 'E'
         else kept = true
       }
     }
@@ -379,6 +387,11 @@ export class Track {
       toks[1] = toks[e]
       toks[e] = 'K'
     }
+    // crashed-rocket rows (K with no jump/slide): hold them back a clear gap from the last jump/slide
+    if (toks.includes('K') && !toks.some((x) => x === 'B' || x === 'O' || x === 'P' || x === 'G')) {
+      const want = q(this.lastJS + Math.max(9, v * 0.5))
+      if (want > s0 && want + 8 <= this.nextCornerS - CORNER.half - v * CORNER.preS && this.r() < 0.85) s0 = want
+    }
     const gapLen = q(Math.min(5, Math.max(2.6, 0.3 * v)))
     if (W > 0.62 && toks.includes('P')) {
       // warm-up: teach jump and slide separately first
@@ -387,16 +400,17 @@ export class Track {
 
     // ── route validator: this row must leave at least one passable route from where the runner can be ──
     {
-      const lenOf = (t: Tok) => (t === 'B' ? OB.barrier.len : t === 'O' ? OB.overhead.len : t === 'P' ? OB.pipe.len : t === 'K' ? OB.car.len : t === 'G' ? gapLen : 0)
+      const holeLen = q(Math.min(7, Math.max(3.5, 0.13 * v)))
+      const lenOf = (t: Tok) => (t === 'B' ? OB.barrier.len : t === 'O' ? OB.overhead.len : t === 'P' ? OB.pipe.len : t === 'K' ? OB.car.len : t === 'G' ? gapLen : t === 'H' ? holeLen : 0)
       const mk = (at: number): Row => {
         const len = toks.map(lenOf)
-        return { s0: at, cells: toks as Cell[], len, end: at + Math.max(0, ...len) }
+        return { s0: at, cells: toks.map((t) => (t === 'H' ? 'X' : t)) as Cell[], len, end: at + Math.max(0, ...len) }
       }
-      let nx = stepRow(this.reach, this.vEnd, mk(s0), v)
+      let nx = stepRow(this.reach, this.vEnd, mk(s0), speedAt(s0))
       // 1) give the row a little more room (keeps the pattern)
       for (let k = 0; k < 18 && !anyReach(nx); k++) {
         s0 = q(s0 + 1)
-        nx = stepRow(this.reach, this.vEnd, mk(s0), v)
+        nx = stepRow(this.reach, this.vEnd, mk(s0), speedAt(s0))
         if (anyReach(nx)) this.repairs++
       }
       // 2) still blocked: open the blocker nearest to a reachable lane
@@ -407,13 +421,14 @@ export class Track {
         if (pick < 0) break
         toks[pick] = 'E'
         this.repairs++
-        nx = stepRow(this.reach, this.vEnd, mk(s0), v)
+        nx = stepRow(this.reach, this.vEnd, mk(s0), speedAt(s0))
       }
       this.reach = anyReach(nx) ? nx : fresh(s0)
       this.vEnd = mk(s0).end
     }
 
     let rowEnd = s0
+    let rocketRow = false
     for (let lane = 0; lane < 3; lane++) {
       const t = toks[lane]
       if (t === 'B') {
@@ -426,15 +441,23 @@ export class Track {
         this.addOb('pipe', lane, s0, OB.pipe.len)
         rowEnd = Math.max(rowEnd, s0 + OB.pipe.len)
       } else if (t === 'K') {
-        // crystal pylon or a crashed satellite across the lane
-        if (this.r() < 0.4) {
+        // crashed rocket or a crashed satellite across the lane
+        // rockets never share a row with, or sit right after, a jump/slide obstacle
+        const jsRow = toks.some((x) => x === 'B' || x === 'O' || x === 'P' || x === 'G')
+        const rocketOk = !jsRow && s0 - this.lastJS > Math.max(9, v * 0.5)
+        if (this.r() < 0.15 || !rocketOk) {
           this.addOb('car', lane, s0, OB.car.len)
           this.cars++
           rowEnd = Math.max(rowEnd, s0 + OB.car.len)
         } else {
           this.addOb('block', lane, s0, OB.block.len)
           rowEnd = Math.max(rowEnd, s0 + OB.block.len)
+          rocketRow = true
         }
+      } else if (t === 'H') {
+        const hl = q(Math.min(7, Math.max(3.5, 0.13 * v)))
+        this.addOb('void', lane, s0, hl)
+        rowEnd = Math.max(rowEnd, s0 + hl)
       } else if (t === 'G') {
         this.addOb('gap', lane, s0, gapLen)
         rowEnd = Math.max(rowEnd, s0 + gapLen)
@@ -505,7 +528,7 @@ export class Track {
     // warm-up: up to ~2.9× the gap between waves at the start line, tapering by WARM_M; a little
     // extra breathing room while the level is still low (fades out as L → 1)
     const T = Math.max(0.28, base * (0.7 + 0.35 * this.r()) * (1 + 1.6 * W + 0.3 * (1 - L)))
-    this.cursor = q(rowEnd + Math.max(5.2, v * T))
+    this.cursor = q(rowEnd + Math.max(rocketRow ? Math.max(9, v * 0.5) : 5.2, v * T))
     this.rows++
   }
 }

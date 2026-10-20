@@ -6,6 +6,7 @@
  * his heels after a stumble or a lost life (Temple Run's monkeys), overtaking him when it catches you.
  */
 import * as THREE from 'three'
+import { hullTextures } from './hull'
 import { addRim } from './shaders'
 
 const R = 0.5 // hull radius (m) before SCALE
@@ -82,6 +83,7 @@ export class UfoChaser {
   readonly variant: UfoVariant
   private baseScale = SCALE
   private ring: THREE.Group | null = null
+  private engMat: THREE.MeshStandardMaterial | null = null
   private swoopV = 0
   private lastSwoopX = 0
   private lunge = 0
@@ -164,39 +166,101 @@ export class UfoChaser {
 
   /** (a) classic big silver saucer: polished disc, glass dome, spinning rim lights, cyan tractor beam */
   private buildSaucer() {
-    const prof = [
-      new THREE.Vector2(0.0, -0.13),
-      new THREE.Vector2(R * 0.5, -0.12),
-      new THREE.Vector2(R * 0.95, -0.03),
-      new THREE.Vector2(R * 1.05, 0.0),
-      new THREE.Vector2(R * 0.95, 0.04),
-      new THREE.Vector2(R * 0.5, 0.1),
-      new THREE.Vector2(0.0, 0.11),
-    ]
-    const silver = addRim(new THREE.MeshStandardMaterial({ color: '#d9dde6', metalness: 0.95, roughness: 0.18, envMapIntensity: 2.6, emissive: new THREE.Color('#1a2230'), emissiveIntensity: 1 }), new THREE.Color('#bfe9ff'), 1.4, 2.4)
-    this.craft.add(new THREE.Mesh(new THREE.LatheGeometry(prof, 48), silver))
-    // glass dome with a faint cyan cabin glow
-    this.eyeMat = new THREE.MeshStandardMaterial({ color: '#6fd8ff', emissive: new THREE.Color('#38c8ff'), emissiveIntensity: 1.2, transparent: true, opacity: 0.75, metalness: 0.2, roughness: 0.05 })
-    const dome = new THREE.Mesh(new THREE.SphereGeometry(R * 0.42, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2), this.eyeMat)
-    dome.position.y = 0.09
+    // ── hull: stepped gunmetal disc (brushed + polished panels, seams, rivets, vents) ──
+    const P = (r: number, y: number) => new THREE.Vector2(R * r, y)
+    const prof = [P(0, -0.165), P(0.2, -0.165), P(0.23, -0.13), P(0.5, -0.115), P(0.53, -0.1), P(0.9, -0.042), P(1.02, -0.014), P(1.06, 0), P(1.02, 0.015), P(0.9, 0.04), P(0.64, 0.082), P(0.61, 0.098), P(0.46, 0.112), P(0.44, 0.12), P(0, 0.12)]
+    const tex = hullTextures('saucer', { base: '#8b9099', brush: 1.2, panelsU: 24, panelsV: 7, rivets: true, soot: 0.15, seed: 21 })
+    const gun = addRim(new THREE.MeshPhysicalMaterial({ color: '#c3c8d0', map: tex.map, bumpMap: tex.bump, bumpScale: 1.6, roughnessMap: tex.rough, roughness: 0.42, metalness: 1, clearcoat: 0.35, clearcoatRoughness: 0.2, envMapIntensity: 1.8 }), new THREE.Color('#dff4ff'), 0.9, 3.2)
+    this.craft.add(new THREE.Mesh(new THREE.LatheGeometry(prof, 96), gun))
+    const dark = new THREE.MeshStandardMaterial({ color: '#2a2e35', metalness: 0.9, roughness: 0.38, envMapIntensity: 1.4 })
+    const polished = new THREE.MeshStandardMaterial({ color: '#e6e9ee', metalness: 1, roughness: 0.12, envMapIntensity: 2.2 })
+    // rim band + polished trim rings
+    const band = new THREE.Mesh(new THREE.TorusGeometry(R * 1.035, 0.022, 10, 96), dark)
+    band.rotation.x = Math.PI / 2
+    this.craft.add(band)
+    for (const [r, y] of [[0.62, 0.092], [0.9, 0.041]] as const) {
+      const t = new THREE.Mesh(new THREE.TorusGeometry(R * r, 0.006, 6, 96), polished)
+      t.rotation.x = Math.PI / 2
+      t.position.y = y
+      this.craft.add(t)
+    }
+    // greebles on the upper hull: armour blocks, vent grilles, antenna nubs
+    const greb = new THREE.BoxGeometry(1, 1, 1)
+    for (let i = 0; i < 24; i++) {
+      const a = (i / 24) * Math.PI * 2
+      const vent = i % 4 === 0
+      const m = new THREE.Mesh(greb, vent ? dark : i % 2 ? polished : dark)
+      const r = R * (vent ? 0.76 : 0.8)
+      m.position.set(Math.cos(a) * r, vent ? 0.066 : 0.058, Math.sin(a) * r)
+      m.scale.set(vent ? 0.09 : 0.035, vent ? 0.012 : 0.016, vent ? 0.06 : 0.05 + (i % 3) * 0.02)
+      m.rotation.set(0, -a, vent ? 0 : -0.28)
+      this.craft.add(m)
+      if (vent) for (let k = -2; k <= 2; k++) {
+        const slat = new THREE.Mesh(greb, polished)
+        slat.position.set(Math.cos(a) * r + Math.sin(a) * k * 0.014, 0.074, Math.sin(a) * r - Math.cos(a) * k * 0.014)
+        slat.scale.set(0.006, 0.004, 0.05)
+        slat.rotation.y = -a
+        this.craft.add(slat)
+      }
+    }
+    // ── tinted glass dome (reflective), a dim cabin glow behind it ──
+    const glass = new THREE.MeshPhysicalMaterial({ color: '#1a2b36', metalness: 0.2, roughness: 0.03, transparent: true, opacity: 0.62, clearcoat: 1, clearcoatRoughness: 0.02, envMapIntensity: 3.2, specularIntensity: 1 })
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(R * 0.42, 48, 24, 0, Math.PI * 2, 0, Math.PI / 2), glass)
+    dome.position.y = 0.115
+    dome.scale.y = 0.78
     this.craft.add(dome)
-    // spinning ring of rim lights (alternating colours chase round)
+    const collar = new THREE.Mesh(new THREE.TorusGeometry(R * 0.425, 0.012, 8, 64), polished)
+    collar.rotation.x = Math.PI / 2
+    collar.position.y = 0.118
+    this.craft.add(collar)
+    this.eyeMat = new THREE.MeshStandardMaterial({ color: '#0a1218', emissive: new THREE.Color('#6fc8e0'), emissiveIntensity: 0.6, roughness: 0.6 })
+    const cabin = new THREE.Mesh(new THREE.SphereGeometry(R * 0.3, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), this.eyeMat)
+    cabin.position.y = 0.112
+    cabin.scale.y = 0.55
+    this.craft.add(cabin)
+    // ── running lights: small recessed white / cold-cyan lenses in the rim band, slow sweep ──
     this.ring = new THREE.Group()
-    const cols = ['#ffd84a', '#ff4ad8', '#4affd2']
-    const N = 14
+    const N = 16
+    const lens = new THREE.CylinderGeometry(0.014, 0.014, 0.01, 12)
+    lens.rotateZ(Math.PI / 2)
     for (let i = 0; i < N; i++) {
       const a = (i / N) * Math.PI * 2
-      const m = new THREE.MeshStandardMaterial({ color: '#111', emissive: new THREE.Color(cols[i % 3]), emissiveIntensity: 3 })
+      const m = new THREE.MeshStandardMaterial({ color: '#0b0e12', emissive: new THREE.Color(i % 4 === 0 ? '#bfefff' : '#f2f6ff'), emissiveIntensity: 1.5 })
       this.bladeLights.push(m)
-      const b = new THREE.Mesh(new THREE.SphereGeometry(0.04, 10, 8), m)
-      b.position.set(Math.cos(a) * R * 1.0, 0.0, Math.sin(a) * R * 1.0)
+      const b = new THREE.Mesh(lens, m)
+      b.position.set(Math.cos(a) * R * 1.058, 0, Math.sin(a) * R * 1.058)
+      b.rotation.y = -a
       this.ring.add(b)
     }
     this.craft.add(this.ring)
-    this.under = glowMat('#6ff0ff')
-    const ug = new THREE.Mesh(new THREE.CircleGeometry(R * 2.0, 32), this.under)
+    // ── underside: plating rings, three engine pods with cold-cyan cores, central emitter ──
+    for (const [r, y] of [[0.36, -0.118], [0.72, -0.075]] as const) {
+      const t = new THREE.Mesh(new THREE.TorusGeometry(R * r, 0.01, 6, 96), dark)
+      t.rotation.x = Math.PI / 2
+      t.position.y = y
+      this.craft.add(t)
+    }
+    const engCore = new THREE.MeshStandardMaterial({ color: '#05080c', emissive: new THREE.Color('#7fe6ff'), emissiveIntensity: 2.2 })
+    this.engMat = engCore
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * Math.PI * 2 + Math.PI / 6
+      const pod = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.09, 0.05, 24), dark)
+      pod.position.set(Math.cos(a) * R * 0.6, -0.11, Math.sin(a) * R * 0.6)
+      this.craft.add(pod)
+      const core = new THREE.Mesh(new THREE.CircleGeometry(0.058, 24), engCore)
+      core.rotation.x = Math.PI / 2
+      core.position.set(pod.position.x, -0.137, pod.position.z)
+      this.craft.add(core)
+    }
+    const hub = new THREE.Mesh(new THREE.TorusGeometry(R * 0.14, 0.014, 8, 48), engCore)
+    hub.rotation.x = Math.PI / 2
+    hub.position.y = -0.168
+    this.craft.add(hub)
+    // heat haze / engine glow: a soft cold shimmer under the hull (no pastel disc)
+    this.under = glowMat('#7fdcff')
+    const ug = new THREE.Mesh(new THREE.CircleGeometry(R * 1.2, 48), this.under)
     ug.rotation.x = Math.PI / 2
-    ug.position.y = -0.14
+    ug.position.y = -0.2
     this.craft.add(ug)
     // wide tractor beam
     this.beamMat = glowMat('#8ff6ff', BEAM_FRAG)
@@ -213,6 +277,10 @@ export class UfoChaser {
     })
     this.spot.frustumCulled = false
   }
+
+  /** v16: beam/spotlight only while he's slowed after a hit (eased on / off) */
+  beamOn = false
+  private beamK = 0
 
   /** opening flare (intro): 0..1 extra beam / glow */
   flare = 0
@@ -256,14 +324,14 @@ export class UfoChaser {
       this.pose.y = -0.74 + 0.1 * near + over * 0.35 + 0.025 * Math.sin(time * 2.2)
       this.pose.dist = 3.9 - 1.2 * near + hunt * 1.4 * (1 - near) + back * 1.5 - over * 1.2
     } else if (v === 'saucer') {
-      // v15 hybrid: B's looming swoop above / behind him (a bit higher), beam on the runner;
-      // a stumble brings it lower and closer, then it rises back as the threat eases
-      const sx = 0.4 * Math.sin(time * 0.75) + 0.08 * Math.sin(time * 1.9)
+      // v16: up high and a little BEHIND him (nearer the camera than he is), following and swooping
+      // gently; a hit no longer brings it in — the spotlight switching on is the threat cue
+      const sx = 0.26 * Math.sin(time * 0.75) + 0.05 * Math.sin(time * 1.9)
       this.swoopV = (sx - this.lastSwoopX) / Math.max(dt, 1e-3)
       this.lastSwoopX = sx
-      this.pose.x = sx * (1 - 0.55 * near)
-      this.pose.y = 0.34 - 0.62 * near - 0.15 * this.lunge + over * 0.2 + 0.04 * Math.sin(time * 1.6)
-      this.pose.dist = 4.9 - 2.0 * near - 0.6 * this.lunge + back * 2 - over * 1.4
+      this.pose.x = sx
+      this.pose.y = 0.52 + over * 0.1 + 0.035 * Math.sin(time * 1.6)
+      this.pose.dist = 4.4 + back * 2 - over * 1.4
     } else if (v === 'b') {
       // large and looming above and behind, swooping side to side; dives lower when it closes in
       const sx = 0.42 * Math.sin(time * 0.75) + 0.08 * Math.sin(time * 1.9)
@@ -288,22 +356,33 @@ export class UfoChaser {
     this.group.position.set(this.x, this.y + bob, this.z)
     if (v === 'saucer') {
       this.craft.rotation.set(-0.18, 0, THREE.MathUtils.clamp(-this.swoopV * 0.45, -0.4, 0.4))
-      if (this.ring) this.ring.rotation.y = time * 2.6
+      if (this.ring) this.ring.rotation.y = time * 0.5
     } else if (v === 'a') {
       this.craft.rotation.set(-0.3 + 0.03 * Math.sin(time * 1.4), 0, 0.04 * Math.sin(time * 1.1))
-      if (this.ring) this.ring.rotation.y = time * 2.6
+      if (this.ring) this.ring.rotation.y = time * 0.5
     } else if (v === 'b') this.craft.rotation.set(-0.25, time * 0.7, THREE.MathUtils.clamp(-this.swoopV * 0.5, -0.45, 0.45))
     else this.craft.rotation.set(-0.42 + 0.04 * Math.sin(time * 2.1), time * (v === 'c' ? 2.2 : 0.9), 0.05 * Math.sin(time * 1.7))
     this.group.visible = true
     const pulse = 0.5 + 0.5 * Math.sin(time * (5 + 6 * near))
-    this.eyeMat.emissiveIntensity = v === 'a' || v === 'saucer' ? 1 + 0.8 * pulse + 2 * this.flare : 2.5 + 3 * pulse + 3 * this.flare
-    for (let i = 0; i < this.bladeLights.length; i++) this.bladeLights[i].emissiveIntensity = (i + Math.floor(time * 8)) % 3 === 0 ? 5 : 1.8
-    this.under.uniforms.uAmp.value = 0.7 + 0.6 * near + 1.2 * this.flare
+    this.eyeMat.emissiveIntensity = v === 'a' || v === 'saucer' ? 0.5 + 0.15 * pulse + 1.2 * this.flare : 2.5 + 3 * pulse + 3 * this.flare
+    if (v === 'saucer' || v === 'a') {
+      // subtle running lights: a slow sweep + a crisp strobe on two lenses
+      const n = this.bladeLights.length
+      for (let i = 0; i < n; i++) {
+        const ph = (((time * 0.6 - i / n) % 1) + 1) % 1
+        this.bladeLights[i].emissiveIntensity = 1.1 + 1.6 * Math.exp(-ph * 9) + (i % 8 === 0 && time % 1.3 < 0.06 ? 4 : 0)
+      }
+      if (this.engMat) this.engMat.emissiveIntensity = 2 + 0.3 * Math.sin(time * 17) + 0.2 * Math.sin(time * 41) + 1.5 * this.flare
+    } else for (let i = 0; i < this.bladeLights.length; i++) this.bladeLights[i].emissiveIntensity = (i + Math.floor(time * 8)) % 3 === 0 ? 5 : 1.8
+    this.under.uniforms.uAmp.value = (this.variant === 'saucer' ? 0.4 : 1) * (0.7 + 0.6 * near + 1.2 * this.flare)
     this.beamMat.uniforms.uTime.value = time
   }
 
   /** Point the searchlight at the runner (local frame), after any on-screen clamping of the craft. */
-  aim(target: THREE.Vector3, visible: boolean) {
+  aim(target: THREE.Vector3, visible0: boolean) {
+    if (this.variant === 'saucer') this.beamK += ((this.beamOn ? 1 : 0) - this.beamK) * (this.beamOn ? 0.35 : 0.12)
+    else this.beamK = 1
+    const visible = visible0 && this.beamK > 0.02
     const g = this.group.position
     this.tmp.copy(target).sub(g)
     const len = Math.max(0.5, this.tmp.length())
@@ -312,9 +391,9 @@ export class UfoChaser {
     this.beam.lookAt(target)
     this.beam.scale.set(1, 1, len)
     this.beam.visible = visible
-    this.beamMat.uniforms.uAmp.value = visible ? (this.variant === 'a' || this.variant === 'saucer' ? 0.55 : 0.35) + 0.45 * this.near + 1.4 * this.flare : 0
+    this.beamMat.uniforms.uAmp.value = visible ? ((this.variant === 'a' || this.variant === 'saucer' ? 0.55 : 0.35) + 0.45 * this.near + 1.4 * this.flare) * this.beamK : 0
     this.spot.position.set(target.x, 0.03, target.z)
     this.spot.visible = visible
-    this.spotMat.uniforms.uAmp.value = 0.35 + 0.4 * this.near + 0.9 * this.flare
+    this.spotMat.uniforms.uAmp.value = (0.35 + 0.4 * this.near + 0.9 * this.flare) * this.beamK
   }
 }

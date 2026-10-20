@@ -346,10 +346,15 @@ export function buildPickup(kind: 'hand', glow: THREE.Texture, emblem: THREE.Tex
   const color = '#ffd36a'
   // Rare Fifth Dimension logo — spinning emblem disc (15s invincible when collected)
   if (emblem) {
-    const disc = new THREE.Mesh(
-      new THREE.CircleGeometry(0.72, 48),
-      new THREE.MeshBasicMaterial({ map: emblem, transparent: true, side: THREE.DoubleSide, depthWrite: true, alphaTest: 0.3, toneMapped: false }),
-    )
+    // v16: Jenks's uploaded circle logo, pixel-exact (1024² sRGB, mipmapped), uncropped on a square
+    // plane; one-sided front + back copies so neither face is ever seen mirrored; exact colours (no tone map)
+    emblem.anisotropy = Math.max(emblem.anisotropy, 8)
+    emblem.generateMipmaps = true
+    emblem.minFilter = THREE.LinearMipmapLinearFilter
+    emblem.needsUpdate = true
+    const mat = new THREE.MeshBasicMaterial({ map: emblem, transparent: true, side: THREE.FrontSide, depthWrite: false, alphaTest: 0.01, toneMapped: false })
+    const disc = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.5), mat)
+    disc.renderOrder = 2
     spin.add(disc)
     const back = disc.clone()
     back.rotation.y = Math.PI

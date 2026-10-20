@@ -35,7 +35,7 @@ import {
 import { keyPos, obstacleS, type Corner, type ObKind, type Obstacle, type PowerKind, type Track } from './track'
 
 export type Action = 'left' | 'right' | 'jump' | 'slide'
-/** fall = gap / void / missed corner · crash = crystal pylon / crashed satellite · caught = the UFO got you */
+/** fall = gap / void / missed corner · crash = crashed rocket / crashed satellite · caught = the UFO got you */
 export type LifeCause = 'caught' | 'fall' | 'crash'
 
 export type RunEvent =
