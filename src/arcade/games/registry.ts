@@ -39,7 +39,7 @@ export const GAMES: ArcadeGame[] = [
   {
     id: 'fifth-run',
     title: 'Fifth Glide',
-    tagline: 'Miami to the galaxies. Catch the stars.',
+    tagline: 'Run the Fifth Dimension. Catch the stars.',
     status: 'new',
     boxArt: art('box-fifth-glide.webp'),
     route: '/fifth-run',

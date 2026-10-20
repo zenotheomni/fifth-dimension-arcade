@@ -4,7 +4,7 @@ export const PALETTE = {
   ink: '#121212',
   soft: '#F2F0EA',
   muted: '#6B6B73',
-  /** Brand accents from logos / Miami sunset */
+  /** Brand accents from logos / Fifth Dimension dusk */
   teal: '#00C8C4',
   coral: '#FF5A3C',
   orange: '#FF8C28',

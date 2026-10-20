@@ -532,7 +532,7 @@ export default function LobbyPage() {
         </p>
         <h1 style={{ margin: 0, fontSize: '1.6rem' }}>Open on your phone</h1>
         <p style={{ maxWidth: 360, color: 'rgba(242,240,234,0.7)' }}>
-          Built for touch — flick shots, juiced pixels, Miami dusk. Scan to step
+          Built for touch — flick shots, juiced pixels, Fifth Dimension nights. Scan to step
           onto the Fifth Floor.
         </p>
         <img className="qr" src={qrSrc} width={200} height={200} alt="QR code to the arcade" />

@@ -4,7 +4,7 @@ Seeded 3-lane endless **on-foot** runner (three.js). Route `/arcade/fifth-run` (
 Display name **Fifth Glide**; internal game id stays `fifth-run` (scores / challenges / seeds).
 Lobby retired the broken Fifth Gear driving build — same cabinet now launches this runner.
 
-Theme: **how far you can run**. Galaxy run: Miami night → cosmic highway → deep space.
+Theme: **how far you can run**. Galaxy run: Fifth Dimension dusk → cosmic highway → deep space.
 Vibe: Temple Run / Subway Surfers — swipe lanes, jump, slide, collect 💫 stars.
 
 Player: **rigged astronaut** (`render/humanRunner.ts`, `public/art/runner/astronaut.glb`, Rocketbox MIT

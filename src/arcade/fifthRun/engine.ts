@@ -383,7 +383,7 @@ class Engine {
       }
       if (this.run.s >= 600 && this.biomeCalled < 1) {
         this.biomeCalled = 1
-        this.say('Leaving Miami…', 'teal', 1.4)
+        this.say('Into the Fifth Dimension…', 'teal', 1.4)
       } else if (this.run.s >= 1600 && this.biomeCalled < 2) {
         this.biomeCalled = 2
         this.say('Deep space.', 'gold', 1.5)
