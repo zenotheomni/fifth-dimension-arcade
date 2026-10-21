@@ -12,7 +12,7 @@ import { hashSeed, mulberry32 } from '../../core/seededRandom'
 import { type Cell, type Reach, type Row, anyReach, fresh, stepRow } from './validate'
 import { CORNER, JUMP_APEX, JUMP_T, OB, VOID, laneX, START_CLEAR_M, levelAt, pressureAt, speedAt, voidChanceAt, warmAt } from './constants'
 
-/** void = a lane of the path is missing (narrow section / edge drop-off); car = crashed satellite (static, switch lanes) */
+/** void = a lane of the path is missing (narrow section / edge drop-off); car = toppled broken neon sign (static, switch lanes; was a crashed satellite) */
 export type ObKind = 'barrier' | 'overhead' | 'pipe' | 'block' | 'gap' | 'void' | 'car'
 
 /** 90° corner (L / R) or T-junction (either way), centred at path distance `s`. */
