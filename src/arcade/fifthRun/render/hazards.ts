@@ -1,7 +1,7 @@
 /**
  * v21 lane hazards (dodge by switching lanes; sim kinds 'block' / 'car', collision unchanged).
  * Replaces the palm-tree lane obstacle and the broken neon signs. No symbols or arrows anywhere.
- *  - meteor:    glowing rock with molten orange cracks + smoke, in a cracked crater
+ *  - meteor:    a stack of 2–3 glowing rocks (taller than a jump) with molten orange cracks + smoke, in a cracked crater
  *  - crates:    toppled stack of dark cargo crates with thin cyan edge trim
  *  - statue:    fallen chrome statue pieces — big polished head + broken arm, shards
  *  - holo:      broken holographic billboard — cracked frame, glitching blank teal panel
@@ -103,24 +103,37 @@ function lavaTexture(seed: number): THREE.CanvasTexture | null {
 function meteor(glow: THREE.Texture, seed: number): Item {
   const group = new THREE.Group()
   const r = rng(seed)
-  const geo = new THREE.IcosahedronGeometry(0.82, 4)
-  const p = geo.attributes.position as THREE.BufferAttribute
-  const v = new THREE.Vector3()
-  const ph = [r() * 6, r() * 6, r() * 6]
-  for (let i = 0; i < p.count; i++) {
-    v.fromBufferAttribute(p, i)
-    const n = 1 + 0.16 * Math.sin(v.x * 3.1 + ph[0]) * Math.cos(v.y * 2.7 + ph[1]) + 0.08 * Math.sin(v.z * 6.3 + ph[2]) + 0.04 * Math.sin(v.x * 11 + v.y * 9)
-    v.multiplyScalar(n)
-    v.y *= 0.82
-    p.setXYZ(i, v.x, v.y, v.z)
+  // v23: a STACK of 2–3 molten rocks, clearly taller than a jump (≈ crate / barricade height) so it
+  // reads as "switch lanes", not "hop it". Collision is unchanged (meteors were never jumpable).
+  const rockGeo = (rad: number, sq: number, k: number) => {
+    const geo = new THREE.IcosahedronGeometry(rad, 4)
+    const p = geo.attributes.position as THREE.BufferAttribute
+    const v = new THREE.Vector3()
+    const ph = [r() * 6 + k, r() * 6, r() * 6]
+    for (let i = 0; i < p.count; i++) {
+      v.fromBufferAttribute(p, i)
+      const n = 1 + 0.16 * Math.sin(v.x * 3.1 + ph[0]) * Math.cos(v.y * 2.7 + ph[1]) + 0.08 * Math.sin(v.z * 6.3 + ph[2]) + 0.04 * Math.sin(v.x * 11 + v.y * 9)
+      v.multiplyScalar(n)
+      v.y *= sq
+      p.setXYZ(i, v.x, v.y, v.z)
+    }
+    geo.computeVertexNormals()
+    return geo
   }
-  geo.computeVertexNormals()
   const lava = lavaTexture(seed)
   const rock = new THREE.MeshStandardMaterial({ color: '#1d1714', roughness: 0.92, metalness: 0.05, emissive: new THREE.Color('#ff5a10'), emissiveIntensity: 2.2, emissiveMap: lava ?? undefined })
-  const m = new THREE.Mesh(geo, rock)
-  m.position.y = 0.48
-  m.rotation.set(r() * 0.6, r() * 6, r() * 0.4)
-  group.add(m)
+  const three = r() < 0.65
+  // [radius, squash, y centre, x offset]
+  const stack: [number, number, number, number][] = three
+    ? [[0.86, 0.72, 0.56, 0], [0.62, 0.8, 1.38, (r() - 0.5) * 0.25], [0.44, 0.85, 2.0, (r() - 0.5) * 0.3]]
+    : [[0.9, 0.76, 0.6, 0], [0.7, 0.85, 1.62, (r() - 0.5) * 0.25]]
+  stack.forEach(([rad, sq, y, x], k) => {
+    const m = new THREE.Mesh(rockGeo(rad, sq, k), rock)
+    m.position.set(x, y, (r() - 0.5) * 0.15)
+    m.rotation.set(r() * 0.6, r() * 6, r() * 0.4)
+    group.add(m)
+  })
+  const top = three ? 2.35 : 2.25
   crater(group, 3.2)
   // rubble chunks around the impact
   const rub = new THREE.MeshStandardMaterial({ color: '#221c22', roughness: 0.9 })
@@ -130,8 +143,8 @@ function meteor(glow: THREE.Texture, seed: number): Item {
     c.position.set(Math.cos(a) * d, 0.05, Math.sin(a) * d)
     group.add(c)
   }
-  const halo = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 2), glowMaterial(glow, '#ff6a1a', 0.5))
-  halo.position.set(0, 0.55, 0.6)
+  const halo = new THREE.Mesh(new THREE.PlaneGeometry(2.8, top + 0.6), glowMaterial(glow, '#ff6a1a', 0.5))
+  halo.position.set(0, top / 2, 0.6)
   group.add(halo)
   const haloMat = halo.material as THREE.MeshBasicMaterial
   // smoke: soft grey puffs rising (normal blending)
@@ -148,7 +161,7 @@ function meteor(glow: THREE.Texture, seed: number): Item {
     haloMat.opacity = 0.38 + 0.12 * Math.sin(t * 2.3)
     for (const q of puffs) {
       const u = (t * 0.35 + q.o) % 1
-      q.m.position.set(0.15 * Math.sin(u * 5 + q.o * 9), 0.9 + u * 2.2, -0.1)
+      q.m.position.set(0.15 * Math.sin(u * 5 + q.o * 9), top - 0.3 + u * 2.2, -0.1)
       q.m.scale.setScalar(0.6 + u * 1.4)
       q.mat.opacity = 0.55 * Math.sin(u * Math.PI)
     }
