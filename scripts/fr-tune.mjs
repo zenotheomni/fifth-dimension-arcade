@@ -207,7 +207,9 @@ if (!JSON_OUT) {
 const d = bots.decent
 check('decent player lasts ~90–360 s (median, 3-life)', d.medianT >= 90 && d.medianT <= 360, `median ${d.medianT}s, IQR ${d.p25T}–${d.p75T}s`)
 const rk = bots.rookie
-check('first-timer (rookie bot) median ≥ 60 s, nobody out before 30 s', rk.medianT >= 60 && rk.under30 === 0, `median ${rk.medianT}s, IQR ${rk.p25T}–${rk.p75T}s, ${rk.under30} under 30 s`)
+const ex = bots.expert
+check('expert bot median 180–240 s', ex.medianT >= 180 && ex.medianT <= 240, `median ${ex.medianT}s`)
+check('first-timer (rookie bot) median 45–60 s, ≤3% out before 30 s', rk.medianT >= 45 && rk.medianT <= 60 && rk.under30 <= rk.n * 0.03, `median ${rk.medianT}s, IQR ${rk.p25T}–${rk.p75T}s, ${rk.under30} under 30 s`)
 check('perfect-timing bot (info): survives 300 s', true, `${bots.perfect.survivedCap}/${bots.perfect.n}`)
 check('scores fit server cap (500000)', Math.max(...Object.values(bots).map((b) => b.maxScore)) < 500000, `max ${Math.max(...Object.values(bots).map((b) => b.maxScore))}`)
 

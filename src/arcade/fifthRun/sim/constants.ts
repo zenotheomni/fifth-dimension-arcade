@@ -49,7 +49,7 @@ export const speedAt = (s: number) => {
   return k === 0 ? RAMP.v0 : vStep(k - 1) + (vStep(k) - vStep(k - 1)) * e
 }
 /** post-cap pressure 0..PRESSURE.max: shrinks the gap between obstacle waves after top speed */
-export const PRESSURE = { max: 0.6, overM: 4000 }
+export const PRESSURE = { max: 0.66, overM: 4000 }
 export const pressureAt = (s: number) => (s <= CAP_S ? 0 : Math.min(PRESSURE.max, (PRESSURE.max * (s - CAP_S)) / PRESSURE.overM))
 /**
  * Warm-up distance (≈ first 40 s, easing out linearly): sparse single-car rows, slower oncoming
