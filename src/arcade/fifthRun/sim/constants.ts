@@ -49,7 +49,7 @@ export const speedAt = (s: number) => {
   return k === 0 ? RAMP.v0 : vStep(k - 1) + (vStep(k) - vStep(k - 1)) * e
 }
 /** post-cap pressure 0..PRESSURE.max: shrinks the gap between obstacle waves after top speed */
-export const PRESSURE = { max: 0.66, overM: 4000 }
+export const PRESSURE = { max: 0.4, overM: 4000 }
 export const pressureAt = (s: number) => (s <= CAP_S ? 0 : Math.min(PRESSURE.max, (PRESSURE.max * (s - CAP_S)) / PRESSURE.overM))
 /**
  * Warm-up distance (≈ first 40 s, easing out linearly): sparse single-car rows, slower oncoming
@@ -127,8 +127,8 @@ export const CORNER = {
   segMinHard: 70,
   segMaxHard: 140,
   tP: 0.22,
-  preS: 1.7,
-  postS: 1.9,
+  preS: 1.4,
+  postS: 1.5,
   postT: 70,
 }
 /** Path half width the runner can occupy — lane centres are ±LANE_W. */
@@ -160,7 +160,9 @@ export const CHASE = { hit: 0.75, catchAt: 0.3, recoverS: 7, warmRecoverCut: 0.4
 export const SLOW_TICKS = Math.round(CHASE.slowS * FR_HZ)
 
 /** Logo pickup: 10 s invincible + speed surge. */
-export const BOOST = { mul: 1.08, easeInS: 0.4, easeOutS: 1.0 }
+/** v19: a real boost — ×1.75 speed (may pass RAMP.vMax, up to vMax × mul, during the power-up only),
+ *  2× distance metres and 2× stars; eases in, and back down to normal speed over its last easeOutS */
+export const BOOST = { mul: 1.75, easeInS: 0.6, easeOutS: 1.8, distX: 2, starX: 2 }
 
 export const POWER_TICKS = {
   /** Fifth Dimension logo — 10 s invincible + 1.5× speed surge */

@@ -127,9 +127,9 @@ const passable = (t: Tok) => t !== 'K' && t !== 'H'
 
 /** Star coin lines (Temple Run): LINE_MIN..LINE_MAX stars STAR_SPACING m apart, then ≥ LINE_GAP_MIN m (and ≥ ~1.1 s) of nothing. */
 export const STAR_SPACING = 3
-export const LINE_MIN = 10
+export const LINE_MIN = 14
 /** base line length max; a jump arc / slide trio can add ≤ 2 more, so a line never exceeds 15 */
-export const LINE_MAX = 16
+export const LINE_MAX = 24
 export const LINE_GAP_MIN = 5
 
 export class Track {
@@ -216,6 +216,10 @@ export class Track {
     const v = speedAt(cs)
     // nothing on the corner square or just after it (a T keeps both arms empty for postT m)
     const after = q(cs + CORNER.half + (kind === 'T' ? CORNER.postT : Math.max(14, v * CORNER.postS)))
+    // v19: the clear corner approach / exit carries a star line too (stars nearly all run long);
+    // nothing on the corner square itself
+    for (let s = Math.max(this.prevEnd + 2.2, this.starFloor); s <= cs - CORNER.half - 2; s += STAR_SPACING) this.addKey(this.pathLane, s, 0.9)
+    for (let s = cs + CORNER.half + 5; s <= after; s += STAR_SPACING) this.addKey(this.pathLane, s, 0.9)
     if (this.lineLeft > 0) this.endLine(this.prevEnd, v)
     this.lineGapTo = Math.max(this.lineGapTo, after + 4)
     this.cursor = after
@@ -224,7 +228,7 @@ export class Track {
     this.seqQ = []
     this.reach = fresh(after)
     this.vEnd = after
-    this.starFloor = after + 2
+    this.starFloor = after + STAR_SPACING
     const segMin = CORNER.segMin + (CORNER.segMinHard - CORNER.segMin) * L
     const segMax = CORNER.segMax + (CORNER.segMaxHard - CORNER.segMax) * L
     const seg = segMin + this.r() * (segMax - segMin)
@@ -247,14 +251,15 @@ export class Track {
     const kr = this.r()
     const side = this.r() < 0.5 ? 0 : 2
     // v18: more one-lane pinches
-    const gone = kr < 0.45 ? [0, 2] : kr < 0.72 ? [side] : [1]
-    for (const l of gone) this.addOb('void', l, start, len)
-    this.voids++
+    const gone = kr < 0.4 ? [0, 2] : kr < 0.66 ? [side] : [1]
     const open = [0, 1, 2].filter((l) => !gone.includes(l))
     // route check: the open lanes must be reachable in time, else no void here
     const vcells = [0, 1, 2].map((l) => (gone.includes(l) ? 'X' : 'E')) as Cell[]
     const vReach = stepRow(this.reach, this.vEnd, { s0: start, cells: vcells, len: [len, len, len], end }, v)
     if (!anyReach(vReach)) return false
+    // v19: only lay the void once its route check passed (a rejected one used to leave stray holes behind)
+    for (const l of gone) this.addOb('void', l, start, len)
+    this.voids++
     // stars run the open lane (the one nearest the current line)
     let path = open[0]
     for (const l of open) if (Math.abs(l - this.pathLane) < Math.abs(path - this.pathLane)) path = l
@@ -397,6 +402,61 @@ export class Track {
   ensure(s: number) {
     while (this.cursor < s) this.genRow()
     this.generatedTo = this.cursor
+    this.guard(this.cursor - 90)
+  }
+
+  // ── v19 safety net: replay the exact route validator over finished rows (same grouping, void
+  // overlay and corner resets as validateObstacles) and open any row it can't pass. The generator's own
+  // per-row check carries a slightly different state history, so a razor-thin chain could slip through.
+  // Rows are only checked once complete (≥ 90 m behind the cursor), so the result doesn't depend on how
+  // far ahead ensure() is called — the layout stays a pure function of the seed.
+  private gReach: Reach = fresh(0)
+  private gPrevEnd = 0
+  private gDone = -1
+  private gCornerS = -1
+  /** rows opened by the safety net (stats) */
+  guardFixes = 0
+  private guard(lim: number): void {
+    const map: Record<string, Cell> = { barrier: 'B', overhead: 'O', pipe: 'P', block: 'K', car: 'K', gap: 'G', void: 'X' }
+    const obs = this.obstacles
+    let i = 0
+    while (i < obs.length && obs[i].s <= this.gDone) i++
+    while (i < obs.length && obs[i].s < lim) {
+      const s0 = obs[i].s
+      let j = i
+      const row: Row = { s0, cells: ['E', 'E', 'E'], len: [0, 0, 0], end: s0 }
+      while (j < obs.length && Math.abs(obs[j].s - s0) < 0.011) {
+        const o = obs[j]
+        row.cells[o.lane] = map[o.kind] ?? 'K'
+        row.len[o.lane] = o.len
+        row.end = Math.max(row.end, o.s + o.len)
+        j++
+      }
+      for (const vo of obs) {
+        if (vo.s >= s0) break
+        if (vo.kind === 'void' && s0 > vo.s + 0.01 && s0 < vo.s + vo.len) row.cells[vo.lane] = 'X'
+      }
+      for (const c of this.corners) if (c.s > this.gCornerS && c.s < s0) {
+        this.gReach = fresh(c.s)
+        this.gPrevEnd = c.s
+        this.gCornerS = c.s
+      }
+      let nx = stepRow(this.gReach, this.gPrevEnd, row, speedAt(s0))
+      if (!anyReach(nx)) {
+        // open the row: drop its obstacles (never makes anything harder); voids stay (lanes still missing)
+        const drop = new Set(obs.slice(i, j).filter((o) => o.kind !== 'void').map((o) => o.id))
+        if (drop.size) {
+          this.obstacles = obs.filter((o) => !drop.has(o.id))
+          this.guardFixes++
+          return this.guard(lim)
+        }
+        nx = fresh(row.end)
+      }
+      this.gReach = nx
+      this.gPrevEnd = Math.max(this.gPrevEnd, row.end)
+      this.gDone = s0 + 0.011
+      i = j
+    }
   }
 
   /** Drop items well behind the runner (keeps arrays short on long runs). */
@@ -451,7 +511,9 @@ export class Track {
       this.postCorner--
       // out of a turn: one obstacle at most, never a wall, so there's always an obvious line
       let kept = false
-      for (let i = 0; i < 3; i++) {
+      // v19: scan from a random end, so the kept obstacle isn't always the LEFT-most one
+      const order = this.r() < 0.5 ? [0, 1, 2] : [2, 1, 0]
+      for (const i of order) {
         if (toks[i] === 'E') continue
         if (kept || toks[i] === 'K' || toks[i] === 'G' || toks[i] === 'H') toks[i] = 'E'
         else kept = true
@@ -459,7 +521,7 @@ export class Track {
     }
     // first rows: never put a crate straight in the start lane before the player has learned to swipe
     if (W > 0.62 && toks[1] === 'K') {
-      const e = toks[0] === 'E' ? 0 : 2
+      const e = toks[0] === 'E' && toks[2] === 'E' ? (this.r() < 0.5 ? 0 : 2) : toks[0] === 'E' ? 0 : 2
       toks[1] = toks[e]
       toks[e] = 'K'
     }
@@ -482,18 +544,29 @@ export class Track {
         const len = toks.map(lenOf)
         return { s0: at, cells: toks.map((t) => (t === 'H' ? 'X' : t)) as Cell[], len, end: at + Math.max(0, ...len) }
       }
-      let nx = stepRow(this.reach, this.vEnd, mk(s0), speedAt(s0))
+      // v19: a full-width must-jump / must-slide row also has to be reachable with 0.1 s less slack on
+      // landing, so a razor-thin chain (gap jump → truss) can't depend on one exact state history
+      const full = toks.every((t) => t !== 'E' && t !== 'K' && t !== 'H')
+      const slack = (st: Reach, v: number) => st.map((l) => l.map((x) => ({ mv: x.mv, act: x.act + v * 0.1 })))
+      const ok = (at: number) => {
+        const v1 = speedAt(at)
+        const r1 = stepRow(this.reach, this.vEnd, mk(at), v1)
+        return anyReach(r1) && (!full || anyReach(stepRow(slack(this.reach, v1), this.vEnd, mk(at), v1))) ? r1 : null
+      }
+      let nx = ok(s0) ?? stepRow(this.reach, this.vEnd, mk(s0), speedAt(s0)).map(() => [])
       // 1) give the row a little more room (keeps the pattern)
       for (let k = 0; k < 18 && !anyReach(nx); k++) {
         s0 = q(s0 + 1)
-        nx = stepRow(this.reach, this.vEnd, mk(s0), speedAt(s0))
+        nx = ok(s0) ?? [[], [], []]
         if (anyReach(nx)) this.repairs++
       }
+      if (!anyReach(nx)) nx = stepRow(this.reach, this.vEnd, mk(s0), speedAt(s0))
       // 2) still blocked: open the blocker nearest to a reachable lane
       while (!anyReach(nx)) {
-        const best = [0, 1, 2].filter((l) => this.reach[l].length > 0)[0] ?? 1
+        const rl = [0, 1, 2].filter((l) => this.reach[l].length > 0)
+        const best = rl.length ? rl[Math.floor(this.r() * rl.length)] : 1
         let pick = -1
-        for (const l of [best, 1, 0, 2]) if (toks[l] !== 'E') { pick = l; break }
+        for (const l of this.r() < 0.5 ? [best, 1, 0, 2] : [best, 1, 2, 0]) if (toks[l] !== 'E') { pick = l; break }
         if (pick < 0) break
         toks[pick] = 'E'
         this.repairs++
@@ -602,7 +675,7 @@ export class Track {
     this.prevEnd = rowEnd
 
     // ── spacing to next wave: reaction window shrinks; density ramps like Surfers ──
-    const base = 0.78 - 0.5 * L
+    const base = 0.76 - 0.48 * L
     // warm-up: up to ~2.9× the gap between waves at the start line, tapering by WARM_M; a little
     // extra breathing room while the level is still low (fades out as L → 1)
     // after top speed, waves keep tightening (density-only difficulty); the validator still guards every row

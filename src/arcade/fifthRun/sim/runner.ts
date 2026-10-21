@@ -113,6 +113,10 @@ export type RunState = {
   sBank: number
   /** streak bonus metres earned */
   bonusM: number
+  /** v19 boost metres: the extra distance + star metres earned while boosted (2× scoring) */
+  boostM: number
+  /** v19 boost level 0..1 (eased; a second logo mid-boost never drops it) */
+  boostK: number
   /** ticks spent held at the far edge of a corner square waiting for a (late) turn swipe */
   edgeHold: number
   /** s of the last corner handled (turned / fallen at); the next corner is the first beyond it */
@@ -170,6 +174,8 @@ export function newRun(): RunState {
     tx: 0,
     sBank: 0,
     bonusM: 0,
+    boostM: 0,
+    boostK: 0,
     edgeHold: 0,
     cDone: -1,
     turnQ: 0,
@@ -184,18 +190,13 @@ export function newRun(): RunState {
 }
 
 /** Score = distance: metres run + STAR_M bonus metres per star. */
-export const scoreOf = (st: RunState) => Math.floor(st.s + st.sBank) + st.keys * STAR_M + st.bonusM
+export const scoreOf = (st: RunState) => Math.floor(st.s + st.sBank + st.boostM) + st.keys * STAR_M + st.bonusM
 
 /** Speed multiplier from stumble slow-down × logo surge (eased). */
 export function speedMul(st: RunState) {
   let m = 1
   if (st.slowT > 0) m *= 1 - (1 - CHASE.slowMul) * (st.slowT / SLOW_TICKS)
-  if (st.hand > 0) {
-    const el = (POWER_TICKS.hand - st.hand) / FR_HZ
-    const left = st.hand / FR_HZ
-    const k = Math.max(0, Math.min(1, el / BOOST.easeInS, left / BOOST.easeOutS))
-    m *= 1 + (BOOST.mul - 1) * k
-  }
+  if (st.boostK > 0) m *= 1 + (BOOST.mul - 1) * st.boostK
   return m
 }
 
@@ -495,8 +496,16 @@ export function step(st: RunState, track: Track, opts: StepOpts) {
   } else if (st.slide > 0) st.slide--
 
   st.s += st.v * FR_DT
-  // hard top speed: boosts can't push past RAMP.vMax
-  st.v = Math.min(RAMP.vMax, speedAt(st.s) * speedMul(st))
+  {
+    // boost level: rises over easeInS, follows the eased tail down over the last easeOutS (smooth to 0)
+    const tgt = st.hand > 0 ? Math.min(1, st.hand / FR_HZ / BOOST.easeOutS) : 0
+    const tail = tgt * tgt * (3 - 2 * tgt)
+    st.boostK = tail > st.boostK ? Math.min(tail, st.boostK + FR_DT / BOOST.easeInS) : tail
+  }
+  // v19 boost: metres count BOOST.distX× while the power-up runs
+  if (st.hand > 0) st.boostM += st.v * FR_DT * (BOOST.distX - 1)
+  // hard top speed RAMP.vMax; only the boost may pass it (eased, so the return to normal is smooth)
+  st.v = Math.min(st.hand > 0 ? RAMP.vMax * BOOST.mul : RAMP.vMax, speedAt(st.s) * speedMul(st))
 
   // ── corners ──
   if (corner) {
@@ -633,7 +642,8 @@ export function step(st: RunState, track: Track, opts: StepOpts) {
       st.combo++
       if (st.combo > st.maxCombo) st.maxCombo = st.combo
       st.mult = multFor(st.combo)
-      const pts = STAR_M
+      const pts = st.hand > 0 ? STAR_M * BOOST.starX : STAR_M
+      if (st.hand > 0) st.boostM += STAR_M * (BOOST.starX - 1)
       st.keyPts += pts
       ev?.push({ type: 'key', id: k.id, pts, combo: st.combo, mult: st.mult, magnet: false, first: st.keys === 1 })
       if (st.mult > prevMult) ev?.push({ type: 'mult', mult: st.mult })
