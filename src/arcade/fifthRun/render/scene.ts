@@ -23,8 +23,8 @@ import { blobTexture, chevronTexture, glowTexture, shootingStarTexture, streakTe
 import { PathLayout, turned, type Seg, type WorldPt } from './layout'
 import { buildCornerSquare, buildDeckChunk, deckMaterial, DECK_HALF, glowStripMaterial } from './deck'
 import { voidSkyMaterial } from './sky'
-import { buildPalmObstacle, buildTruss } from './relics'
-import { buildNeonSign } from './neonSign'
+import { buildTruss } from './relics'
+import { LONG_HAZARDS, SHORT_HAZARDS, buildHazard } from './hazards'
 import { buildArch, buildIsland, buildTurnSign } from './decor'
 
 export type QualityTier = 'high' | 'low'
@@ -195,6 +195,9 @@ export class FrScene {
     block: { group: THREE.Group; lamp?: THREE.MeshStandardMaterial; pose?: (variant: number, time: number) => void }[]
     car: { group: THREE.Group }[]
   } = { barrier: [], overhead: [], pipe: [], block: [], car: [] }
+  /** v21 hazard pools, keyed `s:<kind>` (block footprint) / `l:<kind>` (car footprint) */
+  private hz = new Map<string, { group: THREE.Group; pose: (variant: number, time: number) => void }[]>()
+  private hzIdx = new Map<string, number>()
   private arches: { group: THREE.Group; tubes: THREE.MeshStandardMaterial[] }[] = []
   private signs: ReturnType<typeof buildTurnSign>[] = []
   private islands: (ReturnType<typeof buildIsland> & { slot: number })[] = []
@@ -456,9 +459,19 @@ export class FrScene {
     add(this.pools.pipe, () => buildPipe(metal), 18)
     add(this.pools.barrier, () => buildBarrier(chev, metal), 24)
     add(this.pools.overhead, () => buildTruss(this.glow), 24)
-    add(this.pools.block, () => buildPalmObstacle(), 16)
-    // v20: broken neon signs replace the crashed satellites (same 'car' slot, footprint and rules)
-    for (let i = 0; i < 10; i++) add(this.pools.car, () => buildNeonSign(this.glow, i), 1)
+    // v21: lane hazards (meteor / crates / chrome statue / holo billboard / barricade) replace the palm
+    // obstacle and the neon signs; same 'block' / 'car' slots, footprints and collision
+    let seed = 11
+    for (const k of SHORT_HAZARDS) {
+      const arr: { group: THREE.Group; pose: (variant: number, time: number) => void }[] = []
+      add(arr, () => buildHazard(k, this.glow, seed++), 4, false)
+      this.hz.set(`s:${k}`, arr)
+    }
+    for (const k of LONG_HAZARDS) {
+      const arr: { group: THREE.Group; pose: (variant: number, time: number) => void }[] = []
+      add(arr, () => buildHazard(k, this.glow, seed++, true), 3, false)
+      this.hz.set(`l:${k}`, arr)
+    }
     for (const k of ['hand'] as PowerKind[]) {
       for (let i = 0; i < 2; i++) {
         const p = buildPickup(k, this.glow, emblem)
@@ -1041,6 +1054,7 @@ export class FrScene {
     const S = v.s
     const L = this.layout
     const idx = { barrier: 0, overhead: 0, pipe: 0, block: 0, car: 0 }
+    this.hzIdx.clear()
     const now = v.time
     for (const o of v.obstacles) {
       if (o.s > S + VIEW_AHEAD + 10) break
@@ -1063,8 +1077,16 @@ export class FrScene {
         lift = k * 2
       }
       const p = L.pt(seg, mid, laneX(o.lane), this.wp2)
-      const pool = this.pools[o.kind as keyof typeof this.pools] as { group: THREE.Group; lamp?: THREE.MeshStandardMaterial; pose?: (variant: number, time: number) => void }[]
-      const item = pool?.[idx[o.kind as keyof typeof idx]++]
+      let item: { group: THREE.Group; lamp?: THREE.MeshStandardMaterial; pose?: (variant: number, time: number) => void } | undefined
+      if (o.kind === 'block' || o.kind === 'car') {
+        const key = o.kind === 'block' ? `s:${SHORT_HAZARDS[o.variant % SHORT_HAZARDS.length]}` : `l:${LONG_HAZARDS[o.variant % LONG_HAZARDS.length]}`
+        const n = this.hzIdx.get(key) ?? 0
+        item = this.hz.get(key)?.[n]
+        this.hzIdx.set(key, n + 1)
+      } else {
+        const pool = this.pools[o.kind as keyof typeof this.pools] as { group: THREE.Group; lamp?: THREE.MeshStandardMaterial }[]
+        item = pool?.[idx[o.kind as keyof typeof idx]++]
+      }
       if (!item) continue
       item.group.visible = true
       item.group.position.set(p.x, lift, p.z)
@@ -1079,6 +1101,7 @@ export class FrScene {
       const pool = this.pools[k] as { group: THREE.Group }[]
       for (let i = idx[k]; i < pool.length; i++) pool[i].group.visible = false
     }
+    for (const [key, arr] of this.hz) for (let i = this.hzIdx.get(key) ?? 0; i < arr.length; i++) arr[i].group.visible = false
     if (this.smashT.size > 40) this.smashT.clear()
   }
 
