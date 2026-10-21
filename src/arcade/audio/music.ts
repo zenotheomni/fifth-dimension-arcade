@@ -56,6 +56,33 @@ export const FIFTH_GLIDE_THEME: MusicTrack = {
   duckedLevel: 0.22,
 }
 
+/**
+ * Fifth Glide song rotation — edit this list to add songs. The run starts on the first one; when a
+ * run outlasts a song the next one "unlocks" (Now Playing toast) and the list keeps alternating.
+ * A single entry just loops. Drop the file in public/audio/ and add an entry, e.g.:
+ *   { id: 'fifth-glide-2', title: 'Jenks - <title>', file: 'fifth-glide-2' }  (needs .m4a + .mp3)
+ */
+const FIFTH_GLIDE_SONGS: { id: string; title: string; file: string }[] = [
+  // song 2 (Oct 2026): "Wattup Yo" — unlocks when a run outlasts Thousand Yard Stare
+  { id: 'fifth-glide-2', title: 'Jenks - Wattup Yo', file: 'fifth-glide-2' },
+]
+
+const fromFile = (x: { id: string; title: string; file: string }): MusicTrack => ({
+  id: x.id,
+  title: x.title,
+  sources: [
+    { src: `${BASE}audio/${x.file}.m4a`, type: 'audio/mp4; codecs="mp4a.40.2"' },
+    { src: `${BASE}audio/${x.file}.mp3`, type: 'audio/mpeg' },
+  ],
+  level: FIFTH_GLIDE_THEME.level,
+  duckedLevel: FIFTH_GLIDE_THEME.duckedLevel,
+})
+
+/** per-scene rotations (a scene without one just loops its SCENE_TRACKS song) */
+export const SCENE_PLAYLISTS: Partial<Record<MusicScene, MusicTrack[]>> = {
+  'fifth-run': [FIFTH_GLIDE_THEME, ...FIFTH_GLIDE_SONGS.map(fromFile)],
+}
+
 export const SCENE_TRACKS: Record<MusicScene, MusicTrack | null> = {
   lobby: LOBBY_THEME,
   'court-vision': COURT_VISION_THEME,

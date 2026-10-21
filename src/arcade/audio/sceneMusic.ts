@@ -7,7 +7,7 @@
  * WebAudio routing is unavailable we fall back to element.volume.
  */
 import { getAudioContext, onGesture, onVisibility, peekAudioContext } from './audioContext'
-import { MUSIC_FADE_IN_S, MUSIC_FADE_OUT_S, SCENE_TRACKS, type MusicScene, type MusicTrack } from './music'
+import { MUSIC_FADE_IN_S, MUSIC_FADE_OUT_S, SCENE_PLAYLISTS, SCENE_TRACKS, type MusicScene, type MusicTrack } from './music'
 
 type Deck = {
   /** the element currently carrying the song (one of `els`) */
@@ -80,6 +80,38 @@ function prime(d: Deck) {
 /** gapless loop: shortly before the end, start the twin at 0 and crossfade (WebAudio-routed decks only).
  *  The playing copy keeps its native loop until the twin is really running, so a slow start can only
  *  ever fall back to the plain loop — never silence or a doubled intro. */
+const badTracks = new Set<string>()
+const playedIds = new Set<string>()
+function nextTrack(d: Deck): MusicTrack | null {
+  const list = (SCENE_PLAYLISTS[scene] ?? []).filter((x) => !badTracks.has(x.id))
+  if (!d.track || list.length < 2) return d.track
+  const i = list.findIndex((x) => x.id === d.track!.id)
+  return i < 0 ? d.track : list[(i + 1) % list.length]
+}
+function announce(t: MusicTrack, unlocked: boolean) {
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('arcade-music-track', { detail: { title: t.title, unlocked } }))
+}
+
+/** fallback when the crossfade didn't run: the song ended → start the next one on the same element */
+function hardNext(d: Deck, e: HTMLAudioElement) {
+  e.onended = null
+  if (d.el !== e || d !== active) return
+  const next = nextTrack(d)
+  if (!next || next === d.track) {
+    e.currentTime = 0
+    void e.play().catch(() => {})
+    return
+  }
+  const seen = playedIds.has(next.id)
+  playedIds.add(next.id)
+  d.track = next
+  e.src = pickSrc(next)
+  e.loop = true
+  void e.play().catch(() => {})
+  d.warm = false
+  announce(next, !seen)
+}
+
 function loopTick() {
   const ctx = peekAudioContext()
   for (const d of decks) {
@@ -92,7 +124,22 @@ function loopTick() {
     const t = d.els[1 - i]
     const gi = d.sub[i]!
     const gt = d.sub[1 - i]!
-    if (t.src !== e.src) t.src = e.src
+    // what comes after this song: the next track in the scene's playlist, else the same song again
+    const next = nextTrack(d)
+    const nextSrc = next === d.track ? e.src : new URL(pickSrc(next!), location.href).href
+    if (t.src !== nextSrc) {
+      t.src = nextSrc
+      t.onerror = () => {
+        // a playlist file that can't load (missing song 2): drop it from the rotation for this session
+        if (next && next !== d.track) badTracks.add(next.id)
+        t.onerror = null
+      }
+    }
+    // playlist: the song must not loop on its own — if the crossfade can't happen, 'ended' switches
+    if (next !== d.track) {
+      e.loop = false
+      if (!e.onended) e.onended = () => hardNext(d, e)
+    }
     // warm the twin's decoder a few seconds ahead (silent: its sub-gain is 0)
     if (left0 < LOOP_XF_S + 4 && left0 > LOOP_XF_S + 1.5 && !d.warm) {
       d.warm = true
@@ -127,6 +174,13 @@ function loopTick() {
         gi.gain.setValueAtTime(1, now)
         gi.gain.linearRampToValueAtTime(0, now + left)
         d.el = t
+        if (next && next !== d.track) {
+          const seen = playedIds.has(next.id)
+          playedIds.add(next.id)
+          d.track = next
+          announce(next, !seen)
+        }
+        e.onended = null
         setTimeout(() => {
           e.pause()
           e.loop = true
@@ -291,6 +345,7 @@ export function setMusicScene(next: MusicScene) {
   }
   ducked = false
   active = d
+  playedIds.add(track.id)
   kick()
 }
 

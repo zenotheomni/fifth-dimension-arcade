@@ -382,7 +382,7 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
               <h3>Controls</h3>
               <ul className="fr-howto__controls">
                 <li><b>↰&nbsp;↱</b>The path turns 90°. Swipe left / right at the corner to take it. Too late (or the wrong way) and you run off into the void. A glowing sign and arrows on the floor show which way, and at a T you pick either side</li>
-                <li><b>←&nbsp;→</b>Between corners, swipe left / right to switch lanes, dodge crashed rockets and crashed satellites and grab stars</li>
+                <li><b>←&nbsp;→</b>Between corners, swipe left / right to switch lanes, dodge palm trees and crashed satellites and grab stars</li>
                 <li><b>↑</b>Swipe up to jump gaps and low rubble</li>
                 <li><b>↓</b>Swipe down to slide under the red SLIDE laser gates. You can’t jump them. Steel pipes: jump or slide</li>
               </ul>
@@ -391,7 +391,7 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
               <h3>Rules</h3>
               <ul>
                 <li><b>🛸</b>A UFO is right behind you. Stumble and it swoops in; run clean to keep it back</li>
-                <li><b>⚠</b>Watch for gaps, parts of the path that drop away, and narrow stretches. Crashed rockets and crashed satellites block a lane, so go around them</li>
+                <li><b>⚠</b>Watch for gaps, parts of the path that drop away, and narrow stretches. Palm trees and crashed satellites block a lane, so go around them</li>
                 <li><b>⚠</b>Hit an obstacle and you stumble: you slow down and it closes in. Stumble again before you pull away (about {Math.round((CHASE.hit - CHASE.catchAt) * CHASE.recoverS)} s of clean running) and the UFO catches you</li>
                 <li><b>{'♥'.repeat(START_LIVES)}</b>{START_LIVES} lives. Getting caught, falling off the path, or running into a pylon or a satellite costs one. You flash and respawn right where you were, then keep running</li>
                 <li><b>☠</b>Lose all {START_LIVES} and the run is over. It gets faster the farther you go</li>
