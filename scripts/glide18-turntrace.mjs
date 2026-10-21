@@ -76,6 +76,8 @@ const res = await page.evaluate((MIN) => {
   const prof = { view: 0, ensure: 0, sync: 0, t: 0 }
   const wrapT = (o, k, key) => { const f0 = o[k].bind(o); o[k] = (...a) => { const t = performance.now(); const r = f0(...a); prof[key] = Math.max(prof[key], (performance.now() - t) * (turnF >= 0 && turnF < 90 ? 1 : 0)); return r } }
   wrapT(v, 'update', 'view'); wrapT(e.track, 'ensure', 'ensure'); wrapT(v.layout, 'sync', 'sync')
+  const costsT = [], costsP = []
+  const pct = (a, q) => { const b = [...a].sort((x, y) => x - y); return +(b[Math.floor(b.length * q)] ?? 0).toFixed(2) }
   let f = 0, turns = 0, costTurn = 0, costPlain = 0, nPlain = 0, sumPlain = 0
   const end = MIN * 60
   while (e.clock < end && !e.run.dead && e.phase === 'playing') {
@@ -86,6 +88,7 @@ const res = await page.evaluate((MIN) => {
     const t0 = performance.now()
     e.update(dt, true)
     const cost = performance.now() - t0
+    ;(turnF >= 0 && turnF < 90 ? costsT : costsP).push(cost)
     if (turnF === 0) turns++
     f++
     v.world.updateMatrixWorld(true)
@@ -111,7 +114,7 @@ const res = await page.evaluate((MIN) => {
     if (turnF > 400) turnF = -1
   }
   const r = (o) => Object.fromEntries(Object.entries(o).map(([k, x]) => [k, +x.toFixed(3)]))
-  return { gameMin: +(e.clock / 60).toFixed(2), turns, speed: +e.run.v.toFixed(1), turn: r(W), straight: r(S), updateMsMaxTurn: +costTurn.toFixed(2), prof, updateMsMeanPlain: +(sumPlain / Math.max(1, nPlain)).toFixed(3) }
+  return { gameMin: +(e.clock / 60).toFixed(2), turns, speed: +e.run.v.toFixed(1), turn: r(W), straight: r(S), updateMsMaxTurn: +costTurn.toFixed(2), prof, costTurn: { p99: pct(costsT, 0.99), p999: pct(costsT, 0.999), over2: costsT.filter((c) => c > 2).length, n: costsT.length }, costPlain: { p99: pct(costsP, 0.99), p999: pct(costsP, 0.999), over2: costsP.filter((c) => c > 2).length, n: costsP.length }, updateMsMeanPlain: +(sumPlain / Math.max(1, nPlain)).toFixed(3) }
 }, MIN)
 console.log('trace', JSON.stringify(res))
 await browser.close()
