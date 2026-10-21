@@ -478,7 +478,11 @@ export function step(st: RunState, track: Track, opts: StepOpts) {
   if (st.latQ) {
     // near a corner a left/right swipe is a turn, not a lane change
     const d = corner ? corner.s - st.s : 1e9
-    if (corner && d <= st.v * CORNER.armS + CORNER.half && d >= -CORNER.half - 0.5) {
+    // v23 fix: while invincible the corner takes itself, so swipes stay lane changes. (At boost speed
+    // the old v·armS window was ~100 m long and swallowed nearly every swipe.) Only a T, right at the
+    // square, still reads a swipe as the way to go.
+    const arm = st.hand > 0 ? (corner?.kind === 'T' ? CORNER.half + 2 : -1e9) : st.v * CORNER.armS + CORNER.half
+    if (corner && d <= arm && d >= -CORNER.half - 0.5) {
       st.turnQ = st.latQ === 'left' ? -1 : 1
       ev?.push({ type: 'turnQ', id: corner.id, dir: st.turnQ as -1 | 1 })
     } else applyAction(st, st.latQ, track, ev)
