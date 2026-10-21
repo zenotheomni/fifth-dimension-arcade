@@ -15,14 +15,14 @@ export const laneX = (lane: number) => (lane - 1) * LANE_W
  * Forward speed (m/s). Temple Run pace on a narrow sky path: brisk 21 m/s start, ramping toward vmax
  * (≈26 m/s at 1 km, ≈31 m/s at 2.5 km, ≈35 m/s at 5 km).
  */
-export const SPEED = { v0: 24, vmax: 54, k: 2200 }
+export const SPEED = { v0: 21.6, vmax: 48.6, k: 2200 } // v22: −10%
 /**
  * v17 speed ramp: clear steps, one every RAMP.stepS seconds of running (+inc m/s each), up to a hard
  * cap RAMP.vMax (≈ the old ×1.5 invincibility surge: fast, not crazy). Step k lasts stepS·v_k metres
  * and blends in over RAMP.blendM. After the cap, difficulty keeps rising through obstacle density
  * only (pressureAt). Pure function of distance (deterministic).
  */
-export const RAMP = { v0: 32, inc: 5, stepS: 18, blendM: 45, vMax: 56 }
+export const RAMP = { v0: 28.8, inc: 4.5, stepS: 18, blendM: 45, vMax: 50.4 } // v22: all speeds −10% (boost stays ×BOOST.mul)
 /** last step index (the one that reaches vMax) */
 export const RAMP_KMAX = Math.ceil((RAMP.vMax - RAMP.v0) / RAMP.inc)
 const vStep = (k: number) => Math.min(RAMP.vMax, RAMP.v0 + RAMP.inc * k)
@@ -118,6 +118,10 @@ export const START_LIVES = 3
  */
 export const CORNER = {
   half: 3.2,
+  /** v22: after running off a corner, respawn this far before the corner square (no auto-turn) */
+  backM: 40,
+  /** v22: coyote time at the lip of a corner square before he goes over (s) */
+  coyoteS: 0.05,
   armS: 1.3,
   /** extra time past the far edge of the corner square you may still turn (+ more during the warm-up) */
   lateS: 0.28,

@@ -75,6 +75,9 @@ function seedFromUrl(): string | null {
   }
 }
 
+/** v22 dev param: combo alert placement (?meter=bottom|ufo) */
+const METER = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('meter') === 'ufo' ? 'ufo' : 'bottom'
+
 export default function FifthRun({ challenge = null, seeded = null, onChallengeResolved, onRunResult, onPlayNormal, renderShare }: FifthRunProps) {
   const hostRef = useRef<HTMLDivElement>(null)
   const gameRef = useRef<FifthRunHandle | null>(null)
@@ -253,7 +256,7 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
   const recordStore = DOCK_LINKS.find((d) => d.id === 'record-store')?.href ?? 'https://5dimperial.com/collections/music?view=record-store'
 
   return (
-    <div className="fr-root">
+    <div className={`fr-root fr-meter--${METER}`}>
       <Link to="/" className="fr-pill fr-back">
         ← Floor
       </Link>

@@ -126,6 +126,10 @@ export type RunState = {
   /** corner fall: the correct way to auto-turn on respawn (0 = none) */
   pendTurn: number
   pendCorner: number
+  /** v22 run-off: forward speed carried over the edge while falling (m/s, decays) */
+  runV: number
+  /** v22 run-off: s where he went over (score is banked so the respawn rewind never costs metres) */
+  offS: number
   turns: number
   cornerFallN: number
   obCur: number
@@ -183,6 +187,8 @@ export function newRun(): RunState {
     pendCorner: -1,
     turns: 0,
     cornerFallN: 0,
+    runV: 0,
+    offS: 0,
     obCur: 0,
     keyCur: 0,
     pkCur: 0,
@@ -315,12 +321,16 @@ function cornerFall(st: RunState, c: Corner, want: number, opts: StepOpts, ev: R
     ev?.push({ type: 'dead', kind: 'fall', ob: c.id })
     return
   }
-  st.cDone = c.s
+  void want
+  // v22: no auto-turn. He keeps his momentum over the edge (see step()), then respawns back on the
+  // approach still facing the corner, so the player has to take it themselves.
   st.turnQ = 0
-  st.pendTurn = cornerDir(c, want || (st.x <= 0 ? -1 : 1))
-  st.pendCorner = c.id
+  st.edgeHold = 0
+  const v = st.v
   loseLife(st, fake, 'fall', ev)
-  st.downS = c.s + CORNER.half + 0.6
+  st.runV = v
+  st.offS = st.s
+  st.downS = c.s - CORNER.half - CORNER.backM
 }
 
 export function queueAction(st: RunState, a: Action) {
@@ -360,6 +370,12 @@ function loseLife(st: RunState, o: Obstacle, cause: LifeCause, ev: RunEvent[] | 
 /** End of the downed beat: back on your feet at the same spot, flashing (i-frames), still running. */
 function respawn(st: RunState, track: Track, ev: RunEvent[] | null | undefined) {
   const cause = st.downKind ?? 'crash'
+  if (st.runV > 0 || st.offS) {
+    // rewind to the approach: bank the metres already run so the score never drops
+    st.sBank += Math.max(0, st.offS - st.downS)
+    st.runV = 0
+    st.offS = 0
+  }
   st.s = st.downS
   if (st.pendTurn) {
     ev?.push({ type: 'turn', id: st.pendCorner, s: st.cDone, dir: st.pendTurn as -1 | 1, auto: true, respawn: true })
@@ -447,6 +463,11 @@ export function step(st: RunState, track: Track, opts: StepOpts) {
     // downed: falling into the hole / knocked flat — no forward motion, inputs ignored
     st.down--
     st.v = 0
+    // v22 run-off: carried forward off the cliff, slowing as he drops
+    if (st.downKind === 'fall' && st.runV > 0) {
+      st.s += st.runV * FR_DT
+      st.runV *= 0.86 // ≈ 3–4 m past the lip: he visibly runs off, the camera stays at the rim
+    }
     st.queued = null
     st.latQ = null
     if (st.down === 0) respawn(st, track, ev)
@@ -515,24 +536,17 @@ export function step(st: RunState, track: Track, opts: StepOpts) {
     } else if (st.turnQ && st.s >= corner.s - CORNER.half) {
       const ok = corner.kind === 'T' || (corner.kind === 'L' ? st.turnQ < 0 : st.turnQ > 0)
       if (ok) doTurn(st, corner, st.turnQ as -1 | 1, false, ev)
-      else {
-        cornerFall(st, corner, st.turnQ, opts, ev)
-        return
-      }
-    } else {
+      else st.turnQ = 0 // v22: wrong way is no turn at all: he carries straight on and runs off the edge
+    }
+    if (st.cDone < corner.s) {
       // Forgiving late turn: the runner never leaves the corner square. Past its far edge he is held at
       // the edge (still running in place, on the deck) for the late window; a swipe in that time turns
       // cleanly from the edge, otherwise he runs off.
-      const edge = corner.s + CORNER.half - 0.35
-      if (st.s > edge) {
-        st.s = edge
-        st.edgeHold++
-        const lateT = CORNER.lateS + CORNER.lateWarmS * warmAt(st.s)
-        if (st.edgeHold * FR_DT > lateT) {
-          st.edgeHold = 0
-          cornerFall(st, corner, 0, opts, ev)
-          return
-        }
+      // v22: no invisible wall. Past the far edge of the corner square there is no deck: he runs off.
+      // (a brief coyote step at the lip still turns cleanly — doTurn() puts him back on the square)
+      if (st.s > corner.s + CORNER.half + st.v * CORNER.coyoteS) {
+        cornerFall(st, corner, 0, opts, ev)
+        return
       }
     }
   }

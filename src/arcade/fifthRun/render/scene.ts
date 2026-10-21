@@ -142,7 +142,7 @@ export const CAM_TUNE = {
   /** look-at height (pitch: lower = looks down more) */ lookY: 0.35,
   /** base FOV offset (deg) */ fov: 0,
   /** turn settle time (s) — critically damped spring */ turnS: 0.13,
-  /** how far the camera leans into a turn as soon as the swipe is accepted (0..1 of 90°) */ lead: 0.3,
+  /** how far the camera leans into a turn as soon as the swipe is accepted (0..1 of 90°) */ lead: 0,
   /** FOV kick multiplier (speed-ups / boost) */ fovKick: 1,
   /** camera shake multiplier */ shake: 1,
 }
@@ -595,8 +595,8 @@ export class FrScene {
   preTurn(id: number, dir: number, corners: Corner[]) {
     const c = corners.find((x) => x.id === id)
     if (!c) return
-    if (c.kind !== 'T' && (c.kind === 'L') !== dir < 0) return // wrong way: no lean
-    this.lead = { dir, s: c.s }
+    void dir
+    // v22: no pre-turn lean: the camera stays straight down the track until the turn itself
   }
 
   /** Speed-up beat: brief FOV punch. */
@@ -1392,7 +1392,9 @@ export class FrScene {
     dz -= this.camPush
     // a fall: the camera stays at the rim and looks down after him
     const fall = v.dead && v.deathKind === 'gap' ? Math.min(1, v.deadT * 1.4) : 0
-    this.camera.position.set(this.camX + sx, this.camY + sy, rl.z * 0 + dz)
+    // v22: on a fall the camera eases back + up a little so the rim and the falling runner stay in frame
+    const fe = fall * fall * (3 - 2 * fall)
+    this.camera.position.set(this.camX + sx, this.camY + sy + fe * 1.2, rl.z * 0 + dz + fe * 4.5)
     this.lookT.set(rl.x * 0.5, CAM_TUNE.lookY - fall * 3.5, -13 + fall * 8)
     // ── opening cinematic: start high behind the chaser, swoop down past it onto the astronaut ──
     const opn = v.idle ? 0 : (v.opening ?? 1)
