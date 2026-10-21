@@ -23,6 +23,10 @@ function bind() {
   window.addEventListener('pointerdown', onTap, { capture: true, passive: true })
   window.addEventListener('touchend', onTap, { capture: true, passive: true })
   window.addEventListener('keydown', onTap, { capture: true, passive: true })
+  // v26: touchstart too — resume the context as early as possible on every touch (iOS 'interrupted')
+  window.addEventListener('touchstart', () => {
+    if (ctx && ctx.state !== 'running' && !document.hidden) void ctx.resume().catch(() => {})
+  }, { capture: true, passive: true })
   // v25: any first interaction anywhere (not just the Enter button) starts the lobby song
   window.addEventListener('click', onTap, { capture: true, passive: true })
   document.addEventListener('visibilitychange', () => {
