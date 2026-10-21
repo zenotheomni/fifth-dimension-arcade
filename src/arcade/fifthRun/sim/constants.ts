@@ -49,7 +49,7 @@ export const speedAt = (s: number) => {
   return k === 0 ? RAMP.v0 : vStep(k - 1) + (vStep(k) - vStep(k - 1)) * e
 }
 /** post-cap pressure 0..PRESSURE.max: shrinks the gap between obstacle waves after top speed */
-export const PRESSURE = { max: 0.66, overM: 4000 }
+export const PRESSURE = { max: 0.4, overM: 4000 }
 export const pressureAt = (s: number) => (s <= CAP_S ? 0 : Math.min(PRESSURE.max, (PRESSURE.max * (s - CAP_S)) / PRESSURE.overM))
 /**
  * Warm-up distance (≈ first 40 s, easing out linearly): sparse single-car rows, slower oncoming
@@ -127,8 +127,8 @@ export const CORNER = {
   segMinHard: 70,
   segMaxHard: 140,
   tP: 0.22,
-  preS: 1.15,
-  postS: 1.25,
+  preS: 1.4,
+  postS: 1.5,
   postT: 70,
 }
 /** Path half width the runner can occupy — lane centres are ±LANE_W. */

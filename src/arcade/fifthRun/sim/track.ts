@@ -251,7 +251,7 @@ export class Track {
     const kr = this.r()
     const side = this.r() < 0.5 ? 0 : 2
     // v18: more one-lane pinches
-    const gone = kr < 0.45 ? [0, 2] : kr < 0.72 ? [side] : [1]
+    const gone = kr < 0.4 ? [0, 2] : kr < 0.66 ? [side] : [1]
     const open = [0, 1, 2].filter((l) => !gone.includes(l))
     // route check: the open lanes must be reachable in time, else no void here
     const vcells = [0, 1, 2].map((l) => (gone.includes(l) ? 'X' : 'E')) as Cell[]
@@ -675,7 +675,7 @@ export class Track {
     this.prevEnd = rowEnd
 
     // ── spacing to next wave: reaction window shrinks; density ramps like Surfers ──
-    const base = 0.68 - 0.44 * L
+    const base = 0.76 - 0.48 * L
     // warm-up: up to ~2.9× the gap between waves at the start line, tapering by WARM_M; a little
     // extra breathing room while the level is still low (fades out as L → 1)
     // after top speed, waves keep tightening (density-only difficulty); the validator still guards every row
