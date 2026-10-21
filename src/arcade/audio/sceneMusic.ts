@@ -312,6 +312,11 @@ function ensureDecks() {
       noTwin = true
       for (const d of decks) for (const e of d.els) e.loop = false
     }
+    // QA (v25): simulate an iOS interruption — the system pauses the song and suspends the context
+    ;(globalThis as unknown as { __ARCADE_MUSIC_INTERRUPT?: () => void }).__ARCADE_MUSIC_INTERRUPT = () => {
+      active?.el.pause()
+      void peekAudioContext()?.suspend()
+    }
   }
 }
 

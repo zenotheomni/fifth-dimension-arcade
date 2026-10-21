@@ -118,6 +118,12 @@ export const START_LIVES = 3
  */
 export const CORNER = {
   half: 3.2,
+  /** v25: a sideways swipe is a TURN only this close before the corner square: ≈0.32 s of running,
+   *  clamped to 8–14 m (+ the square's half). Outside it — or toward a way the corner doesn't go —
+   *  a swipe is always a lane change. */
+  turnWinS: 0.32,
+  turnWinMin: 8,
+  turnWinMax: 14,
   /** v22: after running off a corner, respawn this far before the corner square (no auto-turn) */
   backM: 40,
   /** v22: coyote time at the lip of a corner square before he goes over (s) */
@@ -193,3 +199,6 @@ export const multFor = (combo: number) => {
 }
 
 export const START_CLEAR_M = 110
+
+/** v25: distance (m, to the corner centre) inside which a matching sideways swipe is a turn */
+export const turnWindowM = (v: number) => CORNER.half + Math.min(CORNER.turnWinMax, Math.max(CORNER.turnWinMin, v * CORNER.turnWinS))
