@@ -543,7 +543,8 @@ export function step(st: RunState, track: Track, opts: StepOpts) {
       // the edge (still running in place, on the deck) for the late window; a swipe in that time turns
       // cleanly from the edge, otherwise he runs off.
       // v22: no invisible wall. Past the far edge of the corner square there is no deck: he runs off.
-      if (st.s > corner.s + CORNER.half) {
+      // (a brief coyote step at the lip still turns cleanly — doTurn() puts him back on the square)
+      if (st.s > corner.s + CORNER.half + st.v * CORNER.coyoteS) {
         cornerFall(st, corner, 0, opts, ev)
         return
       }

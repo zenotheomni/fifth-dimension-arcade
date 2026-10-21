@@ -671,7 +671,7 @@ export class Track {
     this.prevEnd = rowEnd
 
     // ── spacing to next wave: reaction window shrinks; density ramps like Surfers ──
-    const base = 0.76 - 0.48 * L
+    const base = 0.84 - 0.54 * L // v22: a touch roomier early (speeds −10% shortened jumps)
     // warm-up: up to ~2.9× the gap between waves at the start line, tapering by WARM_M; a little
     // extra breathing room while the level is still low (fades out as L → 1)
     // after top speed, waves keep tightening (density-only difficulty); the validator still guards every row
