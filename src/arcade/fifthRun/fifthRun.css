@@ -911,3 +911,31 @@
 /* star / streak juice: the star count pops on every pickup */
 .fr-pop { animation: fr-pop 0.22s ease-out; display: inline-flex; }
 @keyframes fr-pop { 0% { transform: scale(1.32); filter: brightness(1.6); } 100% { transform: scale(1); filter: none; } }
+
+/* v19: x2 boost badge on the distance box while the 5D logo power runs */
+.fr-cell--main {
+  position: relative;
+}
+.fr-x2 {
+  position: absolute;
+  top: -0.55rem;
+  right: -0.45rem;
+  padding: 0.12rem 0.42rem;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  color: #1a0b22;
+  background: linear-gradient(135deg, #ffe066, #ff9a3c);
+  box-shadow: 0 0 12px rgba(255, 200, 60, 0.85);
+  animation: fr-x2-pulse 0.7s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+.fr-power__x2 {
+  color: #ffe066;
+  font-weight: 900;
+}
+@keyframes fr-x2-pulse {
+  from { transform: scale(1); }
+  to { transform: scale(1.12); }
+}

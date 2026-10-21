@@ -537,7 +537,7 @@ class Engine {
       case 'power':
         sfxPower('hand')
         sfxSurge()
-        this.say('Fifth Dimension · 10s invincible', 'teal', 1.4)
+        this.say('Fifth Dimension · x2 boost', 'teal', 1.4)
         break
       case 'boostEnd':
         this.say('Back to earth', 'teal', 0.9)

@@ -301,6 +301,12 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
               {hud.score.toLocaleString('en-US')}
               <small>m</small>
             </span>
+            {/* v19: boost doubles metres + stars while the logo power runs */}
+            {hud.hand > 0 ? (
+              <span className="fr-x2" aria-label="double distance and stars">
+                x2
+              </span>
+            ) : null}
             {/* v16: hearts sit centred BELOW the distance box (never over the number) */}
             <div className="fr-lives" aria-label={`${hud.lives} lives`}>
           {[0, 1, 2].map((i) => (
@@ -333,7 +339,7 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
         <div className="fr-powers">
           {hud.hand > 0 ? (
             <span className="fr-power fr-power--hand" style={{ ['--p' as string]: hud.hand }}>
-              <i aria-hidden>✦</i>Invincible · {Math.ceil(hud.hand * (POWER_TICKS.hand / FR_HZ))}s
+              <i aria-hidden>✦</i>Invincible · {Math.ceil(hud.hand * (POWER_TICKS.hand / FR_HZ))}s · <b className="fr-power__x2">x2</b>
             </span>
           ) : null}
         </div>
@@ -402,7 +408,7 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
               <ul>
                 <li><b>m</b>Your score is your distance, 1 point per metre</li>
                 <li><b>💫</b>Each shooting star adds +{STAR_M} m. Every {STREAK_EVERY} in a row without missing one pays a streak bonus (+{STREAK_M} m, then +{STREAK_M * 2} m, +{STREAK_M * 3} m…). The ones arcing over obstacles need a jump</li>
-                <li><img src={BRAND_LOGO} alt="" width={28} height={28} style={{ borderRadius: '50%', verticalAlign: 'middle', marginRight: 6, boxShadow: '0 0 10px #ffc83c' }} />Rare 5D logo: {Math.round(POWER_TICKS.hand / FR_HZ)} s invincible plus a {BOOST.mul}× speed surge. Nothing can catch you, you can’t fall, corners take themselves, and you blast through everything without losing your star streak. You blink for the last {BLINK_S} s, still invincible, so you know it’s almost over</li>
+                <li><img src={BRAND_LOGO} alt="" width={28} height={28} style={{ borderRadius: '50%', verticalAlign: 'middle', marginRight: 6, boxShadow: '0 0 10px #ffc83c' }} />Rare 5D logo: {Math.round(POWER_TICKS.hand / FR_HZ)} s invincible plus a {BOOST.mul}× speed boost that counts double: every metre and every star is worth 2×. Nothing can catch you, you can’t fall, corners take themselves, and you blast through everything without losing your star streak. You blink for the last {BLINK_S} s, still invincible, so you know it’s almost over</li>
               </ul>
             </section>
             <button type="button" className="ffa-btn ffa-btn--primary fr-howto__start" onClick={startFromHowto} disabled={hud.phase === 'loading'}>

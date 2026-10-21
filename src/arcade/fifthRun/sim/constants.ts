@@ -160,7 +160,9 @@ export const CHASE = { hit: 0.75, catchAt: 0.3, recoverS: 7, warmRecoverCut: 0.4
 export const SLOW_TICKS = Math.round(CHASE.slowS * FR_HZ)
 
 /** Logo pickup: 10 s invincible + speed surge. */
-export const BOOST = { mul: 1.08, easeInS: 0.4, easeOutS: 1.0 }
+/** v19: a real boost — ×1.75 speed (may pass RAMP.vMax, up to vMax × mul, during the power-up only),
+ *  2× distance metres and 2× stars; eases in, and back down to normal speed over its last easeOutS */
+export const BOOST = { mul: 1.75, easeInS: 0.6, easeOutS: 1.8, distX: 2, starX: 2 }
 
 export const POWER_TICKS = {
   /** Fifth Dimension logo — 10 s invincible + 1.5× speed surge */
