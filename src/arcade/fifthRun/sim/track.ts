@@ -119,6 +119,16 @@ const PERMS = [
 ]
 
 const q = (x: number) => Math.round(x * 100) / 100
+/** v26: seconds of travel kept hole-free after a jump / slide obstacle, and clear after a hole before one */
+const HOLE_AFTER_T = 1.2
+const HOLE_BEFORE_T = 0.45
+/** side of a partial row: mean lane of its obstacles (0 / 1 / 2), -1 for empty or full-width rows */
+const sideOf = (t: Tok[]): number => {
+  const ls = [0, 1, 2].filter((l) => t[l] !== 'E')
+  if (!ls.length || ls.length === 3 || (ls.length === 2 && ls[0] === 0 && ls[1] === 2)) return -1
+  const m = ls.reduce((a, b) => a + b, 0) / ls.length
+  return m < 1 ? 0 : m > 1 ? 2 : 1
+}
 const passable = (t: Tok) => t !== 'K' && t !== 'H'
 
 /** Star coin lines (Temple Run): LINE_MIN..LINE_MAX stars STAR_SPACING m apart, then ≥ LINE_GAP_MIN m (and ≥ ~1.1 s) of nothing. */
@@ -140,6 +150,12 @@ export class Track {
   private cursor = START_CLEAR_M
   /** end of the last jump/slide obstacle — rockets keep a clear gap from them */
   private lastJS = -1e9
+  /** v26: end of the last jump / slide obstacle (barrier, arch, pipe) — no hole lands right after it */
+  private lastBOP = -1e9
+  /** v26: end of the last hole (gap, pothole, void) — a little room before the next jump / slide */
+  private lastHole = -1e9
+  /** v26: side (0 left · 1 centre · 2 right) of recent partial rows, to cap same-side runs at 2 */
+  private sideHist: number[] = []
   /** v18 choreographed sequence: queued rows (left→right token triples) */
   private seqQ: Tok[][] = []
   private seqRow = false
@@ -189,6 +205,8 @@ export class Track {
 
   private addOb(kind: ObKind, lane: number, s: number, len: number, vs = 0) {
     if (kind === 'barrier' || kind === 'overhead' || kind === 'pipe' || kind === 'gap') this.lastJS = Math.max(this.lastJS, s + len)
+    if (kind === 'barrier' || kind === 'overhead' || kind === 'pipe') this.lastBOP = Math.max(this.lastBOP, s + len)
+    if (kind === 'gap' || kind === 'void') this.lastHole = Math.max(this.lastHole, s + len)
     const variant = Math.floor(this.r() * 1000)
     this.obstacles.push({ id: this.nextId++, kind, lane, s: q(s), len: q(len), vs, variant, smashed: false })
   }
@@ -239,7 +257,8 @@ export class Track {
     const p = voidChanceAt(s0)
     if (p <= 0 || this.r() >= p) return false
     const lead = v * 0.55
-    const start = q(s0 + lead)
+    // v26: never open a hole within ~1.2 s of a jump landing / slide exit
+    const start = q(Math.max(s0 + lead, this.lastBOP + v * HOLE_AFTER_T))
     const len = q(VOID.minLen + this.r() * (VOID.maxLen - VOID.minLen) * (0.6 + 0.4 * L))
     const end = start + len
     if (end + v * 1.1 + CORNER.half + 8 > this.nextCornerS) return false
@@ -349,7 +368,7 @@ export class Track {
     const S: string[][] = [
       ['KKE', 'EKK', 'KKE', 'OOO'], // right, left, back right, slide, go
       ['EKK', 'KKE', 'EKK', 'BBB'], // left, right, left, jump
-      ['KEE', 'KBE', 'KEE', 'KOE', 'KEE'], // wall on the left for a while (jump / slide inside it)
+      ['KEE', 'EBE', 'EEK', 'KOE', 'EEK'], // v26: zigzag wall (no 3-in-a-row same side) with a jump / slide inside
       ['KKE', 'KEE', 'EEK', 'EKK', 'OOO'], // weave
       ['EKE', 'KEK', 'EKE', 'GGG'], // centre, sides, centre, jump the gap
     ]
@@ -484,7 +503,13 @@ export class Track {
       if (x < 0) break
     }
     const src = PATTERNS[idx].p
-    const perm = PERMS[Math.floor(this.r() * 6)]
+    let perm = PERMS[Math.floor(this.r() * 6)]
+    // v26: no third same-side partial row in a row (left left left / right right right)
+    const h = this.sideHist
+    if (h.length >= 2 && h[h.length - 1] === h[h.length - 2]) {
+      const ok = PERMS.filter((pm) => sideOf([src[pm[0]], src[pm[1]], src[pm[2]]] as Tok[]) !== h[h.length - 1])
+      if (ok.length) perm = ok[Math.floor(this.r() * ok.length)]
+    }
     return [src[perm[0]], src[perm[1]], src[perm[2]]] as Tok[]
   }
 
@@ -525,6 +550,34 @@ export class Track {
     if (toks.includes('K') && !toks.some((x) => x === 'B' || x === 'O' || x === 'P' || x === 'G')) {
       const want = q(this.lastJS + Math.max(9, v * 0.5))
       if (want > s0 && want + 8 <= this.nextCornerS - CORNER.half - v * CORNER.preS && this.r() < 0.85) s0 = want
+    }
+    // v26: post-corner / warm-up edits can still line up a third same-side row — mirror it
+    {
+      const h = this.sideHist
+      const sd = sideOf(toks)
+      if (sd !== -1 && h.length >= 2 && h[h.length - 1] === sd && h[h.length - 2] === sd) {
+        if (sd !== 1) { const t0 = toks[0]; toks[0] = toks[2]; toks[2] = t0 }
+        else if (toks[1] !== 'E') { const e = this.r() < 0.5 ? 0 : 2; const t1 = toks[1]; toks[1] = toks[e]; toks[e] = t1 }
+      }
+    }
+    // v26 hole buffer: no gap / pothole within ~1.2 s of travel after a jump landing or slide exit,
+    // and a little room after a hole before the next jump / slide. Push the row back; if that would
+    // crowd the corner, turn its holes into hurdles / blockers instead.
+    {
+      const lim = this.nextCornerS - CORNER.half - v * CORNER.preS - 8
+      const hasHole = toks.some((t) => t === 'G' || t === 'H')
+      const hasBOP = toks.some((t) => t === 'B' || t === 'O' || t === 'P')
+      let want = s0
+      if (hasHole) want = Math.max(want, q(this.lastBOP + v * HOLE_AFTER_T))
+      if (hasBOP) want = Math.max(want, q(this.lastHole + v * HOLE_BEFORE_T))
+      if (want > s0) {
+        if (want <= lim) s0 = want
+        else {
+          // keep the row's challenge: a gap becomes a hurdle, a pothole a lane blocker
+          for (let i = 0; i < 3; i++) if (toks[i] === 'G') toks[i] = 'B'; else if (toks[i] === 'H') toks[i] = 'K'
+          if (hasBOP) s0 = Math.max(s0, Math.min(lim, q(this.lastHole + v * HOLE_BEFORE_T)))
+        }
+      }
     }
     const gapLen = q(Math.min(5, Math.max(2.6, 0.3 * v)))
     if (W > 0.62 && toks.includes('P')) {
@@ -572,6 +625,8 @@ export class Track {
       this.vEnd = mk(s0).end
     }
 
+    this.sideHist.push(sideOf(toks))
+    if (this.sideHist.length > 4) this.sideHist.shift()
     let rowEnd = s0
     let rocketRow = false
     for (let lane = 0; lane < 3; lane++) {
