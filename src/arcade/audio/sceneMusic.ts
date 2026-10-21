@@ -31,6 +31,8 @@ let ducked = false
 let muted = false
 let unlocked = false
 let started = false
+/** QA: crossfade path disabled (see __ARCADE_MUSIC_BREAK) */
+let noTwin = false
 
 /** Scene-change log for tests / debugging: window.__ARCADE_MUSIC_LOG */
 type LogEntry = { t: number; scene: MusicScene; from: string | null; to: string | null; path: string }
@@ -58,7 +60,19 @@ function makeEl() {
 function makeDeck(): Deck {
   const els: [HTMLAudioElement, HTMLAudioElement] = [makeEl(), makeEl()]
   els[1].preload = 'none'
-  return { el: els[0], els, sub: [null, null], primed: false, swapping: false, gain: null, routed: false, track: null, pauseTimer: null }
+  const d: Deck = { el: els[0], els, sub: [null, null], primed: false, swapping: false, gain: null, routed: false, track: null, pauseTimer: null }
+  // v24: every song must keep going. iOS can fire 'ended' even with loop on (WebAudio-routed element),
+  // and the twin crossfade can fail: whatever happens, an ended song restarts / moves to the next one.
+  for (const e of els) e.addEventListener('ended', () => onEnded(d, e))
+  return d
+}
+
+function onEnded(d: Deck, e: HTMLAudioElement) {
+  if (d !== active || e !== d.el || muted || !unlocked || document.hidden) return
+  const next = nextTrack(d)
+  if (next && next !== d.track) return hardNext(d, e)
+  e.currentTime = 0
+  void e.play().catch(() => {})
 }
 
 function pauseDeck(d: Deck) {
@@ -68,7 +82,9 @@ function pauseDeck(d: Deck) {
 
 /** iOS: let the twin element play later without a gesture by starting it silently inside one */
 function prime(d: Deck) {
-  if (d.primed || !d.routed) return
+  // v24: don't fight the first download — the twin is only unlocked once the song itself is buffered
+  // (a later tap does it; until then the native loop / 'ended' fallback covers the wrap)
+  if (d.primed || !d.routed || d.el.readyState < 3) return
   const t = d.els.find((e) => e !== d.el)!
   if (!t.src && d.el.src) t.src = d.el.src
   if (!t.src) return
@@ -114,8 +130,11 @@ function hardNext(d: Deck, e: HTMLAudioElement) {
 
 function loopTick() {
   const ctx = peekAudioContext()
+  // v24 watchdog: the active song ended / stopped on its own (missed 'ended', failed crossfade)
+  const a = active
+  if (a && started && a.el.ended && !a.swapping) onEnded(a, a.el)
   for (const d of decks) {
-    if (!d.routed || !ctx || d.swapping || d.el.paused) continue
+    if (noTwin || !d.routed || !ctx || d.swapping || d.el.paused) continue
     const e = d.el
     const dur = e.duration
     if (!isFinite(dur) || dur < LOOP_XF_S * 4) continue
@@ -127,7 +146,8 @@ function loopTick() {
     // what comes after this song: the next track in the scene's playlist, else the same song again
     const next = nextTrack(d)
     const nextSrc = next === d.track ? e.src : new URL(pickSrc(next!), location.href).href
-    if (t.src !== nextSrc) {
+    // v24: only fetch the twin / next song in the last ~25 s (it used to download with the first copy)
+    if (t.src !== nextSrc && left0 < LOOP_XF_S + 25) {
       t.src = nextSrc
       t.onerror = () => {
         // a playlist file that can't load (missing song 2): drop it from the rotation for this session
@@ -138,7 +158,7 @@ function loopTick() {
     // playlist: the song must not loop on its own — if the crossfade can't happen, 'ended' switches
     if (next !== d.track) {
       e.loop = false
-      if (!e.onended) e.onended = () => hardNext(d, e)
+      // ('ended' → onEnded() → hardNext() is wired once per element in makeDeck)
     }
     // warm the twin's decoder a few seconds ahead (silent: its sub-gain is 0)
     if (left0 < LOOP_XF_S + 4 && left0 > LOOP_XF_S + 1.5 && !d.warm) {
@@ -227,6 +247,11 @@ function ensureDecks() {
       if (active) active.el.currentTime = t < 0 ? active.el.duration + t : t
     }
     ;(globalThis as unknown as { __ARCADE_MUSIC?: unknown }).__ARCADE_MUSIC = musicDebugState
+    // QA (v24): simulate the iOS failure — no twin crossfade and no native loop — to test the 'ended' fallback
+    ;(globalThis as unknown as { __ARCADE_MUSIC_BREAK?: () => void }).__ARCADE_MUSIC_BREAK = () => {
+      noTwin = true
+      for (const d of decks) for (const e of d.els) e.loop = false
+    }
   }
 }
 
@@ -337,10 +362,12 @@ export function setMusicScene(next: MusicScene) {
     // restart on the first element at full sub-gain
     d.el = d.els[0]
     for (let i = 0; i < 2; i++) {
-      d.els[i].src = src
+      if (i === 0) d.els[i].src = src
       d.sub[i]?.gain.setValueAtTime(i === 0 ? 1 : 0, peekAudioContext()?.currentTime ?? 0)
     }
-    d.els[1].preload = 'auto'
+    // v24: the twin stays empty until the loop point nears (no double download at start)
+    d.els[1].removeAttribute('src')
+    d.els[1].preload = 'none'
     d.primed = false
   }
   ducked = false
@@ -381,5 +408,21 @@ export function musicDebugState() {
     time: a ? Number(a.el.currentTime.toFixed(2)) : null,
     duration: a && isFinite(a.el.duration) ? a.el.duration : null,
     loopEl: a ? a.els.indexOf(a.el) : null,
+  }
+}
+
+/** v24: warm the HTTP cache for a song that may play next (card highlighted) — silent, low priority,
+ *  never touches playback. */
+const prefetched = new Set<string>()
+export function prefetchSceneMusic(next: MusicScene) {
+  const t = SCENE_TRACKS[next]
+  if (!t || typeof window === 'undefined') return
+  const src = pickSrc(t)
+  if (prefetched.has(src) || (active?.track?.id === t.id)) return
+  prefetched.add(src)
+  try {
+    void fetch(src, { priority: 'low' } as RequestInit).then((r) => r.arrayBuffer()).catch(() => prefetched.delete(src))
+  } catch {
+    /* ignore */
   }
 }

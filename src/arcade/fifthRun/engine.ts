@@ -439,6 +439,11 @@ class Engine {
       this.emitHud(false)
     }
     if (!this.view || this.ctxLost) return
+    // v24: pre-warm GPU uploads once while the how-to / intro is up (before the run starts)
+    if (this.phase === 'intro' && !this.view.warmed && this.clock > 0.25 && !skipRender) {
+      this.view.warmed = true
+      this.view.prewarm()
+    }
     // resizes clear the drawing buffer: apply them only right before drawing a frame, so the cleared
     // (black) canvas is never composited
     if (this.resizeReq && !skipRender) this.applyResize(this.resizeReq)
@@ -702,6 +707,13 @@ class Engine {
     const fps = this.fpsFrames / this.fpsTime
     this.fpsFrames = 0
     this.fpsTime = 0
+    // v24: never reallocate the canvas / composer in the first seconds of a run (setSize is a big
+    // stall, and the start of a run is exactly when a slow second is most likely): just watch.
+    if (this.phase === 'playing' && this.run.tick < 12 * FR_HZ) {
+      this.fpsBad = 0
+      this.fpsGood = 0
+      return
+    }
     // Sharpness first: shed reflection updates before resolution, and only drop below full DPR
     // after two consecutive slow seconds (load hitches don't count). Composer (AA + bloom) goes last.
     if (fps < 50) {

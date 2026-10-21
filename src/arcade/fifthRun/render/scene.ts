@@ -196,6 +196,8 @@ export class FrScene {
     car: { group: THREE.Group }[]
   } = { barrier: [], overhead: [], pipe: [], block: [], car: [] }
   /** v21 hazard pools, keyed `s:<kind>` (block footprint) / `l:<kind>` (car footprint) */
+  /** v24: prewarm() has run for the current scene contents */
+  warmed = false
   private hz = new Map<string, { group: THREE.Group; pose: (variant: number, time: number) => void }[]>()
   private hzIdx = new Map<string, number>()
   private arches: { group: THREE.Group; tubes: THREE.MeshStandardMaterial[] }[] = []
@@ -1025,6 +1027,37 @@ export class FrScene {
     for (const o of hidden) o.visible = false
   }
 
+  /**
+   * v24 pre-warm (during the how-to): compile every program AND push every texture + geometry to the GPU
+   * by drawing one frame with every pooled obstacle / prop / pickup visible and un-culled, through the
+   * same path as gameplay (composer when on). Nothing is shown: the caller draws a normal frame right
+   * after, in the same tick. Without this the first frames of a run uploaded each hazard type the
+   * first time it came into view (render() spikes of 0.3–1.3 s on a slow GPU).
+   */
+  prewarm() {
+    this.warmup()
+    const touched: [THREE.Object3D, boolean, boolean][] = []
+    const texs = new Set<THREE.Texture>()
+    this.scene.traverse((o) => {
+      touched.push([o, o.visible, o.frustumCulled])
+      o.visible = true
+      o.frustumCulled = false
+      const mat = (o as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined
+      for (const m of Array.isArray(mat) ? mat : mat ? [mat] : [])
+        for (const val of Object.values(m)) if (val instanceof THREE.Texture) texs.add(val)
+    })
+    try {
+      for (const t of texs) this.renderer.initTexture(t)
+      this.render()
+    } catch {
+      /* best effort */
+    }
+    for (const [o, v, f] of touched) {
+      o.visible = v
+      o.frustumCulled = f
+    }
+  }
+
   async loadGltfRunner() {
     try {
       const human = await loadHumanRunner()
@@ -1042,7 +1075,7 @@ export class FrScene {
       this.runnerLight = chase
       this.scene.add(chase)
       this.scene.add(chase.target)
-      this.warmup()
+      this.warmed = false // the runner changed: pre-warm again before the run
       return true
     } catch (e) {
       console.warn('[fifth-glide] runner GLB failed, keeping procedural fallback', e)
