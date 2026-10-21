@@ -63,8 +63,8 @@ export const FIFTH_GLIDE_THEME: MusicTrack = {
  *   { id: 'fifth-glide-2', title: 'Jenks - <title>', file: 'fifth-glide-2' }  (needs .m4a + .mp3)
  */
 const FIFTH_GLIDE_SONGS: { id: string; title: string; file: string }[] = [
-  // song 2 (Oct 2026). TITLE PLACEHOLDER: the file carries no ID3 title/artist — replace when Jenks confirms
-  { id: 'fifth-glide-2', title: 'Jenks - Song 2', file: 'fifth-glide-2' },
+  // song 2 (Oct 2026): "Wattup Yo" — unlocks when a run outlasts Thousand Yard Stare
+  { id: 'fifth-glide-2', title: 'Jenks - Wattup Yo', file: 'fifth-glide-2' },
 ]
 
 const fromFile = (x: { id: string; title: string; file: string }): MusicTrack => ({
