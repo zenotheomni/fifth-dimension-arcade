@@ -1213,6 +1213,8 @@ export class FrScene {
       // keep arches out of obstacle rows (a beam under an arch reads as one object)
       const seg = L.segFor(s)
       if (seg < 0) continue
+      // v21 declutter: no arch within 16 m of any obstacle row
+      if (v.obstacles.some((o) => o.s + o.len > s - 16 && o.s < s + 16)) continue
       const p = L.pt(seg, s, 0, this.wp2)
       a.group.visible = true
       a.group.position.set(p.x, 0, p.z)

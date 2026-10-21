@@ -84,6 +84,7 @@ type Pattern = { p: string; min: number; w: (L: number) => number }
 /** Lane multisets (Temple Run kit): B = low barrier (jump), O = overhead beam (slide),
  * G = gap in the path (jump or fall), K = tall crate stack (switch lanes). E = clear.
  * Full-width rows (BBB / OOO / GGG) are the signature "you must jump / slide" moments. */
+// v21 declutter: a row holds at most 2 obstacles unless they're one unified wall (BBB / OOO / PPP / GGG)
 const PATTERNS: Pattern[] = [
   { p: 'BEE', min: 0, w: (L) => 2.0 - 0.8 * L },
   { p: 'OEE', min: 0, w: (L) => 1.6 - 0.6 * L },
@@ -102,11 +103,6 @@ const PATTERNS: Pattern[] = [
   { p: 'PEE', min: 0, w: (L) => 0.9 - 0.2 * L },
   { p: 'PPP', min: 0.06, w: (L) => 0.7 + 0.3 * L },
   { p: 'KPE', min: 0.12, w: (L) => 0.4 + 0.5 * L },
-  { p: 'KKB', min: 0.18, w: (L) => 0.3 + 0.9 * L },
-  { p: 'KKO', min: 0.18, w: (L) => 0.3 + 0.9 * L },
-  { p: 'KKG', min: 0.26, w: (L) => 0.2 + 0.8 * L },
-  { p: 'BOG', min: 0.3, w: (L) => 0.2 + 0.7 * L },
-  { p: 'GKG', min: 0.34, w: (L) => 0.2 + 0.6 * L },
   // H = pothole: a short missing piece of ONE lane (any lane, the middle one too) — switch round it
   { p: 'HEE', min: 0.02, w: (L) => 0.9 + 0.3 * L },
   { p: 'HBE', min: 0.15, w: (L) => 0.3 + 0.5 * L },
@@ -683,7 +679,7 @@ export class Track {
     const T = Math.max(0.28 - 0.08 * P, base * (0.7 + 0.35 * this.r()) * (1 + 1.6 * W + 0.3 * (1 - L)) * (1 - P))
     // sequence rows: a fixed reaction window in seconds (≈ lane switch + reaction), so metres scale with speed
     const Tq = this.seqRow ? 0.62 + 0.15 * (1 - L) : T
-    this.cursor = q(rowEnd + Math.max(rocketRow ? Math.max(9, v * 0.5) : 5.2, v * Tq))
+    this.cursor = q(rowEnd + Math.max(rocketRow ? Math.max(9, v * 0.5) : 6.5, v * Tq))
     this.rows++
   }
 }
