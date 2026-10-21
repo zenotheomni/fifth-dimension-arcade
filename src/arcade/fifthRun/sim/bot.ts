@@ -7,7 +7,7 @@
  *   executes them with reaction delay, timing jitter and occasional lapses.
  */
 import { mulberry32 } from '../../core/seededRandom'
-import { CORNER, FR_HZ, JUMP_T, laneX, speedAt } from './constants'
+import { FR_HZ, JUMP_T, laneX, speedAt, turnWindowM } from './constants'
 import { cloneRun, nextCorner, queueAction, step, type Action, type RunState } from './runner'
 import { obstacleS, type Track } from './track'
 
@@ -261,7 +261,9 @@ export class RuleBot {
     // corners: swipe the turn ~0.3 s before the corner centre, with this skill's timing noise
     const c = nextCorner(st, track)
     const v = Math.max(st.v, 1)
-    const arm = c ? c.s - st.s <= v * CORNER.armS + CORNER.half + v * 0.15 : false
+    // v25: right at the corner a swipe toward the turn is the turn (no lane change); earlier it's both
+    const arm = c ? c.s - st.s <= turnWindowM(v) + v * 0.15 : false
+    const turnWay = c ? (c.kind === 'L' ? 'left' : c.kind === 'R' ? 'right' : null) : null
     if (c && c.id !== this.turnFor && c.s - st.s < v * (this.skill.lookS + 0.6)) {
       this.turnFor = c.id
       if (c.kind === 'T') this.tDir = this.rng() < 0.5 ? -1 : 1
@@ -276,7 +278,7 @@ export class RuleBot {
     while (this.sched.length && this.sched[0].tick <= st.tick) {
       const a = this.sched.shift()!
       // inside a corner's turn arm a sideways swipe would be a turn: no lane changes there
-      if (a.lat && arm) continue
+      if (a.lat && arm && (turnWay === null || a.a === turnWay)) continue
       queueAction(st, a.a)
       this.lastInput = st.tick
       if (a.ob !== undefined) {

@@ -5,6 +5,7 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import './nowPlaying.css'
+import { musicDebugState } from './sceneMusic'
 
 const SHOW_MS = 4500
 
@@ -25,7 +26,14 @@ export default function NowPlaying({ title: sceneTitle, muted }: { title: string
     const on = () => setArmed(true)
     window.addEventListener('pointerdown', on, { once: true, capture: true })
     window.addEventListener('keydown', on, { once: true, capture: true })
+    window.addEventListener('arcade-music-autoplay', on, { once: true })
+    // v25: autoplay may already be running (allowed before any gesture): arm as soon as it is
+    const poll = setInterval(() => {
+      if (musicDebugState().playing) on()
+    }, 400)
     return () => {
+      clearInterval(poll)
+      window.removeEventListener('arcade-music-autoplay', on)
       window.removeEventListener('pointerdown', on, { capture: true })
       window.removeEventListener('keydown', on, { capture: true })
     }

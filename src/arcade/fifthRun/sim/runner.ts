@@ -21,6 +21,7 @@ import {
   CORNER,
   LANE_W,
   DOWN_S,
+  turnWindowM,
   SLOW_TICKS,
   STAR_M,
   STREAK_EVERY,
@@ -478,14 +479,26 @@ export function step(st: RunState, track: Track, opts: StepOpts) {
   if (st.latQ) {
     // near a corner a left/right swipe is a turn, not a lane change
     const d = corner ? corner.s - st.s : 1e9
-    // v23 fix: while invincible the corner takes itself, so swipes stay lane changes. (At boost speed
-    // the old v·armS window was ~100 m long and swallowed nearly every swipe.) Only a T, right at the
-    // square, still reads a swipe as the way to go.
-    const arm = st.hand > 0 ? (corner?.kind === 'T' ? CORNER.half + 2 : -1e9) : st.v * CORNER.armS + CORNER.half
-    if (corner && d <= arm && d >= -CORNER.half - 0.5) {
-      st.turnQ = st.latQ === 'left' ? -1 : 1
-      ev?.push({ type: 'turnQ', id: corner.id, dir: st.turnQ as -1 | 1 })
-    } else applyAction(st, st.latQ, track, ev)
+    // v25: lane changes ALWAYS work (he can grab the star beside him right up to the corner).
+    //  - right at the corner (turnWindowM, ≈0.32 s): a swipe the corner goes is the turn itself
+    //  - earlier in the approach (old arm window): a swipe the corner goes changes lane AND books the
+    //    turn — an L / R corner only goes one way, so booking it can never be wrong (a T: last swipe wins)
+    //  - a swipe the corner doesn't go is always just a lane change; missed turns still fall
+    // Invincible: always a lane change (+ the booking), so the turn is still there if the power runs
+    // out just before the corner (v23 dropped it and the runner fell).
+    const dir = st.latQ === 'left' ? -1 : 1
+    const near = corner && d >= -CORNER.half - 0.5
+    const goes = corner ? corner.kind === 'T' || (corner.kind === 'L' ? dir < 0 : dir > 0) : false
+    if (st.hand <= 0 && near && goes && d <= turnWindowM(st.v)) {
+      st.turnQ = dir
+      ev?.push({ type: 'turnQ', id: corner!.id, dir })
+    } else {
+      applyAction(st, st.latQ, track, ev)
+      if (near && goes && d <= st.v * CORNER.armS + CORNER.half) {
+        st.turnQ = dir
+        ev?.push({ type: 'turnQ', id: corner!.id, dir })
+      }
+    }
     st.latQ = null
   }
   if (st.queued) {

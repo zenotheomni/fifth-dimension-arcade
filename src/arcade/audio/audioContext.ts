@@ -23,6 +23,8 @@ function bind() {
   window.addEventListener('pointerdown', onTap, { capture: true, passive: true })
   window.addEventListener('touchend', onTap, { capture: true, passive: true })
   window.addEventListener('keydown', onTap, { capture: true, passive: true })
+  // v25: any first interaction anywhere (not just the Enter button) starts the lobby song
+  window.addEventListener('click', onTap, { capture: true, passive: true })
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) void ctx?.suspend().catch(() => {})
     else void ctx?.resume().catch(() => {})
