@@ -500,7 +500,7 @@ export class Track {
     }
     if (this.postCorner <= 0 && this.maybeVoid(s0, v, L)) return
     // v18: now and then a choreographed run of rows (zigzag / one-side wall / then slide)
-    if (!this.seqQ.length && this.postCorner <= 0 && L > 0.2 && W === 0 && this.r() < 0.07 + 0.06 * L && s0 + v * 6 < this.nextCornerS - CORNER.half - v * CORNER.preS) this.seqQ = this.pickSequence()
+    if (!this.seqQ.length && this.postCorner <= 0 && L > 0.2 && W === 0 && this.r() < 0.1 + 0.1 * L && s0 + v * 6 < this.nextCornerS - CORNER.half - v * CORNER.preS) this.seqQ = this.pickSequence()
     this.seqRow = this.seqQ.length > 0
     const toks = this.seqRow ? this.seqQ.shift()! : this.pickPattern(L, W)
     if (this.postCorner > 0) {
@@ -676,10 +676,10 @@ export class Track {
     // extra breathing room while the level is still low (fades out as L → 1)
     // after top speed, waves keep tightening (density-only difficulty); the validator still guards every row
     const P = pressureAt(s0)
-    const T = Math.max(0.28 - 0.08 * P, base * (0.7 + 0.35 * this.r()) * (1 + 1.6 * W + 0.3 * (1 - L)) * (1 - P))
+    const T = Math.max(0.24 - 0.12 * P, base * (0.7 + 0.35 * this.r()) * (1 + 1.6 * W + 0.3 * (1 - L)) * (1 - P))
     // sequence rows: a fixed reaction window in seconds (≈ lane switch + reaction), so metres scale with speed
     const Tq = this.seqRow ? 0.62 + 0.15 * (1 - L) : T
-    this.cursor = q(rowEnd + Math.max(rocketRow ? Math.max(9, v * 0.5) : 6.5, v * Tq))
+    this.cursor = q(rowEnd + Math.max(rocketRow ? Math.max(9, v * 0.5) : 5.2, v * Tq))
     this.rows++
   }
 }
