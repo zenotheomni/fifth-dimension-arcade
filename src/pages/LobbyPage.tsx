@@ -92,7 +92,18 @@ export default function LobbyPage() {
   const audio = useArcadeAudio()
   const navigate = useNavigate()
   const [exiting, setExiting] = useState(false)
-  const [selected, setSelected] = useState(0)
+  // v23: remember the focused cabinet (coming back from a game keeps it, not Court Vision by default)
+  const [selected, setSelectedRaw] = useState(() => {
+    try {
+      const id = sessionStorage.getItem('ffa_selected_game')
+      const i = id ? GAMES.findIndex((g) => g.id === id) : -1
+      return i >= 0 ? i : 0
+    } catch {
+      return 0
+    }
+  })
+  const setSelected = useCallback((i: number) => setSelectedRaw(i), [])
+  const cardsRef = useRef<HTMLDivElement | null>(null)
   const [games, setGames] = useState<ArcadeGame[]>(GAMES)
   const [ticker, setTicker] = useState<TickerData | null | undefined>(undefined)
   const [contests, setContests] = useState<{ list: Contest[]; serverNow: string }>({ list: [], serverNow: '' })
@@ -177,6 +188,53 @@ export default function LobbyPage() {
     if (isDesktop) track('arcade_desktop_qr_view')
   }, [isDesktop])
 
+  // v23: swiping the cabinet rail focuses the card nearest the centre (tap focus still works too)
+  const scrollRaf = useRef(0)
+  const onCardsScroll = () => {
+    if (scrollRaf.current) return
+    scrollRaf.current = requestAnimationFrame(() => {
+      scrollRaf.current = 0
+      const rail = cardsRef.current
+      if (!rail) return
+      const r = rail.getBoundingClientRect()
+      const mid = r.left + r.width / 2
+      const cards = Array.from(rail.querySelectorAll<HTMLElement>('.ffa-card'))
+      let best = -1
+      let bestD = Infinity
+      // at either end of the rail the end card wins (2 cabinets can't both reach the centre)
+      if (rail.scrollLeft <= 2) best = 0
+      else if (rail.scrollLeft + rail.clientWidth >= rail.scrollWidth - 2) best = cards.length - 1
+      else
+        cards.forEach((c, i) => {
+          const b = c.getBoundingClientRect()
+          const d = Math.abs(b.left + b.width / 2 - mid)
+          if (d < bestD) {
+            bestD = d
+            best = i
+          }
+        })
+      if (best >= 0 && best !== selected) setSelected(best)
+    })
+  }
+
+  useEffect(() => {
+    const g = games[selected]
+    if (!g) return
+    try {
+      sessionStorage.setItem('ffa_selected_game', g.id)
+    } catch {
+      /* ignore */
+    }
+  }, [games, selected])
+
+  // restore: bring a remembered (non-first) cabinet into view once
+  useEffect(() => {
+    const rail = cardsRef.current
+    const c = rail?.querySelectorAll<HTMLElement>('.ffa-card')[selected]
+    if (rail && c && selected > 0) rail.scrollLeft = c.offsetLeft - (rail.clientWidth - c.offsetWidth) / 2
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const onTapToStart = () => {
     if (exiting || audio.entered) return
     unlockAudio()
@@ -204,7 +262,9 @@ export default function LobbyPage() {
     setSelected(index)
     playUiConfirm()
     track('arcade_game_launch', { game: g.id, via: 'card' })
-    navigate(g.route)
+    // v23: let the tapped card take the highlight (bigger + neon ring) for a beat before opening it
+    const route = g.route
+    window.setTimeout(() => navigate(route), 180)
   }
 
   const onPlay = () => {
@@ -366,7 +426,7 @@ export default function LobbyPage() {
               />
             ) : null}
 
-            <div className="ffa-cards" role="listbox" aria-label="Games">
+            <div className="ffa-cards" role="listbox" aria-label="Games" ref={cardsRef} onScroll={onCardsScroll}>
               {games.map((g, i) => {
                 const locked = !g.route
                 const badgeClass =

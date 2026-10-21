@@ -40,6 +40,15 @@ export function getAudioContext(): AudioContext | null {
         window.AudioContext ||
         (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
       if (!AC) return null
+      // v23 iOS Safari: music is routed through WebAudio, which the ring/silent switch mutes by default
+      // (the lobby song looked like it "wasn't playing"). Declare a playback session so it plays like
+      // a media element (Safari 16.4+; ignored elsewhere).
+      try {
+        const as = (navigator as unknown as { audioSession?: { type: string } }).audioSession
+        if (as && as.type !== 'playback') as.type = 'playback'
+      } catch {
+        /* ignore */
+      }
       ctx = new AC()
     }
     if (ctx.state !== 'running' && !document.hidden) void ctx.resume().catch(() => {})
