@@ -23,7 +23,8 @@ import { blobTexture, chevronTexture, glowTexture, shootingStarTexture, streakTe
 import { PathLayout, turned, type Seg, type WorldPt } from './layout'
 import { buildCornerSquare, buildDeckChunk, deckMaterial, DECK_HALF, glowStripMaterial } from './deck'
 import { voidSkyMaterial } from './sky'
-import { buildPalmObstacle, buildSatellite, buildTruss } from './relics'
+import { buildPalmObstacle, buildTruss } from './relics'
+import { buildNeonSign } from './neonSign'
 import { buildArch, buildIsland, buildTurnSign } from './decor'
 
 export type QualityTier = 'high' | 'low'
@@ -456,7 +457,8 @@ export class FrScene {
     add(this.pools.barrier, () => buildBarrier(chev, metal), 24)
     add(this.pools.overhead, () => buildTruss(this.glow), 24)
     add(this.pools.block, () => buildPalmObstacle(), 16)
-    add(this.pools.car, () => buildSatellite(this.glow), 8)
+    // v20: broken neon signs replace the crashed satellites (same 'car' slot, footprint and rules)
+    for (let i = 0; i < 10; i++) add(this.pools.car, () => buildNeonSign(this.glow, i), 1)
     for (const k of ['hand'] as PowerKind[]) {
       for (let i = 0; i < 2; i++) {
         const p = buildPickup(k, this.glow, emblem)
