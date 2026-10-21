@@ -127,8 +127,8 @@ export const CORNER = {
   segMinHard: 70,
   segMaxHard: 140,
   tP: 0.22,
-  preS: 1.7,
-  postS: 1.9,
+  preS: 1.15,
+  postS: 1.25,
   postT: 70,
 }
 /** Path half width the runner can occupy — lane centres are ±LANE_W. */
