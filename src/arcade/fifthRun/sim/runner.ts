@@ -466,7 +466,7 @@ export function step(st: RunState, track: Track, opts: StepOpts) {
     // v22 run-off: carried forward off the cliff, slowing as he drops
     if (st.downKind === 'fall' && st.runV > 0) {
       st.s += st.runV * FR_DT
-      st.runV *= 0.955
+      st.runV *= 0.86 // ≈ 3–4 m past the lip: he visibly runs off, the camera stays at the rim
     }
     st.queued = null
     st.latQ = null

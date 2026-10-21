@@ -1392,7 +1392,9 @@ export class FrScene {
     dz -= this.camPush
     // a fall: the camera stays at the rim and looks down after him
     const fall = v.dead && v.deathKind === 'gap' ? Math.min(1, v.deadT * 1.4) : 0
-    this.camera.position.set(this.camX + sx, this.camY + sy, rl.z * 0 + dz)
+    // v22: on a fall the camera eases back + up a little so the rim and the falling runner stay in frame
+    const fe = fall * fall * (3 - 2 * fall)
+    this.camera.position.set(this.camX + sx, this.camY + sy + fe * 1.2, rl.z * 0 + dz + fe * 4.5)
     this.lookT.set(rl.x * 0.5, CAM_TUNE.lookY - fall * 3.5, -13 + fall * 8)
     // ── opening cinematic: start high behind the chaser, swoop down past it onto the astronaut ──
     const opn = v.idle ? 0 : (v.opening ?? 1)

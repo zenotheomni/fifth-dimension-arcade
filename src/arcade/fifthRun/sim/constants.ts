@@ -121,7 +121,7 @@ export const CORNER = {
   /** v22: after running off a corner, respawn this far before the corner square (no auto-turn) */
   backM: 40,
   /** v22: coyote time at the lip of a corner square before he goes over (s) */
-  coyoteS: 0.12,
+  coyoteS: 0.05,
   armS: 1.3,
   /** extra time past the far edge of the corner square you may still turn (+ more during the warm-up) */
   lateS: 0.28,
