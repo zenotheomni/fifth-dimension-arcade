@@ -22,7 +22,7 @@ export const SPEED = { v0: 24, vmax: 54, k: 2200 }
  * and blends in over RAMP.blendM. After the cap, difficulty keeps rising through obstacle density
  * only (pressureAt). Pure function of distance (deterministic).
  */
-export const RAMP = { v0: 26, inc: 4.2, stepS: 20, blendM: 40, vMax: 48 }
+export const RAMP = { v0: 32, inc: 5, stepS: 18, blendM: 45, vMax: 56 }
 /** last step index (the one that reaches vMax) */
 export const RAMP_KMAX = Math.ceil((RAMP.vMax - RAMP.v0) / RAMP.inc)
 const vStep = (k: number) => Math.min(RAMP.vMax, RAMP.v0 + RAMP.inc * k)
@@ -49,7 +49,7 @@ export const speedAt = (s: number) => {
   return k === 0 ? RAMP.v0 : vStep(k - 1) + (vStep(k) - vStep(k - 1)) * e
 }
 /** post-cap pressure 0..PRESSURE.max: shrinks the gap between obstacle waves after top speed */
-export const PRESSURE = { max: 0.6, overM: 4000 }
+export const PRESSURE = { max: 0.66, overM: 4000 }
 export const pressureAt = (s: number) => (s <= CAP_S ? 0 : Math.min(PRESSURE.max, (PRESSURE.max * (s - CAP_S)) / PRESSURE.overM))
 /**
  * Warm-up distance (≈ first 40 s, easing out linearly): sparse single-car rows, slower oncoming

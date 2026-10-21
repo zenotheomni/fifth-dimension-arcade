@@ -229,6 +229,11 @@ export class FrScene {
   /** the segment we turned off, held BY REFERENCE: PathLayout.sync() drops old segments (shifting every
    * index) once a run has more than 8, so an index captured before the turn goes stale mid-run (v15 fix) */
   private pendingTurn: { oldSeg: Seg; snap: boolean } | null = null
+  /** v18 turn arc: over D metres the runner / frame origin / yaw blend from the old segment's line to
+   *  the new one (smootherstep) — a curve, not a pivot; distance-driven, so dt spikes can't lag it */
+  private arc: { fx: number; fz: number; d: number; lx: number; px: number; rx: number; rz: number; ox: number; oz: number; D: number; cam0: number; run0: number; to: number } | null = null
+  private prevR = { x: 0, z: 0, ox: 0, oz: 0, ok: false }
+  private arcLastTo = 0
   private runnerLocal = new THREE.Vector3()
   private billQ = new THREE.Quaternion()
   private invWorldQ = new THREE.Quaternion()
@@ -240,7 +245,6 @@ export class FrScene {
   private lookT = new THREE.Vector3()
   private wp: WorldPt = { x: 0, z: 0, yaw: 0 }
   private wp2: WorldPt = { x: 0, z: 0, yaw: 0 }
-  private lastS = 0
   private emblem: THREE.Texture | null
 
   constructor(canvas: HTMLCanvasElement, tier: QualityTier, emblem: THREE.Texture | null, logo: THREE.Texture | null = null) {
@@ -670,10 +674,18 @@ export class FrScene {
         this.runYaw = segYaw
         this.camYawV = 0
         this.runYawV = 0
+        this.arc = null
       } else {
-        const b = PathLayout.ptOn(pt.oldSeg, this.lastS, 0, this.wp2)
-        // frame-origin hand-off: start from where the old frame was (plus whatever is left of a swing)
-        this.offO.set(b.x - ox + this.offO.x, b.z - oz + this.offO.y)
+        // the arc starts where the camera / runner are now (any pre-turn lean included)
+        const D = Math.max(6, v.speed * CAM_TUNE.turnS * 2)
+        const g = pt.oldSeg
+        const P = this.prevR
+        // anchor on the last rendered frame (the sim may re-frame s / x at the corner) and keep running
+        // along the old heading for one frame's travel, so frame 0 of the arc is exactly continuous
+        this.arc = {
+          fx: g.fx, fz: g.fz, d: 0, lx: 0, px: v.x,
+          rx: P.ok ? P.x : rx, rz: P.ok ? P.z : rz, ox: P.ok ? P.ox : ox, oz: P.ok ? P.oz : oz, D, cam0: this.camYaw, run0: this.runYaw, to: segYaw }
+        this.offO.set(this.offO.x, this.offO.y)
       }
     }
     // the lean is dropped once the corner is behind us (missed / wrong-way turn)
@@ -683,6 +695,29 @@ export class FrScene {
     const w = 5.8 / Math.max(0.05, CAM_TUNE.turnS)
     const wr = w * 1.6
     const leadYaw = this.lead ? -this.lead.dir * (Math.PI / 2) * CAM_TUNE.lead : 0
+    let arcYaw: number | null = null
+    if (this.arc) {
+      const a = this.arc
+      a.d += Math.max(0, v.speed * dt)
+      // lateral travel since the arc began (re-frame jumps of x at the corner are ignored)
+      const ddx = v.x - a.px
+      a.px = v.x
+      if (Math.abs(ddx) < 0.5) a.lx += ddx
+      const u = Math.min(1, Math.max(0, a.d / a.D))
+      const e = u * u * u * (u * (u * 6 - 15) + 10) // smootherstep: zero velocity + acceleration at both ends
+      const d = a.d
+      const dx = a.lx
+      const ax = a.rx + d * a.fx - dx * a.fz
+      const az = a.rz + d * a.fz + dx * a.fx
+      rx = ax + (rx - ax) * e
+      rz = az + (rz - az) * e
+      const bx = a.ox + d * a.fx
+      const bz = a.oz + d * a.fz
+      ox = bx + (ox - bx) * e
+      oz = bz + (oz - bz) * e
+      arcYaw = e
+      if (u >= 1) this.arc = null
+    }
     let rem = Math.min(dt, 1 / 15)
     while (rem > 1e-6) {
       const h = Math.min(rem, 1 / 240)
@@ -698,11 +733,31 @@ export class FrScene {
       this.offO.x += this.offV.x * h
       this.offO.y += this.offV.y * h
     }
+    if (arcYaw != null && this.arc) {
+      // yaw follows the same eased curve; the spring state is kept in step so the hand-back is seamless
+      const a = this.arc
+      const cy = a.cam0 + wrap(a.to + leadYaw - a.cam0) * arcYaw
+      const ry = a.run0 + wrap(a.to - a.run0) * arcYaw
+      if (dt > 0) {
+        this.camYawV = wrap(cy - this.camYaw) / dt
+        this.runYawV = wrap(ry - this.runYaw) / dt
+      }
+      this.camYaw = cy
+      this.runYaw = ry
+      this.offO.set(0, 0)
+      this.offV.set(0, 0)
+    } else if (arcYaw != null) {
+      this.camYaw = wrap(this.arcLastTo + leadYaw)
+      this.runYaw = this.arcLastTo
+      this.camYawV = 0
+      this.runYawV = 0
+    }
+    if (this.arc) this.arcLastTo = this.arc.to
     this.camYaw = wrap(this.camYaw)
     this.runYaw = wrap(this.runYaw)
     ox += this.offO.x
     oz += this.offO.y
-    this.lastS = S
+    this.prevR.x = rx; this.prevR.z = rz; this.prevR.ox = ox; this.prevR.oz = oz; this.prevR.ok = true
 
     // world → local frame: origin at the path centre under the runner, heading −Z under camYaw
     this.world.rotation.set(0, -this.camYaw, 0)
