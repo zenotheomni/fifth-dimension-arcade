@@ -115,6 +115,8 @@ export type RunState = {
   bonusM: number
   /** v19 boost metres: the extra distance + star metres earned while boosted (2× scoring) */
   boostM: number
+  /** v19 boost level 0..1 (eased; a second logo mid-boost never drops it) */
+  boostK: number
   /** ticks spent held at the far edge of a corner square waiting for a (late) turn swipe */
   edgeHold: number
   /** s of the last corner handled (turned / fallen at); the next corner is the first beyond it */
@@ -173,6 +175,7 @@ export function newRun(): RunState {
     sBank: 0,
     bonusM: 0,
     boostM: 0,
+    boostK: 0,
     edgeHold: 0,
     cDone: -1,
     turnQ: 0,
@@ -193,12 +196,7 @@ export const scoreOf = (st: RunState) => Math.floor(st.s + st.sBank + st.boostM)
 export function speedMul(st: RunState) {
   let m = 1
   if (st.slowT > 0) m *= 1 - (1 - CHASE.slowMul) * (st.slowT / SLOW_TICKS)
-  if (st.hand > 0) {
-    const el = (POWER_TICKS.hand - st.hand) / FR_HZ
-    const left = st.hand / FR_HZ
-    const k = Math.max(0, Math.min(1, el / BOOST.easeInS, left / BOOST.easeOutS))
-    m *= 1 + (BOOST.mul - 1) * k
-  }
+  if (st.boostK > 0) m *= 1 + (BOOST.mul - 1) * st.boostK
   return m
 }
 
@@ -498,6 +496,12 @@ export function step(st: RunState, track: Track, opts: StepOpts) {
   } else if (st.slide > 0) st.slide--
 
   st.s += st.v * FR_DT
+  {
+    // boost level: rises over easeInS, follows the eased tail down over the last easeOutS (smooth to 0)
+    const tgt = st.hand > 0 ? Math.min(1, st.hand / FR_HZ / BOOST.easeOutS) : 0
+    const tail = tgt * tgt * (3 - 2 * tgt)
+    st.boostK = tail > st.boostK ? Math.min(tail, st.boostK + FR_DT / BOOST.easeInS) : tail
+  }
   // v19 boost: metres count BOOST.distX× while the power-up runs
   if (st.hand > 0) st.boostM += st.v * FR_DT * (BOOST.distX - 1)
   // hard top speed RAMP.vMax; only the boost may pass it (eased, so the return to normal is smooth)
