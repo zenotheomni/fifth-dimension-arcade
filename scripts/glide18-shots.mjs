@@ -115,14 +115,14 @@ await adv(3500)
 const want = { narrow: 'glide18-narrow.png', gap: 'glide18-gap.png', zigzag: 'glide18-zigzag.png', stars: 'glide18-stars.png' }
 const done = new Set()
 for (let i = 0; i < 1500 && done.size < 4; i++) {
-  await adv(120)
+  await adv(200)
   const found = await page.evaluate(() => {
     const e = globalThis.__FR
     e.run.invuln = 1e6
     const s = e.run.s
-    const ob = e.track.obstacles.filter((o) => o.s - s > 14 && o.s - s < 60)
+    const ob = e.track.obstacles.filter((o) => o.s - s > 10 && o.s - s < 60)
     const types = []
-    const near = ob.filter((o) => o.s - s < 40)
+    const near = ob.filter((o) => o.s - s < 30)
     // narrow: voids in two lanes overlapping the same stretch
     for (const a of near) if (a.kind === 'void') {
       const lanes = new Set(near.filter((b) => b.kind === 'void' && b.s < a.s + a.len && b.s + b.len > a.s).map((b) => b.lane))
@@ -139,8 +139,8 @@ for (let i = 0; i < 1500 && done.size < 4; i++) {
       for (let k = 1; k < blocks.length; k++) if (blocks[k].lane !== blocks[k - 1].lane && blocks[k].s - blocks[k - 1].s > 4) ch++
       if (ch >= 3) types.push('zigzag')
     }
-    const keys = e.track.keys.filter((k) => k.state === 0 && k.s - s > 6 && k.s - s < 45)
-    if (keys.length >= 18 && new Set(keys.map((k) => k.lane)).size >= 2) types.push('stars')
+    const keys = e.track.keys.filter((k) => k.state === 0 && k.s - s > 4 && k.s - s < 40)
+    if (keys.length >= 24 && new Set(keys.map((k) => k.lane)).size >= 2) types.push('stars')
     return types
   })
   for (const t of found) if (!done.has(t)) { done.add(t); await shot(want[t]); break }
