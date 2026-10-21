@@ -451,7 +451,9 @@ export class Track {
       this.postCorner--
       // out of a turn: one obstacle at most, never a wall, so there's always an obvious line
       let kept = false
-      for (let i = 0; i < 3; i++) {
+      // v19: scan from a random end, so the kept obstacle isn't always the LEFT-most one
+      const order = this.r() < 0.5 ? [0, 1, 2] : [2, 1, 0]
+      for (const i of order) {
         if (toks[i] === 'E') continue
         if (kept || toks[i] === 'K' || toks[i] === 'G' || toks[i] === 'H') toks[i] = 'E'
         else kept = true
@@ -459,7 +461,7 @@ export class Track {
     }
     // first rows: never put a crate straight in the start lane before the player has learned to swipe
     if (W > 0.62 && toks[1] === 'K') {
-      const e = toks[0] === 'E' ? 0 : 2
+      const e = toks[0] === 'E' && toks[2] === 'E' ? (this.r() < 0.5 ? 0 : 2) : toks[0] === 'E' ? 0 : 2
       toks[1] = toks[e]
       toks[e] = 'K'
     }
@@ -491,9 +493,10 @@ export class Track {
       }
       // 2) still blocked: open the blocker nearest to a reachable lane
       while (!anyReach(nx)) {
-        const best = [0, 1, 2].filter((l) => this.reach[l].length > 0)[0] ?? 1
+        const rl = [0, 1, 2].filter((l) => this.reach[l].length > 0)
+        const best = rl.length ? rl[Math.floor(this.r() * rl.length)] : 1
         let pick = -1
-        for (const l of [best, 1, 0, 2]) if (toks[l] !== 'E') { pick = l; break }
+        for (const l of this.r() < 0.5 ? [best, 1, 0, 2] : [best, 1, 2, 0]) if (toks[l] !== 'E') { pick = l; break }
         if (pick < 0) break
         toks[pick] = 'E'
         this.repairs++
