@@ -246,8 +246,10 @@ export default function LobbyPage() {
     return () => window.clearTimeout(t)
   }, [games, selected, audio.entered])
 
+  const startedRef = useRef(false)
   const onTapToStart = () => {
-    if (exiting || audio.entered) return
+    if (exiting || audio.entered || startedRef.current) return
+    startedRef.current = true
     unlockAudio()
     playCoinInsert()
     audio.enterFloor()
@@ -311,6 +313,9 @@ export default function LobbyPage() {
           <button
             type="button"
             className={`ffa-title${exiting ? ' is-exiting' : ''}`}
+            // v26: iOS swallows the 'click' of a first tap that changed the page on touch-down (the
+            // music unlock / Now Playing tab), so the splash needed a second tap. Enter on pointer-up.
+            onPointerUp={onTapToStart}
             onClick={onTapToStart}
             aria-label="Tap to start Fifth Floor Arcade"
           >
