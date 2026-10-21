@@ -76,7 +76,7 @@ function seedFromUrl(): string | null {
 }
 
 /** v22 dev param: combo alert placement (?meter=bottom|ufo) */
-const METER = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('meter') === 'bottom' ? 'bottom' : 'ufo'
+const METER = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('meter') === 'ufo' ? 'ufo' : 'bottom'
 
 export default function FifthRun({ challenge = null, seeded = null, onChallengeResolved, onRunResult, onPlayNormal, renderShare }: FifthRunProps) {
   const hostRef = useRef<HTMLDivElement>(null)

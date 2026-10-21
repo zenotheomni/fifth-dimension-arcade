@@ -142,7 +142,7 @@ export const CAM_TUNE = {
   /** look-at height (pitch: lower = looks down more) */ lookY: 0.35,
   /** base FOV offset (deg) */ fov: 0,
   /** turn settle time (s) — critically damped spring */ turnS: 0.13,
-  /** how far the camera leans into a turn as soon as the swipe is accepted (0..1 of 90°) */ lead: 0.3,
+  /** how far the camera leans into a turn as soon as the swipe is accepted (0..1 of 90°) */ lead: 0,
   /** FOV kick multiplier (speed-ups / boost) */ fovKick: 1,
   /** camera shake multiplier */ shake: 1,
 }
@@ -595,8 +595,8 @@ export class FrScene {
   preTurn(id: number, dir: number, corners: Corner[]) {
     const c = corners.find((x) => x.id === id)
     if (!c) return
-    if (c.kind !== 'T' && (c.kind === 'L') !== dir < 0) return // wrong way: no lean
-    this.lead = { dir, s: c.s }
+    void dir
+    // v22: no pre-turn lean: the camera stays straight down the track until the turn itself
   }
 
   /** Speed-up beat: brief FOV punch. */
