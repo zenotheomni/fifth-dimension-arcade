@@ -13,7 +13,7 @@ for (let seed = 1; seed <= 40; seed++) {
   let lastBOP = -1e9
   const rows = new Map()
   for (const o of obs) {
-    if (['gap', 'void'].includes(o.kind)) { holes++; const dt = (o.s - lastBOP) / speedAt(o.s); if (lastBOP > 0 && dt < minAfter) minAfter = dt; if (lastBOP > 0 && dt < 1.15) under++ }
+    if (['gap', 'void'].includes(o.kind)) { holes++; const dt = (o.s - lastBOP) / speedAt(o.s); if (lastBOP > 0 && dt < minAfter) minAfter = dt; if (lastBOP > 0 && dt < 1.15) { under++; if (under < 5) console.log("H", seed, o.kind, o.lane, o.s, obs.filter((x) => x.s > o.s - 40 && x.s < o.s + 5).map((x) => x.kind[0] + x.lane + "@" + x.s + "+" + x.len).join(" ")) } }
     if (['barrier', 'overhead', 'pipe'].includes(o.kind)) lastBOP = Math.max(lastBOP, o.s + o.len)
     if (o.kind !== 'void') { if (!rows.has(o.s)) rows.set(o.s, new Set()); rows.get(o.s).add(o.lane) }
   }
