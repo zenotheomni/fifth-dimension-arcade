@@ -92,6 +92,26 @@ function announce(t: MusicTrack, unlocked: boolean) {
   if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('arcade-music-track', { detail: { title: t.title, unlocked } }))
 }
 
+/** fallback when the crossfade didn't run: the song ended → start the next one on the same element */
+function hardNext(d: Deck, e: HTMLAudioElement) {
+  e.onended = null
+  if (d.el !== e || d !== active) return
+  const next = nextTrack(d)
+  if (!next || next === d.track) {
+    e.currentTime = 0
+    void e.play().catch(() => {})
+    return
+  }
+  const seen = playedIds.has(next.id)
+  playedIds.add(next.id)
+  d.track = next
+  e.src = pickSrc(next)
+  e.loop = true
+  void e.play().catch(() => {})
+  d.warm = false
+  announce(next, !seen)
+}
+
 function loopTick() {
   const ctx = peekAudioContext()
   for (const d of decks) {
@@ -114,6 +134,11 @@ function loopTick() {
         if (next && next !== d.track) badTracks.add(next.id)
         t.onerror = null
       }
+    }
+    // playlist: the song must not loop on its own — if the crossfade can't happen, 'ended' switches
+    if (next !== d.track) {
+      e.loop = false
+      if (!e.onended) e.onended = () => hardNext(d, e)
     }
     // warm the twin's decoder a few seconds ahead (silent: its sub-gain is 0)
     if (left0 < LOOP_XF_S + 4 && left0 > LOOP_XF_S + 1.5 && !d.warm) {
@@ -155,6 +180,7 @@ function loopTick() {
           d.track = next
           announce(next, !seen)
         }
+        e.onended = null
         setTimeout(() => {
           e.pause()
           e.loop = true
