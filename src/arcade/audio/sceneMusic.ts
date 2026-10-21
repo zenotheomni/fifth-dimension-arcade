@@ -31,6 +31,8 @@ let ducked = false
 let muted = false
 let unlocked = false
 let started = false
+/** QA: crossfade path disabled (see __ARCADE_MUSIC_BREAK) */
+let noTwin = false
 
 /** Scene-change log for tests / debugging: window.__ARCADE_MUSIC_LOG */
 type LogEntry = { t: number; scene: MusicScene; from: string | null; to: string | null; path: string }
@@ -132,7 +134,7 @@ function loopTick() {
   const a = active
   if (a && started && a.el.ended && !a.swapping) onEnded(a, a.el)
   for (const d of decks) {
-    if (!d.routed || !ctx || d.swapping || d.el.paused) continue
+    if (noTwin || !d.routed || !ctx || d.swapping || d.el.paused) continue
     const e = d.el
     const dur = e.duration
     if (!isFinite(dur) || dur < LOOP_XF_S * 4) continue
@@ -245,6 +247,11 @@ function ensureDecks() {
       if (active) active.el.currentTime = t < 0 ? active.el.duration + t : t
     }
     ;(globalThis as unknown as { __ARCADE_MUSIC?: unknown }).__ARCADE_MUSIC = musicDebugState
+    // QA (v24): simulate the iOS failure — no twin crossfade and no native loop — to test the 'ended' fallback
+    ;(globalThis as unknown as { __ARCADE_MUSIC_BREAK?: () => void }).__ARCADE_MUSIC_BREAK = () => {
+      noTwin = true
+      for (const d of decks) for (const e of d.els) e.loop = false
+    }
   }
 }
 
