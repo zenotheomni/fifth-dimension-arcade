@@ -22,7 +22,7 @@ export const SPEED = { v0: 24, vmax: 54, k: 2200 }
  * and blends in over RAMP.blendM. After the cap, difficulty keeps rising through obstacle density
  * only (pressureAt). Pure function of distance (deterministic).
  */
-export const RAMP = { v0: 26, inc: 4.2, stepS: 20, blendM: 40, vMax: 48 }
+export const RAMP = { v0: 32, inc: 5, stepS: 18, blendM: 45, vMax: 56 }
 /** last step index (the one that reaches vMax) */
 export const RAMP_KMAX = Math.ceil((RAMP.vMax - RAMP.v0) / RAMP.inc)
 const vStep = (k: number) => Math.min(RAMP.vMax, RAMP.v0 + RAMP.inc * k)

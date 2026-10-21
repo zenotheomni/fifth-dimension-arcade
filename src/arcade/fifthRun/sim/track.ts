@@ -91,7 +91,9 @@ const PATTERNS: Pattern[] = [
   { p: 'GEE', min: 0, w: (L) => 1.0 - 0.3 * L },
   { p: 'BBB', min: 0, w: (L) => 1.3 + 0.4 * L },
   { p: 'OOO', min: 0.02, w: (L) => 1.1 + 0.4 * L },
-  { p: 'GGG', min: 0.05, w: (L) => 0.9 + 0.6 * L },
+  { p: 'GGG', min: 0.05, w: (L) => 1.2 + 0.8 * L },
+  // v18: most of the width missing — jump, or thread the one remaining lane
+  { p: 'GGE', min: 0.15, w: (L) => 0.5 + 0.7 * L },
   { p: 'KKE', min: 0.04, w: (L) => 1.0 + 1.2 * L },
   { p: 'KBE', min: 0.08, w: (L) => 0.6 + 0.6 * L },
   { p: 'KOE', min: 0.08, w: (L) => 0.6 + 0.6 * L },
@@ -125,10 +127,10 @@ const passable = (t: Tok) => t !== 'K' && t !== 'H'
 
 /** Star coin lines (Temple Run): LINE_MIN..LINE_MAX stars STAR_SPACING m apart, then ≥ LINE_GAP_MIN m (and ≥ ~1.1 s) of nothing. */
 export const STAR_SPACING = 3
-export const LINE_MIN = 8
+export const LINE_MIN = 10
 /** base line length max; a jump arc / slide trio can add ≤ 2 more, so a line never exceeds 15 */
-export const LINE_MAX = 13
-export const LINE_GAP_MIN = 8
+export const LINE_MAX = 16
+export const LINE_GAP_MIN = 5
 
 export class Track {
   readonly seed: string
@@ -142,6 +144,9 @@ export class Track {
   private cursor = START_CLEAR_M
   /** end of the last jump/slide obstacle — rockets keep a clear gap from them */
   private lastJS = -1e9
+  /** v18 choreographed sequence: queued rows (left→right token triples) */
+  private seqQ: Tok[][] = []
+  private seqRow = false
   private prevEnd = 0
   private pathLane = 1
   private nextId = 1
@@ -216,6 +221,7 @@ export class Track {
     this.cursor = after
     this.prevEnd = after
     this.postCorner = 2
+    this.seqQ = []
     this.reach = fresh(after)
     this.vEnd = after
     this.starFloor = after + 2
@@ -240,7 +246,8 @@ export class Track {
     // narrow (only the middle left) · edge drop-off (a side lane gone) · centre hole (the MIDDLE lane gone)
     const kr = this.r()
     const side = this.r() < 0.5 ? 0 : 2
-    const gone = kr < 0.3 ? [0, 2] : kr < 0.62 ? [side] : [1]
+    // v18: more one-lane pinches
+    const gone = kr < 0.45 ? [0, 2] : kr < 0.72 ? [side] : [1]
     for (const l of gone) this.addOb('void', l, start, len)
     this.voids++
     const open = [0, 1, 2].filter((l) => !gone.includes(l))
@@ -253,16 +260,20 @@ export class Track {
     for (const l of open) if (Math.abs(l - this.pathLane) < Math.abs(path - this.pathLane)) path = l
     // later on: a hurdle or an arch inside the narrow stretch
     let mid = -1
-    if (L > 0.2 && len > 24 && this.r() < 0.55 + 0.4 * L) {
+    // v18 chokepoint: the pinch holds a hurdle / truss / pipe across every open lane — jump or slide, no dodging
+    if (L > 0.1 && len > 20 && this.r() < 0.7 + 0.3 * L) {
       mid = q(start + len * (0.4 + this.r() * 0.2))
-      const kind = this.r() < 0.5 ? 'barrier' : 'overhead'
-      for (const l of open) this.addOb(kind, l, mid, kind === 'barrier' ? OB.barrier.len : OB.overhead.len)
+      const kr2 = this.r()
+      const kind = kr2 < 0.4 ? 'barrier' : kr2 < 0.8 ? 'overhead' : 'pipe'
+      const ol = kind === 'barrier' ? OB.barrier.len : kind === 'overhead' ? OB.overhead.len : OB.pipe.len
+      for (const l of open) this.addOb(kind, l, mid, ol)
     }
     {
       let r = vReach
       if (mid > 0) {
-        const tk = this.obstacles[this.obstacles.length - 1].kind === 'barrier' ? 'B' : 'O'
-        const ml = tk === 'B' ? OB.barrier.len : OB.overhead.len
+        const lk = this.obstacles[this.obstacles.length - 1].kind
+        const tk = lk === 'barrier' ? 'B' : lk === 'pipe' ? 'P' : 'O'
+        const ml = tk === 'B' ? OB.barrier.len : tk === 'P' ? OB.pipe.len : OB.overhead.len
         const mc = [0, 1, 2].map((l) => (gone.includes(l) ? 'X' : tk)) as Cell[]
         r = stepRow(r, start, { s0: mid, cells: mc, len: [ml, ml, ml], end: mid + ml }, v)
       }
@@ -274,6 +285,16 @@ export class Track {
     for (let s = Math.max(start + 3, this.starFloor); s <= end - 2 && this.lineLeft > 0; s += STAR_SPACING) {
       if (mid > 0 && Math.abs(s - mid) < v * 0.35) continue
       this.placeLineStar(path, s, 0.9, start)
+    }
+    if (mid > 0) {
+      const lk = this.obstacles.filter((o) => o.s === mid)[0]?.kind
+      for (const l of open) {
+        if (lk === 'overhead') for (const d of [-1.5, 0.2, 1.9]) this.addKey(l, mid + d, 0.45)
+        else {
+          const half = (v * JUMP_T) / 2
+          for (const f of [-0.5, -0.25, 0, 0.25, 0.5]) this.addKey(l, mid + 0.6 + f * half, JUMP_APEX * (1 - f * f) + 0.85)
+        }
+      }
     }
     this.obstacles.sort((a, b) => a.s - b.s || a.id - b.id)
     this.pathLane = path
@@ -322,6 +343,20 @@ export class Track {
     }
   }
 
+  /** v18 sequences: forced quick moves, mirrored at random. Every row still goes through the validator. */
+  private pickSequence(): Tok[][] {
+    const S: string[][] = [
+      ['KKE', 'EKK', 'KKE', 'OOO'], // right, left, back right, slide, go
+      ['EKK', 'KKE', 'EKK', 'BBB'], // left, right, left, jump
+      ['KEE', 'KBE', 'KEE', 'KOE', 'KEE'], // wall on the left for a while (jump / slide inside it)
+      ['KKE', 'KEE', 'EEK', 'EKK', 'OOO'], // weave
+      ['EKE', 'KEK', 'EKE', 'GGG'], // centre, sides, centre, jump the gap
+    ]
+    const pick = S[Math.floor(this.r() * S.length)]
+    const mirror = this.r() < 0.5
+    return pick.map((r) => (mirror ? [r[2], r[1], r[0]] : [r[0], r[1], r[2]]) as Tok[])
+  }
+
   private startLine() {
     this.lineLen = LINE_MIN + Math.floor(this.r() * (LINE_MAX - LINE_MIN + 1))
     this.lineLeft = this.lineLen
@@ -330,7 +365,7 @@ export class Track {
 
   private endLine(at: number, v: number) {
     this.lineLeft = 0
-    this.lineGapTo = q(at + Math.max(LINE_GAP_MIN, v * 0.3) + this.r() * 6)
+    this.lineGapTo = q(at + Math.max(LINE_GAP_MIN, v * 0.16) + this.r() * 4)
   }
 
   /** One star of the running line (or the rare 5D logo in its middle when one is due). */
@@ -408,7 +443,10 @@ export class Track {
       return
     }
     if (this.postCorner <= 0 && this.maybeVoid(s0, v, L)) return
-    const toks = this.pickPattern(L, W)
+    // v18: now and then a choreographed run of rows (zigzag / one-side wall / then slide)
+    if (!this.seqQ.length && this.postCorner <= 0 && L > 0.2 && W === 0 && this.r() < 0.07 + 0.06 * L && s0 + v * 6 < this.nextCornerS - CORNER.half - v * CORNER.preS) this.seqQ = this.pickSequence()
+    this.seqRow = this.seqQ.length > 0
+    const toks = this.seqRow ? this.seqQ.shift()! : this.pickPattern(L, W)
     if (this.postCorner > 0) {
       this.postCorner--
       // out of a turn: one obstacle at most, never a wall, so there's always an obvious line
@@ -554,7 +592,7 @@ export class Track {
       if (this.lineLeft <= 0) this.endLine(lastS, v)
     }
     // ── v17 risk / reward: bait stars off the safe line, so grabbing them means flirting with danger ──
-    if (this.postCorner <= 0 && W < 0.5 && this.r() < 0.55 + 0.25 * L) this.bait(toks, path, s0, v, gapLen)
+    if (this.postCorner <= 0 && W < 0.7 && this.r() < 0.8 + 0.2 * L) this.bait(toks, path, s0, v, gapLen)
     // keep keys sorted by s (bait / floaters can land out of order); only the freshly generated
     // tail (far ahead of the runner) is touched
     const n0 = Math.max(0, this.keys.length - 40)
@@ -570,7 +608,9 @@ export class Track {
     // after top speed, waves keep tightening (density-only difficulty); the validator still guards every row
     const P = pressureAt(s0)
     const T = Math.max(0.28 - 0.08 * P, base * (0.7 + 0.35 * this.r()) * (1 + 1.6 * W + 0.3 * (1 - L)) * (1 - P))
-    this.cursor = q(rowEnd + Math.max(rocketRow ? Math.max(9, v * 0.5) : 5.2, v * T))
+    // sequence rows: a fixed reaction window in seconds (≈ lane switch + reaction), so metres scale with speed
+    const Tq = this.seqRow ? 0.62 + 0.15 * (1 - L) : T
+    this.cursor = q(rowEnd + Math.max(rocketRow ? Math.max(9, v * 0.5) : 5.2, v * Tq))
     this.rows++
   }
 }
