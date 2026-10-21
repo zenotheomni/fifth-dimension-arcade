@@ -7,6 +7,8 @@
     <meta name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0, viewport-fit=cover" />
     <meta name="theme-color" content="#0A0A0C" />
+    <!-- v25: the lobby song ("We Outside") starts on the first screen — fetch it before anything else (keep ?v= in sync with music.ts AV) -->
+    <link rel="preload" href="/arcade/audio/lobby-theme.m4a?v=24" as="fetch" type="audio/mp4" fetchpriority="high" crossorigin="anonymous" />
     <link rel="manifest" href="/arcade/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/arcade/icons/apple-touch-icon.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />

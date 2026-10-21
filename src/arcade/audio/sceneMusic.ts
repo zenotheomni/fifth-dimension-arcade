@@ -63,7 +63,15 @@ function makeDeck(): Deck {
   const d: Deck = { el: els[0], els, sub: [null, null], primed: false, swapping: false, gain: null, routed: false, track: null, pauseTimer: null }
   // v24: every song must keep going. iOS can fire 'ended' even with loop on (WebAudio-routed element),
   // and the twin crossfade can fail: whatever happens, an ended song restarts / moves to the next one.
-  for (const e of els) e.addEventListener('ended', () => onEnded(d, e))
+  for (const e of els) {
+    e.addEventListener('ended', () => onEnded(d, e))
+    // v25: iOS can pause / stall a routed element on its own (audio-session interruptions, SFX bursts,
+    // network hiccups). Any stop of the CURRENT song while it should be playing is recovered at once.
+    for (const ev of ['pause', 'stalled', 'suspend', 'waiting', 'emptied'] as const)
+      e.addEventListener(ev, () => {
+        if (e === d.el && d === active && shouldPlay()) setTimeout(() => watchdog(true), ev === 'pause' ? 60 : 1000)
+      })
+  }
   return d
 }
 
@@ -128,7 +136,58 @@ function hardNext(d: Deck, e: HTMLAudioElement) {
   announce(next, !seen)
 }
 
+/** v25: the active song should be audible right now */
+function shouldPlay(): boolean {
+  const a = active
+  return Boolean(a && a.track && started && unlocked && !muted && !document.hidden && !a.swapping && !a.pauseTimer)
+}
+
+/** v25 watchdog: paused, or currentTime not advancing for > 1 s, while it should play → resume the
+ *  AudioContext and the element (and, if the routed path stays stuck, fall back to the element alone). */
+let wdLast = -1
+let wdStuckAt = 0
+let wdFix = 0
+const wdStats = { resumes: 0, ctxResumes: 0, reloads: 0 }
+function watchdog(now = false) {
+  const a = active
+  if (!a || !shouldPlay()) {
+    wdStuckAt = 0
+    return
+  }
+  const ctx = peekAudioContext()
+  if (ctx && a.routed && ctx.state !== 'running') {
+    wdStats.ctxResumes++
+    void ctx.resume().catch(() => {})
+  }
+  const e = a.el
+  const t = performance.now()
+  const moving = !e.paused && e.currentTime !== wdLast
+  wdLast = e.currentTime
+  if (moving) {
+    wdStuckAt = 0
+    wdFix = 0
+    return
+  }
+  if (!wdStuckAt) wdStuckAt = t
+  if (!now && t - wdStuckAt < 1000) return
+  if (t - wdFix < 900) return
+  wdFix = t
+  wdStats.resumes++
+  if (e.ended || (isFinite(e.duration) && e.currentTime >= e.duration - 0.05)) e.currentTime = 0
+  // stuck > 4 s while "playing" (dead decoder / network): reload the source at the same spot
+  if (!e.paused && t - wdStuckAt > 4000 && e.src) {
+    wdStats.reloads++
+    const at = e.currentTime
+    e.load()
+    e.currentTime = at
+  }
+  void e.play().then(() => rampTo(a, level(a), 0.4)).catch(() => {
+    /* needs a gesture: the next tap (onGesture → kick) resumes it */
+  })
+}
+
 function loopTick() {
+  watchdog()
   const ctx = peekAudioContext()
   // v24 watchdog: the active song ended / stopped on its own (missed 'ended', failed crossfade)
   const a = active
@@ -231,6 +290,7 @@ function route(d: Deck) {
       d.sub[i] = g
     })
     d.routed = true
+    for (const e of d.els) e.volume = 1
   } catch {
     d.routed = false
   }
@@ -286,6 +346,7 @@ function rampTo(d: Deck, to: number, seconds: number, pauseAfter = false) {
 /** Try to (re)start the active deck. Safe to call often; must be in a gesture the first time on iOS. */
 function kick() {
   const d = active
+  if (d && d.track && !muted && !unlocked && !document.hidden) return tryAutoplay(d)
   if (!d || !d.track || muted || !unlocked || document.hidden) return
   route(d)
   prime(d)
@@ -304,6 +365,24 @@ function kick() {
     })
   }
   rampTo(d, level(d), MUSIC_FADE_IN_S)
+}
+
+/** v25: before any gesture, try plain (unrouted) autoplay — desktop / Android with engagement allow it.
+ *  Blocked (iOS): nothing happens and the very first touch / pointer / key anywhere starts it. */
+let autoTried = ''
+function tryAutoplay(d: Deck) {
+  if (d.routed || !d.el.paused || autoTried === d.el.src) return
+  autoTried = d.el.src
+  d.el.volume = level(d)
+  void d.el
+    .play()
+    .then(() => {
+      started = true
+      if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('arcade-music-autoplay'))
+    })
+    .catch(() => {
+      autoTried = ''
+    })
 }
 
 function onTap() {
@@ -408,6 +487,7 @@ export function musicDebugState() {
     time: a ? Number(a.el.currentTime.toFixed(2)) : null,
     duration: a && isFinite(a.el.duration) ? a.el.duration : null,
     loopEl: a ? a.els.indexOf(a.el) : null,
+    watchdog: { ...wdStats },
   }
 }
 

@@ -25,7 +25,9 @@ export default function NowPlaying({ title: sceneTitle, muted }: { title: string
     const on = () => setArmed(true)
     window.addEventListener('pointerdown', on, { once: true, capture: true })
     window.addEventListener('keydown', on, { once: true, capture: true })
+    window.addEventListener('arcade-music-autoplay', on, { once: true })
     return () => {
+      window.removeEventListener('arcade-music-autoplay', on)
       window.removeEventListener('pointerdown', on, { capture: true })
       window.removeEventListener('keydown', on, { capture: true })
     }
