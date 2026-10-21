@@ -7,6 +7,8 @@
 | `fifth-glide-2.mp3`, `fifth-glide-2.m4a` | "Wattup Yo" (Fifth Glide song 2) — original track by Jenks / Fifth Dimension Imperial, supplied by the owner (Oct 2026). Same processing: −16 LUFS, MP3 128 kbps + AAC-LC 128 kbps; 4.1 s trailing silence trimmed. Unlocks when a run outlasts Thousand Yard Stare; the two then alternate. | © Fifth Dimension Imperial — all rights reserved; used by the owner. |
 | `lobby-theme.mp3`, `lobby-theme.m4a` | "We Outside" (FCC clean) — original track by Jenks / Fifth Dimension Imperial, supplied by the owner (Oct 2026). Same processing: −16 LUFS, MP3 128 kbps + AAC-LC 128 kbps. | © Fifth Dimension Imperial — all rights reserved; used by the owner. |
 
+v24 (Oct 2026): the four .m4a files were re-encoded to AAC-LC 96 kbps stereo (faststart) for a faster first play on phones (~1.85 MB per 2.5 min song, was ~2.5 MB). The .mp3 fallbacks are unchanged.
+
 ## Sound effects
 
 Court Vision sound effects (swish, net snap, rim tick/clank, backboard thud,

@@ -18,14 +18,16 @@ export type MusicTrack = {
 }
 
 const BASE = import.meta.env.BASE_URL
+/** v24: audio is served immutable (1 year) — bump AV whenever a song file changes */
+const AV = '?v=24'
 
 /** "ZENO 5" — Jenks / Fifth Dimension Imperial. Court Vision only. */
 export const COURT_VISION_THEME: MusicTrack = {
   id: 'court-vision-theme',
   title: 'Jenks - Zeno 5',
   sources: [
-    { src: `${BASE}audio/court-vision-theme.m4a`, type: 'audio/mp4; codecs="mp4a.40.2"' },
-    { src: `${BASE}audio/court-vision-theme.mp3`, type: 'audio/mpeg' },
+    { src: `${BASE}audio/court-vision-theme.m4a${AV}`, type: 'audio/mp4; codecs="mp4a.40.2"' },
+    { src: `${BASE}audio/court-vision-theme.mp3${AV}`, type: 'audio/mpeg' },
   ],
   level: 0.4,
   duckedLevel: 0.24,
@@ -36,8 +38,8 @@ export const LOBBY_THEME: MusicTrack = {
   id: 'lobby-theme',
   title: 'Jenks ft. Val Underwood - We Outside',
   sources: [
-    { src: `${BASE}audio/lobby-theme.m4a`, type: 'audio/mp4; codecs="mp4a.40.2"' },
-    { src: `${BASE}audio/lobby-theme.mp3`, type: 'audio/mpeg' },
+    { src: `${BASE}audio/lobby-theme.m4a${AV}`, type: 'audio/mp4; codecs="mp4a.40.2"' },
+    { src: `${BASE}audio/lobby-theme.mp3${AV}`, type: 'audio/mpeg' },
   ],
   level: 0.35,
   // Fifth Glide ducks on its end screen; the lobby song keeps its level on the how-to.
@@ -49,8 +51,8 @@ export const FIFTH_GLIDE_THEME: MusicTrack = {
   id: 'fifth-glide-theme',
   title: 'Jenks - Thousand Yard Stare',
   sources: [
-    { src: `${BASE}audio/fifth-glide-theme.m4a`, type: 'audio/mp4; codecs="mp4a.40.2"' },
-    { src: `${BASE}audio/fifth-glide-theme.mp3`, type: 'audio/mpeg' },
+    { src: `${BASE}audio/fifth-glide-theme.m4a${AV}`, type: 'audio/mp4; codecs="mp4a.40.2"' },
+    { src: `${BASE}audio/fifth-glide-theme.mp3${AV}`, type: 'audio/mpeg' },
   ],
   level: 0.38,
   duckedLevel: 0.22,
@@ -71,8 +73,8 @@ const fromFile = (x: { id: string; title: string; file: string }): MusicTrack =>
   id: x.id,
   title: x.title,
   sources: [
-    { src: `${BASE}audio/${x.file}.m4a`, type: 'audio/mp4; codecs="mp4a.40.2"' },
-    { src: `${BASE}audio/${x.file}.mp3`, type: 'audio/mpeg' },
+    { src: `${BASE}audio/${x.file}.m4a${AV}`, type: 'audio/mp4; codecs="mp4a.40.2"' },
+    { src: `${BASE}audio/${x.file}.mp3${AV}`, type: 'audio/mpeg' },
   ],
   level: FIFTH_GLIDE_THEME.level,
   duckedLevel: FIFTH_GLIDE_THEME.duckedLevel,

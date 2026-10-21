@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { SCENE_TRACKS, type MusicScene } from '../arcade/audio/music'
+import { prefetchSceneMusic } from '../arcade/audio/sceneMusic'
 import { getOrCreatePlayerId } from '../arcade/core/identity'
 import { track } from '../arcade/analytics'
 import { COPY } from '../arcade/copyLocks'
@@ -234,6 +236,15 @@ export default function LobbyPage() {
     if (rail && c && selected > 0) rail.scrollLeft = c.offsetLeft - (rail.clientWidth - c.offsetWidth) / 2
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // v24: silently warm the highlighted game's song (after the lobby song has had a head start).
+  // Playback never changes here — the game's song only starts when gameplay does.
+  useEffect(() => {
+    const id = games[selected]?.id
+    if (!audio.entered || !id || !(id in SCENE_TRACKS)) return
+    const t = window.setTimeout(() => prefetchSceneMusic(id as MusicScene), 4000)
+    return () => window.clearTimeout(t)
+  }, [games, selected, audio.entered])
 
   const onTapToStart = () => {
     if (exiting || audio.entered) return
