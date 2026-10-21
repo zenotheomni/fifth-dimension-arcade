@@ -939,3 +939,13 @@
   from { transform: scale(1); }
   to { transform: scale(1.12); }
 }
+
+/* v22: combo alert / streak banner ~28% smaller; placement via ?meter=bottom|ufo (dev param) */
+.fr-callout {
+  padding: 0.36rem 0.95rem 0.4rem;
+  max-width: min(64vw, 280px);
+  font-size: clamp(0.8rem, 4.3vw, 1.22rem);
+  border-width: 1.5px;
+}
+.fr-meter--ufo .fr-callout { top: 38.5%; }
+.fr-meter--bottom .fr-callout { top: auto; bottom: calc(13.5% + env(safe-area-inset-bottom)); }
