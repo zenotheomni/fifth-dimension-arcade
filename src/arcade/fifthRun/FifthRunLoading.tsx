@@ -18,7 +18,7 @@ export default function FifthRunLoading() {
     >
       <div style={{ display: 'grid', justifyItems: 'center', gap: 18 }}>
         <GlideWordmark width={220} />
-        <span>Loading Fifth Glide…</span>
+        <span>Loading FIFTH GLIDE…</span>
       </div>
     </div>
   )

@@ -306,7 +306,7 @@ export default function CourtVision3D({
       {howTo && !ended ? (
         <div className="cv3-howto" role="dialog" aria-label="How to play">
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}><BrandLockup size={64} /></div>
-          <p className="cv3-howto__eyebrow">Court Vision</p>
+          <p className="cv3-howto__eyebrow">COURT VISION</p>
           <h2 className="cv3-howto__title">How to play</h2>
           <ul className="cv3-howto__list">
             <li>
@@ -411,7 +411,7 @@ export default function CourtVision3D({
 
       {ended && !(challenge && onRunResult) ? (
         <div className="cvp-end">
-          <p className="cvp-end__eyebrow">{seeded ? (seeded.rivalHandle ? `Rematch vs ${seeded.rivalHandle}` : 'Set the bar') : 'Court Vision'}</p>
+          <p className="cvp-end__eyebrow">{seeded ? (seeded.rivalHandle ? `Rematch vs ${seeded.rivalHandle}` : 'Set the bar') : 'COURT VISION'}</p>
           <h2>{headline}</h2>
           <div className="cv3-end__stats">
             <div className="cv3-end__stat">
@@ -507,7 +507,7 @@ export default function CourtVision3D({
       ) : null}
       {ended && challenge && onRunResult ? (
         <div className="cvp-end">
-          <p className="cvp-end__eyebrow">Court Vision</p>
+          <p className="cvp-end__eyebrow">COURT VISION</p>
           <h2>Final: {ended.score}</h2>
           <p className="cvp-end__pb">{runState === 'error' ? 'Couldn’t post — check your connection.' : 'Tallying the head-to-head…'}</p>
         </div>

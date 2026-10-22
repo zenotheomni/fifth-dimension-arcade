@@ -327,6 +327,11 @@ class Engine {
 
   start(first: Action | null) {
     if (this.phase !== 'intro') return
+    // v34: never start a run with cold programs (composer toggled right before the tap)
+    if (this.view && !this.view.warmed && !this.ctxLost) {
+      this.view.warmed = true
+      this.view.prewarm()
+    }
     this.phase = 'playing'
     this.startedAt = this.clock
     sfxWhoosh()
@@ -494,7 +499,8 @@ class Engine {
     }
     if (!this.view || this.ctxLost) return
     // v24: pre-warm GPU uploads once while the how-to / intro is up (before the run starts)
-    if (this.phase === 'intro' && !this.view.warmed && this.clock > 0.25 && !skipRender) {
+    // v34: and again whenever the composer was toggled (any non-playing phase), so no run starts cold
+    if (this.phase !== 'playing' && this.phase !== 'loading' && !this.view.warmed && this.clock > 0.25 && !skipRender) {
       this.view.warmed = true
       this.view.prewarm()
     }

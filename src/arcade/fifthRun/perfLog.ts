@@ -1,9 +1,9 @@
 /**
- * v33 real-device perf telemetry. On with ?perf=1 (sticky for the tab, with an on-screen overlay), or for a
+ * v33 real-device perf telemetry. On with ?perf=1 in the URL (on-screen overlay, not remembered), or for a
  * 10% sample of runs (no overlay). Records every frame's dt + JS work time; long frames (>25 ms) with context;
  * on run end POSTs one compact summary to /api/arcade/perf (Supabase arcade_perf_logs).
  */
-export const PERF_BUILD = 'v33'
+export const PERF_BUILD = 'v34'
 const BUCKETS = [8.5, 12, 17.5, 25, 34, 50, 100, Infinity]
 const LONG_MS = 25
 
@@ -22,9 +22,9 @@ type Long = (string | number)[]
 function optedIn(): boolean {
   try {
     const q = new URLSearchParams(location.search).get('perf')
-    if (q === '1') sessionStorage.setItem('fr-perf', '1')
-    if (q === '0') sessionStorage.removeItem('fr-perf')
-    return sessionStorage.getItem('fr-perf') === '1'
+    // v34: overlay only for the ?perf=1 URL itself, never remembered (players never see it)
+    sessionStorage.removeItem('fr-perf')
+    return q === '1'
   } catch {
     return false
   }
@@ -42,11 +42,12 @@ export class PerfLog {
   private maxJs = 0
   private longs: Long[] = []
   private longN = 0
-  private win: number[][] = [] // per 10 s of run: [frames, longs, maxMs, sumJs]
+  private win: number[][] = [] // per 10 s of run: [frames, longs, maxMs, avgJs, dpr, calls, progs]
   private cur = [0, 0, 0, 0]
   private winT = 0
   private events: Long[] = []
   private lastAudio = 0
+  private progs = 0
   private ovT = 0
   private ovFrames = 0
   private ovLong = 0
@@ -93,13 +94,21 @@ export class PerfLog {
     this.sumDt += dtMs
     if (dtMs > this.maxDt) this.maxDt = dtMs
     if (jsMs > this.maxJs) this.maxJs = jsMs
-    if ((this.n & 31) === 0) this.audioCheck()
+    if ((this.n & 31) === 0) {
+      this.audioCheck()
+      const p = info()[3] as number
+      if (p !== this.progs) {
+        if (this.progs) this.event(`progs:${p}@${Math.round(ctx.runS * 10) / 10}`)
+        this.progs = p
+      }
+    }
     const long = dtMs > LONG_MS && ctx.phase === 'playing'
     if (long) {
       this.longN++
       this.ovLong++
-      if (this.longs.length < 250)
-        this.longs.push([
+      // v34: first 150 long frames, then a rolling tail of the last 100 (v33 filled up in 19 s)
+      if (this.longs.length >= 250) this.longs.splice(150, 1)
+      this.longs.push([
           Math.round(ctx.runS * 10) / 10,
           Math.round(dtMs),
           Math.round(jsMs * 10) / 10,
@@ -117,7 +126,8 @@ export class PerfLog {
       c[3] += jsMs
       if (ctx.runS - this.winT >= 10) {
         this.winT = ctx.runS
-        this.win.push([c[0], c[1], Math.round(c[2]), Math.round((c[3] / Math.max(1, c[0])) * 10) / 10])
+        const i = info()
+        this.win.push([c[0], c[1], Math.round(c[2]), Math.round((c[3] / Math.max(1, c[0])) * 10) / 10, +i[0], +i[1], +i[3]])
         this.cur = [0, 0, 0, 0]
       }
     }

@@ -24,7 +24,7 @@ const loading = (
   >
     <div style={{ display: 'grid', justifyItems: 'center', gap: 18 }}>
       <BrandLockup size={120} />
-      <span>Loading Court Vision…</span>
+      <span>Loading COURT VISION…</span>
     </div>
   </div>
 )

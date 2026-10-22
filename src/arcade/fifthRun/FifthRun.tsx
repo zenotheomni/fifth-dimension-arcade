@@ -13,6 +13,7 @@ import SharePanel from '../social/SharePanel'
 import StoryShareButton from '../social/StoryShareButton'
 import { requestAlertsRefresh } from '../social/alertStore'
 import { createFifthRun, type FifthRunHandle } from './engine'
+import { LOGO_BONUS_M, STUMBLE_PEN_M } from './sim/runner'
 import { BLINK_S, BOOST, CHASE, FR_HZ, POWER_TICKS, START_LIVES, STAR_M, STREAK_EVERY, STREAK_M } from './sim/constants'
 import type { FrChallengeConfig, FrEndPayload, FrHudState } from './types'
 import './fifthRun.css'
@@ -382,7 +383,7 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
 
         {hud.phase === 'intro' && !howto ? (
           <div className="fr-intro">
-            <p className="fr-intro__title">Fifth Glide</p>
+            <p className="fr-intro__title">FIFTH GLIDE</p>
             <p className="fr-intro__tag">Outrun the UFO.</p>
             <div className="fr-intro__controls">
               <span>
@@ -409,27 +410,26 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
 
 
       {howto && !ended ? (
-        <div className="fr-howto" role="dialog" aria-label="How to play Fifth Glide">
+        <div className="fr-howto" role="dialog" aria-label="How to play FIFTH GLIDE">
           <div className="fr-howto__card">
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}><GlideWordmark width={170} /></div>
             <p className="fr-howto__eyebrow">How to play</p>
-            <h2 className="fr-howto__title">Fifth Glide</h2>
+            <h2 className="fr-howto__title">FIFTH GLIDE</h2>
             <section>
               <h3>Controls</h3>
               <ul className="fr-howto__controls">
-                <li><b>↰&nbsp;↱</b>The path turns 90°. Swipe left / right at the corner to take it. Too late (or the wrong way) and you run off into the void. A glowing sign and arrows on the floor show which way, and at a T you pick either side</li>
-                <li><b>←&nbsp;→</b>Between corners, swipe left / right to switch lanes, dodge palm trees and toppled neon signs and grab stars</li>
-                <li><b>↑</b>Swipe up to jump gaps and low rubble</li>
-                <li><b>↓</b>Swipe down to slide under the red SLIDE laser gates. You can’t jump them. Steel pipes: jump or slide</li>
+                <li><b>↰&nbsp;↱</b>The path turns 90°. Swipe left / right at the corner to take it. Miss it (or go the wrong way) and you fall off the cliff. A glowing sign and arrows on the floor show which way, and at a T you pick either side</li>
+                <li><b>←&nbsp;→</b>Between corners, swipe left / right to switch lanes, dodge meteor rocks, cargo crates, chrome statues, hologram billboards and steel wreckage, and grab stars</li>
+                <li><b>↑</b>Swipe up to jump gaps, low pipes and hurdles</li>
+                <li><b>↓</b>Swipe down to slide under overhead beams and gates. You can’t jump them</li>
               </ul>
             </section>
             <section>
               <h3>Rules</h3>
               <ul>
                 <li><b>🛸</b>A UFO is right behind you. Stumble and it swoops in; run clean to keep it back</li>
-                <li><b>⚠</b>Watch for gaps, parts of the path that drop away, and narrow stretches. Palm trees and toppled neon signs block a lane, so go around them</li>
-                <li><b>⚠</b>Hit an obstacle and you stumble: you slow down and it closes in. Stumble again before you pull away (about {Math.round((CHASE.hit - CHASE.catchAt) * CHASE.recoverS)} s of clean running) and the UFO catches you</li>
-                <li><b>{'♥'.repeat(START_LIVES)}</b>{START_LIVES} lives. Getting caught, falling off the path, or running into a pylon or a fallen sign costs one. You flash and respawn right where you were, then keep running</li>
+                                <li><b>⚠</b>Hit an obstacle and you stumble: −{STUMBLE_PEN_M} m, you slow down and the UFO closes in. Stumble again before you pull away (about {Math.round((CHASE.hit - CHASE.catchAt) * CHASE.recoverS)} s of clean running) and the UFO catches you</li>
+                <li><b>{'♥'.repeat(START_LIVES)}</b>{START_LIVES} lives. Getting caught or falling off the cliff costs one. You flash and respawn right where you were, then keep running</li>
                 <li><b>☠</b>Lose all {START_LIVES} and the run is over. It gets faster the farther you go</li>
               </ul>
             </section>
@@ -438,7 +438,7 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
               <ul>
                 <li><b>m</b>Your score is your distance, 1 point per metre</li>
                 <li><b>💫</b>Each shooting star adds +{STAR_M} m. Every {STREAK_EVERY} in a row without missing one pays a streak bonus (+{STREAK_M} m, then +{STREAK_M * 2} m, +{STREAK_M * 3} m…). The ones arcing over obstacles need a jump</li>
-                <li><img src={BRAND_LOGO} alt="" width={28} height={28} style={{ borderRadius: '50%', verticalAlign: 'middle', marginRight: 6, boxShadow: '0 0 10px #ffc83c' }} />Rare 5D logo: {Math.round(POWER_TICKS.hand / FR_HZ)} s invincible plus a {BOOST.mul}× speed boost that counts double: every metre and every star is worth 2×. Nothing can catch you, you can’t fall, corners take themselves, and you blast through everything without losing your star streak. You blink for the last {BLINK_S} s, still invincible, so you know it’s almost over</li>
+                <li><img src={BRAND_LOGO} alt="" width={28} height={28} style={{ borderRadius: '50%', verticalAlign: 'middle', marginRight: 6, boxShadow: '0 0 10px #ffc83c' }} />Rare 5D logo: +{LOGO_BONUS_M} m bonus, {Math.round(POWER_TICKS.hand / FR_HZ)} s invincible plus a {BOOST.mul}× speed boost that counts double: every metre and every star is worth 2×. Nothing can catch you, you can’t fall, corners take themselves, and you blast through everything without losing your star streak. You blink for the last {BLINK_S} s, still invincible, so you know it’s almost over</li>
               </ul>
             </section>
             <button type="button" className="ffa-btn ffa-btn--primary fr-howto__start" onClick={startFromHowto} disabled={hud.phase === 'loading'}>
@@ -450,7 +450,7 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
 
       {ended && !(challenge && onRunResult) ? (
         <div className="fr-end">
-          <p className="fr-end__eyebrow">{seeded ? (seeded.rivalHandle ? `Rematch vs ${seeded.rivalHandle}` : 'Set the bar') : 'Fifth Glide'}</p>
+          <p className="fr-end__eyebrow">{seeded ? (seeded.rivalHandle ? `Rematch vs ${seeded.rivalHandle}` : 'Set the bar') : 'FIFTH GLIDE'}</p>
           <h2>{headline}</h2>
           <div className="fr-end__score">
             {ended.score.toLocaleString('en-US')}
@@ -544,7 +544,7 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
       ) : null}
       {ended && challenge && onRunResult ? (
         <div className="fr-end">
-          <p className="fr-end__eyebrow">Fifth Glide</p>
+          <p className="fr-end__eyebrow">FIFTH GLIDE</p>
           <h2>Final: {ended.score.toLocaleString('en-US')} m</h2>
           <p className="fr-end__pb">{runState === 'error' ? 'Couldn’t post — check your connection.' : 'Tallying the head-to-head…'}</p>
         </div>
