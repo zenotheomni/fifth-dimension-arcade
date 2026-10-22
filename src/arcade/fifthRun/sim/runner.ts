@@ -29,6 +29,7 @@ import {
   START_LIVES,
   FR_HZ,
   warmAt,
+  levelAt,
   laneX,
   multFor,
   speedAt,
@@ -116,6 +117,8 @@ export type RunState = {
   bonusM: number
   /** v30: metres lost to stumbles / respawns (STUMBLE_PEN_M each) */
   penM: number
+  /** v32: instant metres from 5D logo pickups (LOGO_BONUS_M each) */
+  logoM: number
   /** v19 boost metres: the extra distance + star metres earned while boosted (2× scoring) */
   boostM: number
   /** v19 boost level 0..1 (eased; a second logo mid-boost never drops it) */
@@ -182,6 +185,7 @@ export function newRun(): RunState {
     sBank: 0,
     bonusM: 0,
     penM: 0,
+    logoM: 0,
     boostM: 0,
     boostK: 0,
     edgeHold: 0,
@@ -202,8 +206,9 @@ export function newRun(): RunState {
 /** Score = distance: metres run + STAR_M bonus metres per star. */
 /** v30: every stumble / respawn costs this many metres (score and distance never go below 0) */
 export const STUMBLE_PEN_M = 500
-export const scoreOf = (st: RunState) => Math.max(0, Math.floor(st.s + st.sBank + st.boostM) + st.keys * STAR_M + st.bonusM - st.penM)
-export const distOf = (st: RunState) => Math.max(0, Math.floor(st.s + st.sBank - st.penM))
+export const LOGO_BONUS_M = 1000
+export const scoreOf = (st: RunState) => Math.max(0, Math.floor(st.s + st.sBank + st.boostM) + st.keys * STAR_M + st.bonusM + st.logoM - st.penM)
+export const distOf = (st: RunState) => Math.max(0, Math.floor(st.s + st.sBank + st.logoM - st.penM))
 
 /** Speed multiplier from stumble slow-down × logo surge (eased). */
 export function speedMul(st: RunState) {
@@ -586,7 +591,9 @@ export function step(st: RunState, track: Track, opts: StepOpts) {
       ev?.push({ type: 'boostEnd' })
     }
   } else if (st.threat > 0) {
-    const rec = CHASE.recoverS * (1 - CHASE.warmRecoverCut * warmAt(st.s))
+    // v32: mid / late the chase lingers a little longer after a stumble (warm-up unchanged)
+    const late = Math.min(1, Math.max(0, (levelAt(st.s) - 0.7) / 0.3))
+    const rec = CHASE.recoverS * (1 - CHASE.warmRecoverCut * warmAt(st.s)) * (1 + CHASE.lateRecover * late)
     st.threat = Math.max(0, st.threat - FR_DT / rec)
   }
   if (st.stumble > 0) st.stumble--
@@ -715,6 +722,7 @@ export function step(st: RunState, track: Track, opts: StepOpts) {
       p.taken = true
       p.takenTick = st.tick
       st.hand = POWER_TICKS.hand
+      st.logoM += LOGO_BONUS_M
       st.slowT = 0
       st.threat = 0
       st.stumble = 0

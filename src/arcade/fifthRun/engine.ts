@@ -7,7 +7,7 @@ import { RuleBot, SKILLS } from './sim/bot'
 import { hudTap, maybeOpenTuneFromUrl, toggleTunePanel } from './tunePanel'
 import { RAMP_KMAX, stepAt } from './sim/constants'
 import { BLINK_S, FR_DT, FR_HZ, POWER_TICKS, STAR_M } from './sim/constants'
-import { distOf, newRun, queueAction, resetCursors, scoreOf, speedMul, step, type Action, type RunEvent, type RunState } from './sim/runner'
+import { LOGO_BONUS_M, STUMBLE_PEN_M, distOf, newRun, queueAction, resetCursors, scoreOf, speedMul, step, type Action, type RunEvent, type RunState } from './sim/runner'
 import { Track } from './sim/track'
 import { DebugOverlay } from './debugOverlay'
 import { FrScene, type QualityTier, type ViewState } from './render/scene'
@@ -122,6 +122,7 @@ class Engine {
   private dbg: DebugOverlay | null = null
   private dbgFrame = 0
   private prevOverscroll = ''
+  private pruneTick = 0
 
   constructor(host: HTMLElement, bridge: FrBridge) {
     this.host = host
@@ -322,6 +323,7 @@ class Engine {
     this.startedAt = this.clock
     sfxWhoosh()
     this.biomeCalled = 0
+    this.pruneTick = 0
     this.openT = 0
     this.runHit = false
     if (first) queueAction(this.run, first)
@@ -404,7 +406,9 @@ class Engine {
           break
         }
       }
-      if (this.run.tick % 600 === 0) {
+      // v32: prune on crossing a 600-tick boundary (several sim steps per frame could step over `% 600`)
+      if (this.run.tick - this.pruneTick >= 600) {
+        this.pruneTick = this.run.tick
         const before = this.track.obstacles.length
         this.track.prune(this.run.s)
         if (this.track.obstacles.length !== before) resetCursors(this.run)
@@ -525,7 +529,8 @@ class Engine {
       case 'key': {
         sfxKey(e.combo, false)
         const k = this.track.keys.find((x) => x.id === e.id)
-        if (k) this.view?.burst(k.lane, k.s, k.y, 6)
+        // v32: x2 stars under the boost: smaller bursts (the scene also caps sparks per frame)
+        if (k) this.view?.burst(k.lane, k.s, k.y, st.hand > 0 ? 3 : 6)
         if (e.first) this.say(FIFTH_RUN_COPY.FIRST_KEY, 'gold', 1.1)
         break
       }
@@ -542,7 +547,7 @@ class Engine {
       case 'power':
         sfxPower('hand')
         sfxSurge()
-        this.say('Fifth Dimension · x2 boost', 'teal', 1.4)
+        this.say('Fifth Dimension · +1000m · x2 boost', 'teal', 1.4)
         break
       case 'boostEnd':
         this.say('Back to earth', 'teal', 0.9)
@@ -689,7 +694,8 @@ class Engine {
       pb: this.pb,
       newPb: this.newPb,
       hand: st.hand / POWER_TICKS.hand,
-      penN: Math.round(st.penM / 1000),
+      penN: Math.round(st.penM / STUMBLE_PEN_M),
+      logoN: Math.round(st.logoM / LOGO_BONUS_M),
       speed: Math.round(st.v * 3.6),
       target: this.bridge.challenge && !this.bridge.challenge.setTheBar ? this.bridge.challenge.targetScore : null,
     }
@@ -727,7 +733,8 @@ class Engine {
         v.dprScale = Math.max(0.7, v.dprScale - 0.1)
         this.lastDprChange = this.clock
         this.requestResize('dpr-down')
-      } else if (v.composer && fps < 40) {
+      } else if (v.composer && fps < 40 && this.phase !== 'playing') {
+        // v32: never drop bloom / AA mid-run (a boost dip used to flip the whole look in one frame)
         v.disableComposer()
         this.dbg?.log('post-processing off (fps)')
       }

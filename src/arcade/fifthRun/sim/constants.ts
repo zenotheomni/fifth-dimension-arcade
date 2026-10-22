@@ -49,7 +49,7 @@ export const speedAt = (s: number) => {
   return k === 0 ? RAMP.v0 : vStep(k - 1) + (vStep(k) - vStep(k - 1)) * e
 }
 /** post-cap pressure 0..PRESSURE.max: shrinks the gap between obstacle waves after top speed */
-export const PRESSURE = { max: 0.9, overM: 2000 } // v28: late tightening back to the v26 curve; min spacing still holds early
+export const PRESSURE = { max: 0.95, overM: 1200 } // v32: reaches full pressure sooner (was 2000) // v28: late tightening back to the v26 curve; min spacing still holds early
 export const pressureAt = (s: number) => (s <= CAP_S ? 0 : Math.min(PRESSURE.max, (PRESSURE.max * (s - CAP_S)) / PRESSURE.overM))
 /**
  * Warm-up distance (≈ first 40 s, easing out linearly): sparse single-car rows, slower oncoming
@@ -168,7 +168,7 @@ export const BLINK_S = 3
  * threat ≥ CATCH_AT = caught (−1 life). Threat bleeds off over RECOVER_S of clean running
  * (faster during the warm-up so first-timers get a longer leash).
  */
-export const CHASE = { hit: 0.75, catchAt: 0.3, recoverS: 7, warmRecoverCut: 0.45, slowS: 1.1, slowMul: 0.62 }
+export const CHASE = { hit: 0.75, catchAt: 0.3, recoverS: 7, warmRecoverCut: 0.45, lateRecover: 0.8, slowS: 1.1, slowMul: 0.62 }
 export const SLOW_TICKS = Math.round(CHASE.slowS * FR_HZ)
 
 /** Logo pickup: 10 s invincible + speed surge. */

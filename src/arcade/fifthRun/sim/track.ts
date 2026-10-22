@@ -145,8 +145,14 @@ export const LINE_MIN = 14
 export const LINE_MAX = 24
 export const LINE_GAP_MIN = 5
 
+/** v32: up to this much shorter wave spacing once the level passes 0.7 (≈ 30 s+) */
+const MID_TIGHT = 0.22
+/** v32: extra chance of a forced sequence once post-cap pressure builds */
+const SEQ_LATE = 0.15
 const SWERVE_MIN = 5
 const SWERVE_MAX = 9
+
+const COMBO_LATE = 2.5
 
 export class Track {
   readonly seed: string
@@ -494,7 +500,7 @@ export class Track {
     this.laneRun++
     if (rowS >= this.nextPickupS && i === Math.floor(this.lineLen / 2)) {
       this.pickups.push({ id: this.nextId++, kind: this.nextPower(), lane, s: q(s), y: 1.0, taken: false, takenTick: -1 })
-      this.nextPickupS = rowS + 900 + this.r() * 600
+      this.nextPickupS = rowS + 1500 + this.r() * 900 // v32: ~35 % rarer (was 900 + r·600)
     } else this.addKey(lane, s, y, this.lineBob ? 1 : 0, i * 0.12)
     this.lineLeft--
     if (this.lineLeft <= 0) this.endLine(s, speedAt(s))
@@ -586,6 +592,7 @@ export class Track {
     if (this.pickups.length > 10 && this.pickups[0].s < cut) this.pickups = this.pickups.filter((p) => p.s >= cut)
   }
 
+  // v32 difficulty nudge
   private pickPattern(L: number, W = 0): Tok[] {
     let total = 0
     const ws: number[] = []
@@ -594,6 +601,8 @@ export class Track {
       // warm-up: multi-car rows fade in only as the warm-up ends
       // warm-up: forced-lane combos (two crates, mixed rows) fade in only as the warm-up ends
       if (W > 0 && /K.*K|BO|G.*G.*K|GKG|HH|HB/.test(p.p) && p.p !== 'GGG') w *= W > 0.5 ? 0 : 1 - 2 * W
+      // v32: mid/late, forced-lane combos (multi-car / mixed rows) come up more often
+      else if (W === 0 && L > 0.7 && /K.*K|BO|GKG|HB/.test(p.p)) w *= 1 + COMBO_LATE * Math.min(1, (L - 0.7) / 0.3)
       // v27 variety: never the last two patterns again; the last row's main type is rarer
       const pi = ws.length
       if (this.patHist.includes(pi)) w = 0
@@ -635,7 +644,7 @@ export class Track {
     }
     if (this.postCorner <= 0 && this.maybeVoid(s0, v, L)) return
     // v18: now and then a choreographed run of rows (zigzag / one-side wall / then slide)
-    if (!this.seqQ.length && this.postCorner <= 0 && L > 0.2 && W === 0 && this.r() < 0.1 + 0.1 * L && s0 + v * 6 < this.nextCornerS - CORNER.half - v * CORNER.preS) this.seqQ = this.pickSequence()
+    if (!this.seqQ.length && this.postCorner <= 0 && L > 0.2 && W === 0 && this.r() < 0.1 + 0.1 * L + SEQ_LATE * pressureAt(s0) && s0 + v * 6 < this.nextCornerS - CORNER.half - v * CORNER.preS) this.seqQ = this.pickSequence()
     this.seqRow = this.seqQ.length > 0
     const toks = this.seqRow ? this.seqQ.shift()! : this.pickPattern(L, W)
     if (this.postCorner > 0) {
@@ -884,25 +893,26 @@ export class Track {
 
     // ── spacing to next wave: reaction window shrinks; density ramps like Surfers ──
     const base = 0.84 - 0.54 * L // v22: a touch roomier early (speeds −10% shortened jumps)
+      * (1 - MID_TIGHT * Math.min(1, Math.max(0, (L - 0.7) / 0.3))) // v32: mid / late a little tighter, warm-up untouched
     // warm-up: up to ~2.9× the gap between waves at the start line, tapering by WARM_M; a little
     // extra breathing room while the level is still low (fades out as L → 1)
     // after top speed, waves keep tightening (density-only difficulty); the validator still guards every row
     const P = pressureAt(s0)
     const T = Math.max(0.24 - 0.12 * P, base * (0.7 + 0.35 * this.r()) * (1 + 1.6 * W + 0.3 * (1 - L)) * (1 - P))
     // sequence rows: a fixed reaction window in seconds (≈ lane switch + reaction), so metres scale with speed
-    let Tq = this.seqRow ? 0.62 + 0.15 * (1 - L) : T
+    let Tq = this.seqRow ? 0.62 + 0.15 * (1 - L) - 0.06 * P : T // v32: late sequences a touch quicker
     // v27 spacing: most rows keep a minimum reaction gap; back-to-back rows only now and then, never
     // three tight rows running; an occasional empty breather
     if (!this.seqRow) {
       // v28: late in a run (post-cap pressure) back-to-back rows come more often, up to 2 tight in a row
-      const tight = this.tightRun < (P > 0.3 ? 2 : 1) && this.r() < 0.18 + 0.1 * L + 0.7 * P
+      const tight = this.tightRun < (P > 0.6 ? 3 : P > 0.3 ? 2 : 1) && this.r() < 0.18 + 0.1 * L + 0.7 * P
       const minT = (0.52 - 0.14 * L) * Math.max(0, 1 - 1.1 * P)
       if (tight) this.tightRun++
       else {
         this.tightRun = 0
         Tq = Math.max(Tq, minT)
       }
-      if (W === 0 && this.r() < 0.07) Tq += 1.3 + this.r() * 0.9
+      if (W === 0 && this.r() < 0.07 - 0.03 * P) Tq += 1.3 + this.r() * 0.9
     }
     this.cursor = q(rowEnd + Math.max(rocketRow ? Math.max(9, v * 0.5) : 5.2, v * Tq))
     this.rows++

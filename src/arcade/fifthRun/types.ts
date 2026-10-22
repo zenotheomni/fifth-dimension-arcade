@@ -29,6 +29,8 @@ export type FrHudState = {
   hand: number
   /** v30: stumble / respawn penalties so far (each −500 m) */
   penN: number
+  /** v32: 5D logo pickups so far (each +1000 m) */
+  logoN: number
   speed: number
   target: number | null
 }
