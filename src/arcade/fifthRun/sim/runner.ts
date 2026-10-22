@@ -201,7 +201,7 @@ export function newRun(): RunState {
 
 /** Score = distance: metres run + STAR_M bonus metres per star. */
 /** v30: every stumble / respawn costs this many metres (score and distance never go below 0) */
-export const STUMBLE_PEN_M = 1000
+export const STUMBLE_PEN_M = 500
 export const scoreOf = (st: RunState) => Math.max(0, Math.floor(st.s + st.sBank + st.boostM) + st.keys * STAR_M + st.bonusM - st.penM)
 export const distOf = (st: RunState) => Math.max(0, Math.floor(st.s + st.sBank - st.penM))
 
@@ -604,8 +604,10 @@ export function step(st: RunState, track: Track, opts: StepOpts) {
     if (o.s > st.s + ONCOMING_LEAD + 5) break
     if (o.smashed) continue
     const os = obstacleS(o, st.s)
-    if (os > sF) continue
-    if (os + o.len < sB) continue
+    // v31: jumpable bars use a slimmer body depth (forgiving: only a real shin/torso overlap counts)
+    const jb = o.kind === 'barrier' || o.kind === 'pipe' ? 0.14 : 0
+    if (os > sF - jb) continue
+    if (os + o.len < sB + jb) continue
     const lx = Math.abs(st.x - laneX(o.lane))
     let hit = false
     // Hits only when the body box really intersects the obstacle box (the meshes are built to these sizes).
@@ -618,12 +620,12 @@ export function step(st: RunState, track: Track, opts: StepOpts) {
       hit = !st.air && st.y <= 0 && lx < OB.gap.halfW - 0.1 && st.s > os + 0.25 && st.s < os + o.len - 0.25
     } else if (o.kind === 'barrier') {
       // low hurdle: feet above the top = clear, always
-      hit = lx < BODY.halfW + OB.barrier.halfW && st.y < OB.barrier.h
+      hit = lx < BODY.halfW + OB.barrier.halfW && st.y < OB.barrier.clear
     } else if (o.kind === 'overhead') {
       hit = lx < BODY.halfW + OB.overhead.halfW && top > OB.overhead.bottom
     } else if (o.kind === 'pipe') {
       // chest-high bar: slide under (head below) or jump over (feet above)
-      hit = lx < BODY.halfW + OB.pipe.halfW && top > OB.pipe.bottom && st.y < OB.pipe.top
+      hit = lx < BODY.halfW + OB.pipe.halfW && top > OB.pipe.bottom && st.y < OB.pipe.clear
     } else if (o.kind === 'car') {
       hit = lx < BODY.halfW + OB.car.halfW - 0.12 && st.y < OB.car.h
     } else {

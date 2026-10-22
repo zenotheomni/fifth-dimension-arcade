@@ -950,7 +950,7 @@
 .fr-meter--ufo .fr-callout { top: 38.5%; }
 .fr-meter--bottom .fr-callout { top: auto; bottom: calc(13.5% + env(safe-area-inset-bottom)); }
 
-/* v30: −1000m stumble penalty pop under the distance */
+/* v30: −500m stumble penalty pop under the distance */
 .fr-pen {
   position: absolute;
   left: 50%;

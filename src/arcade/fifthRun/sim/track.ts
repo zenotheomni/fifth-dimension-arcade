@@ -145,6 +145,9 @@ export const LINE_MIN = 14
 export const LINE_MAX = 24
 export const LINE_GAP_MIN = 5
 
+const SWERVE_MIN = 5
+const SWERVE_MAX = 9
+
 export class Track {
   readonly seed: string
   obstacles: Obstacle[] = []
@@ -180,6 +183,10 @@ export class Track {
   private pickupBag: PowerKind[] = []
   /** star coin-line state: stars left in the current line, where the next line may start, bob flag */
   private lineLeft = 0
+  /** v31: stars laid in the current lane since the last swerve, and the count that triggers the next one */
+  private laneRun = 0
+  private laneRunLane = -1
+  private swerveAt = 7
   /** rows left after a corner that may block at most one lane (readable runway out of every turn) */
   private postCorner = 0
   private lineLen = 0
@@ -268,10 +275,13 @@ export class Track {
     // v28: just a 2-star marker into and out of the turn — most stars sit on jumps / slides
     // (the warm-up's first corners keep the full guide run: it teaches the turn)
     // v29: full guide runs again (stars all run long); the exit run takes a FRESH random lane
-    for (let s = Math.max(this.prevEnd + 2.2, this.starFloor); s <= cs - CORNER.half - 2; s += STAR_SPACING) this.addKey(this.pathLane, s, 0.9)
-    this.pathLane = this.freshLane([0, 1, 2], true)
+    // no swerve in the last ~1 s before the turn: the corner itself is the move
+    this.guideRun(Math.max(this.prevEnd + 2.2, this.starFloor), cs - CORNER.half - 2, v * 1.0)
+    this.pathLane = this.freshLane([0, 1, 2].filter((l) => l !== this.pathLane), true)
     this.noteLine(this.pathLane)
-    for (let s = cs + CORNER.half + 5; s <= after; s += STAR_SPACING) this.addKey(this.pathLane, s, 0.9)
+    this.laneRunLane = this.pathLane
+    this.laneRun = 0
+    this.guideRun(cs + CORNER.half + 5, after)
     if (this.lineLeft > 0) this.endLine(this.prevEnd, v)
     this.lineGapTo = Math.max(this.lineGapTo, after + 4)
     this.cursor = after
@@ -449,6 +459,23 @@ export class Track {
     return ok[ok.length - 1]
   }
 
+  /** v31: a clear guide run (corner approach / exit, no obstacles) — swerves one lane every few stars */
+  private guideRun(a: number, b: number, calm = 0) {
+    for (let s = a; s <= b; s += STAR_SPACING) {
+      if (this.pathLane !== this.laneRunLane) { this.laneRunLane = this.pathLane; this.laneRun = 0 }
+      if (this.laneRun >= this.swerveAt && s + 2 * STAR_SPACING <= b - calm) {
+        const nb = [this.pathLane - 1, this.pathLane + 1].filter((l) => l >= 0 && l <= 2)
+        this.pathLane = nb[Math.floor(this.r() * nb.length)]
+        this.laneRunLane = this.pathLane
+        this.laneRun = 0
+        this.swerveAt = SWERVE_MIN + Math.floor(this.r() * (SWERVE_MAX - SWERVE_MIN + 1))
+        continue
+      }
+      this.addKey(this.pathLane, s, 0.9)
+      this.laneRun++
+    }
+  }
+
   private startLine() {
     this.lineLen = LINE_MIN + Math.floor(this.r() * (LINE_MAX - LINE_MIN + 1))
     this.lineLeft = this.lineLen
@@ -463,6 +490,8 @@ export class Track {
   /** One star of the running line (or the rare 5D logo in its middle when one is due). */
   private placeLineStar(lane: number, s: number, y: number, rowS: number) {
     const i = this.lineLen - this.lineLeft
+    if (lane !== this.laneRunLane) { this.laneRunLane = lane; this.laneRun = 0 }
+    this.laneRun++
     if (rowS >= this.nextPickupS && i === Math.floor(this.lineLen / 2)) {
       this.pickups.push({ id: this.nextId++, kind: this.nextPower(), lane, s: q(s), y: 1.0, taken: false, takenTick: -1 })
       this.nextPickupS = rowS + 900 + this.r() * 600
@@ -760,9 +789,20 @@ export class Track {
       }
     }
     // a running coin line stays in its lane whenever that lane is open
-    if (this.lineLeft > 0 && passable(toks[this.pathLane])) path = this.pathLane
-    // v29: a NEW line picks a fresh lane (rotation across left / middle / right)
-    else if (this.lineLeft <= 0) path = this.freshLane(options)
+    if (this.lineLeft > 0 && passable(toks[this.pathLane])) {
+      path = this.pathLane
+      // v31: a line never runs one lane for a whole runway — after a few stars it swerves to a neighbour lane
+      if (this.laneRun >= this.swerveAt) {
+        const nb = [this.pathLane - 1, this.pathLane + 1].filter((l) => toks[l] === 'E')
+        if (nb.length) {
+          path = nb[Math.floor(this.r() * nb.length)]
+          this.laneRun = 0
+          this.swerveAt = SWERVE_MIN + Math.floor(this.r() * (SWERVE_MAX - SWERVE_MIN + 1))
+        }
+      }
+    }
+    // v29: a NEW line picks a fresh lane (rotation across left / middle / right); v31: never the last line's lane
+    else if (this.lineLeft <= 0) path = this.freshLane(options, true)
     // v27 star choice: at a jump / slide row, often route the line OVER / UNDER the obstacle (the
     // risky option holds the stars, the open lane holds none)
     if (this.postCorner <= 0 && W === 0 && L >= STAR_CHOICE_L && toks.includes('E')) {
@@ -794,6 +834,17 @@ export class Track {
         if (interactive && s < end - (LINE_MIN - 6) * STAR_SPACING) continue
         this.startLine()
         this.noteLine(path)
+      }
+      // v31: on an open stretch the running line swerves to a neighbour lane every few stars (one-lane swerve
+      // with a short beat so it reads as a move, never a whole runway in one lane)
+      if (tok === 'E' && this.laneRun >= this.swerveAt && this.lineLeft > 1 && s <= end - 12) {
+        const nb = [path - 1, path + 1].filter((l) => toks[l] === 'E')
+        if (nb.length) {
+          path = nb[Math.floor(this.r() * nb.length)]
+          this.swerveAt = SWERVE_MIN + Math.floor(this.r() * (SWERVE_MAX - SWERVE_MIN + 1))
+          s += STAR_SPACING
+          if (s > end) break
+        }
       }
       this.placeLineStar(path, s, 0.9, s0)
     }

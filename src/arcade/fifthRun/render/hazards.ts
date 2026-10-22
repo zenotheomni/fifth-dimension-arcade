@@ -425,10 +425,41 @@ function barricade(glow: THREE.Texture, seed: number, long: boolean): Item {
   return { group, pose }
 }
 
-export function buildHazard(kind: HazardKind, glow: THREE.Texture, seed: number, long = false): Item {
+/**
+ * v31 readability: every blocker must look NOTICEABLY too tall to jump — its top sits well above the
+ * runner's head at jump apex (feet 1.8 m + body 1.75 m ≈ 3.5 m). Tall-stretch each look so the top is
+ * ≥ BLOCKER_TOP (y scale, with a milder xz grow capped so it stays inside its lane). Rocks already pass.
+ */
+export const BLOCKER_TOP = 3.4
+function rawHazard(kind: HazardKind, glow: THREE.Texture, seed: number, long: boolean): Item {
   if (kind === 'meteor') return meteor(glow, seed)
   if (kind === 'crates') return crates(seed, long)
   if (kind === 'statue') return statue(glow, seed)
   if (kind === 'holo') return holo(glow, seed, long)
   return barricade(glow, seed, long)
+}
+export function buildHazard(kind: HazardKind, glow: THREE.Texture, seed: number, long = false): Item {
+  const it = rawHazard(kind, glow, seed, long)
+  it.group.updateMatrixWorld(true)
+  // solid (opaque mesh) bounds only — glow sprites / smoke / scanline haze don't count as height
+  const b = new THREE.Box3()
+  it.group.traverse((o) => {
+    const m = o as THREE.Mesh
+    if (!m.isMesh || (m as unknown as THREE.Sprite).isSprite) return
+    const mat = m.material as THREE.Material
+    if (mat.transparent) return
+    m.geometry.computeBoundingBox()
+    b.union(m.geometry.boundingBox!.clone().applyMatrix4(m.matrixWorld))
+  })
+  const top = b.max.y
+  if (top > 0.1 && top < BLOCKER_TOP) {
+    const fy = BLOCKER_TOP / top
+    const halfX = Math.max(Math.abs(b.min.x), Math.abs(b.max.x), 0.01)
+    const fx = Math.min(Math.pow(fy, 0.35), Math.max(1, 0.95 / halfX))
+    const inner = new THREE.Group()
+    while (it.group.children.length) inner.add(it.group.children[0])
+    inner.scale.set(fx, fy, long ? 1 : fx)
+    it.group.add(inner)
+  }
+  return it
 }
