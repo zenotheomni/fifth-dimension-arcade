@@ -122,6 +122,11 @@ const q = (x: number) => Math.round(x * 100) / 100
 /** v26: seconds of travel kept hole-free after a jump / slide obstacle, and clear after a hole before one */
 const HOLE_AFTER_T = 1.2
 const HOLE_BEFORE_T = 0.45
+/** v27: main obstacle type of a pattern (first non-empty, holes grouped) */
+const mainTok = (p: string): string => {
+  const t = [...p].find((c) => c !== 'E') ?? 'E'
+  return t === 'H' ? 'G' : t
+}
 /** side of a partial row: mean lane of its obstacles (0 / 1 / 2), -1 for empty or full-width rows */
 const sideOf = (t: Tok[]): number => {
   const ls = [0, 1, 2].filter((l) => t[l] !== 'E')
@@ -156,6 +161,13 @@ export class Track {
   private lastHole = -1e9
   /** v26: side (0 left · 1 centre · 2 right) of recent partial rows, to cap same-side runs at 2 */
   private sideHist: number[] = []
+  /** v27 variety: recent pattern picks and their main token (no same pattern / type back to back) */
+  private patHist: number[] = []
+  private tightRun = 0
+  private tokHist: string[] = []
+  /** v27: hazard look bags (block = 5 looks, car = 3 long looks), never the same look twice in a row */
+  private lookLast: Record<string, number> = {}
+  private lookBag: Record<string, number[]> = {}
   /** v18 choreographed sequence: queued rows (left→right token triples) */
   private seqQ: Tok[][] = []
   private seqRow = false
@@ -207,7 +219,26 @@ export class Track {
     if (kind === 'barrier' || kind === 'overhead' || kind === 'pipe' || kind === 'gap') this.lastJS = Math.max(this.lastJS, s + len)
     if (kind === 'barrier' || kind === 'overhead' || kind === 'pipe') this.lastBOP = Math.max(this.lastBOP, s + len)
     if (kind === 'gap' || kind === 'void') this.lastHole = Math.max(this.lastHole, s + len)
-    const variant = Math.floor(this.r() * 1000)
+    let variant = Math.floor(this.r() * 1000)
+    if (kind === 'block' || kind === 'car') {
+      // every look in turn (meteor rocks · neon crates · chrome statue · hologram · steel wreckage), shuffled
+      const n = kind === 'block' ? 5 : 3
+      let bag = this.lookBag[kind]
+      if (!bag || !bag.length) {
+        bag = Array.from({ length: n }, (_, i) => i)
+        for (let i = n - 1; i > 0; i--) {
+          const j = Math.floor(this.r() * (i + 1))
+          const t = bag[i]
+          bag[i] = bag[j]
+          bag[j] = t
+        }
+        if (bag[n - 1] === this.lookLast[kind]) [bag[0], bag[n - 1]] = [bag[n - 1], bag[0]]
+        this.lookBag[kind] = bag
+      }
+      const look = bag.pop()!
+      this.lookLast[kind] = look
+      variant = look + n * Math.floor(this.r() * 200)
+    }
     this.obstacles.push({ id: this.nextId++, kind, lane, s: q(s), len: q(len), vs, variant, smashed: false })
   }
 
@@ -493,6 +524,10 @@ export class Track {
       // warm-up: multi-car rows fade in only as the warm-up ends
       // warm-up: forced-lane combos (two crates, mixed rows) fade in only as the warm-up ends
       if (W > 0 && /K.*K|BO|G.*G.*K|GKG|HH|HB/.test(p.p) && p.p !== 'GGG') w *= W > 0.5 ? 0 : 1 - 2 * W
+      // v27 variety: never the last two patterns again; the last row's main type is rarer
+      const pi = ws.length
+      if (this.patHist.includes(pi)) w = 0
+      else if (this.tokHist.length && this.tokHist[this.tokHist.length - 1] === mainTok(p.p)) w *= 0.35
       ws.push(w)
       total += w
     }
@@ -502,7 +537,12 @@ export class Track {
       x -= ws[idx]
       if (x < 0) break
     }
+    if (total <= 0) idx = Math.floor(this.r() * PATTERNS.length)
     const src = PATTERNS[idx].p
+    this.patHist.push(idx)
+    if (this.patHist.length > 2) this.patHist.shift()
+    this.tokHist.push(mainTok(src))
+    if (this.tokHist.length > 2) this.tokHist.shift()
     let perm = PERMS[Math.floor(this.r() * 6)]
     // v26: no third same-side partial row in a row (left left left / right right right)
     const h = this.sideHist
@@ -680,6 +720,16 @@ export class Track {
     }
     // a running coin line stays in its lane whenever that lane is open
     if (this.lineLeft > 0 && passable(toks[this.pathLane])) path = this.pathLane
+    // v27 star choice: at a jump / slide row, often route the line OVER / UNDER the obstacle (the
+    // risky option holds the stars, the open lane holds none)
+    if (this.postCorner <= 0 && W < 0.7 && toks.includes('E') && this.r() < 0.55) {
+      const js = [0, 1, 2].filter((l) => toks[l] === 'B' || toks[l] === 'O' || toks[l] === 'P')
+      if (js.length) {
+        let pick = js[0]
+        for (const l of js) if (Math.abs(l - this.pathLane) < Math.abs(pick - this.pathLane)) pick = l
+        if (Math.abs(pick - this.pathLane) <= 1) path = pick
+      }
+    }
     const changed = path !== this.pathLane
     const tok = toks[path]
     // ── stars: short coin lines in the path lane, then a real gap (never a continuous river) ──
@@ -716,7 +766,9 @@ export class Track {
       if (this.lineLeft <= 0) this.endLine(lastS, v)
     }
     // ── v17 risk / reward: bait stars off the safe line, so grabbing them means flirting with danger ──
-    if (this.postCorner <= 0 && W < 0.7 && this.r() < 0.8 + 0.2 * L) this.bait(toks, path, s0, v, gapLen)
+    // v27: stars sit on ONE option only — no bait when this row's star line already covers the decision
+    const lineHere = this.keys.some((k) => k.lane === path && k.s >= s0 - v * 0.9 && k.s <= rowEnd + 3)
+    if (!lineHere && this.postCorner <= 0 && W < 0.7 && this.r() < 0.8 + 0.2 * L) this.bait(toks, path, s0, v, gapLen)
     // keep keys sorted by s (bait / floaters can land out of order); only the freshly generated
     // tail (far ahead of the runner) is touched
     const n0 = Math.max(0, this.keys.length - 40)
@@ -733,7 +785,19 @@ export class Track {
     const P = pressureAt(s0)
     const T = Math.max(0.24 - 0.12 * P, base * (0.7 + 0.35 * this.r()) * (1 + 1.6 * W + 0.3 * (1 - L)) * (1 - P))
     // sequence rows: a fixed reaction window in seconds (≈ lane switch + reaction), so metres scale with speed
-    const Tq = this.seqRow ? 0.62 + 0.15 * (1 - L) : T
+    let Tq = this.seqRow ? 0.62 + 0.15 * (1 - L) : T
+    // v27 spacing: most rows keep a minimum reaction gap; back-to-back rows only now and then, never
+    // three tight rows running; an occasional empty breather
+    if (!this.seqRow) {
+      const tight = this.tightRun < 1 && this.r() < 0.18 + 0.1 * L
+      const minT = (0.52 - 0.14 * L) * (1 - 0.8 * P)
+      if (tight) this.tightRun++
+      else {
+        this.tightRun = 0
+        Tq = Math.max(Tq, minT)
+      }
+      if (W === 0 && this.r() < 0.07) Tq += 1.3 + this.r() * 0.9
+    }
     this.cursor = q(rowEnd + Math.max(rocketRow ? Math.max(9, v * 0.5) : 5.2, v * Tq))
     this.rows++
   }
