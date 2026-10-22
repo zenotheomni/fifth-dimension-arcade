@@ -122,6 +122,8 @@ const q = (x: number) => Math.round(x * 100) / 100
 /** v26: seconds of travel kept hole-free after a jump / slide obstacle, and clear after a hole before one */
 const HOLE_AFTER_T = 1.2
 const HOLE_BEFORE_T = 0.45
+/** v28: below this level (first ~40 s) stars stay on the easy line; after it they sit on jumps / slides */
+const STAR_CHOICE_L = 0.75
 /** v27: main obstacle type of a pattern (first non-empty, holes grouped) */
 const mainTok = (p: string): string => {
   const t = [...p].find((c) => c !== 'E') ?? 'E'
@@ -263,8 +265,12 @@ export class Track {
     const after = q(cs + CORNER.half + (kind === 'T' ? CORNER.postT : Math.max(14, v * CORNER.postS)))
     // v19: the clear corner approach / exit carries a star line too (stars nearly all run long);
     // nothing on the corner square itself
-    for (let s = Math.max(this.prevEnd + 2.2, this.starFloor); s <= cs - CORNER.half - 2; s += STAR_SPACING) this.addKey(this.pathLane, s, 0.9)
-    for (let s = cs + CORNER.half + 5; s <= after; s += STAR_SPACING) this.addKey(this.pathLane, s, 0.9)
+    // v28: just a 2-star marker into and out of the turn — most stars sit on jumps / slides
+    // (the warm-up's first corners keep the full guide run: it teaches the turn)
+    const guide = warmAt(cs) > 0 || levelAt(cs) < STAR_CHOICE_L
+    const inFrom = Math.max(this.prevEnd + 2.2, this.starFloor, guide ? -1e9 : cs - CORNER.half - 2 - STAR_SPACING)
+    for (let s = inFrom; s <= cs - CORNER.half - 2; s += STAR_SPACING) this.addKey(this.pathLane, s, 0.9)
+    for (let s = cs + CORNER.half + 5, i = 0; s <= after && i < (guide ? 99 : 2); s += STAR_SPACING, i++) this.addKey(this.pathLane, s, 0.9)
     if (this.lineLeft > 0) this.endLine(this.prevEnd, v)
     this.lineGapTo = Math.max(this.lineGapTo, after + 4)
     this.cursor = after
@@ -332,7 +338,8 @@ export class Track {
       this.reach = anyReach(r) ? r.map((l) => l.map((x) => ({ mv: Math.max(x.mv, end), act: x.act }))) : fresh(end)
       this.vEnd = end
     }
-    if (this.lineLeft <= 0 && start >= this.lineGapTo) this.startLine()
+    // v28: a void stretch only gets a line when it holds a hurdle / truss to clear (interactive)
+    if (this.lineLeft <= 0 && start >= this.lineGapTo && mid > 0) this.startLine()
     for (let s = Math.max(start + 3, this.starFloor); s <= end - 2 && this.lineLeft > 0; s += STAR_SPACING) {
       if (mid > 0 && Math.abs(s - mid) < v * 0.35) continue
       this.placeLineStar(path, s, 0.9, start)
@@ -385,7 +392,7 @@ export class Track {
     }
     // open row: a lane-switching trail (two lanes, staggered) just before the row
     const free = [0, 1, 2].filter((l) => toks[l] === 'E' && l !== path)
-    if (free.length >= 1 && this.r() < 0.6) {
+    if (free.length >= 1 && this.r() < 0.04) {
       // zig-zag across the lanes beside the safe line (never on top of it)
       const a = free[0]
       const b = free.length > 1 ? free[1] : free[0]
@@ -722,12 +729,12 @@ export class Track {
     if (this.lineLeft > 0 && passable(toks[this.pathLane])) path = this.pathLane
     // v27 star choice: at a jump / slide row, often route the line OVER / UNDER the obstacle (the
     // risky option holds the stars, the open lane holds none)
-    if (this.postCorner <= 0 && W < 0.7 && toks.includes('E') && this.r() < 0.55) {
+    if (this.postCorner <= 0 && W === 0 && L >= STAR_CHOICE_L && toks.includes('E')) {
       const js = [0, 1, 2].filter((l) => toks[l] === 'B' || toks[l] === 'O' || toks[l] === 'P')
       if (js.length) {
         let pick = js[0]
         for (const l of js) if (Math.abs(l - this.pathLane) < Math.abs(pick - this.pathLane)) pick = l
-        if (Math.abs(pick - this.pathLane) <= 1) path = pick
+        path = pick
       }
     }
     const changed = path !== this.pathLane
@@ -736,9 +743,15 @@ export class Track {
     // lane change inside a running line: the stars swerve right after the previous row (no hole in the line)
     const start = this.prevEnd + (changed && this.lineLeft > 0 ? Math.max(3, v * 0.12) : 2.2)
     const end = tok === 'E' ? rowEnd + 1 : s0 - (tok === 'O' ? 3.5 : v * 0.22 + 1.4)
+    // v28: most new lines only start when they lead into a jump / slide (the player must commit to get them)
+    const interactive = tok === 'B' || tok === 'O' || tok === 'P' || (tok === 'G' && L > 0.85)
+    const freeLine = L < STAR_CHOICE_L || this.r() < 0.06
     for (let s = Math.max(start, this.starFloor); s <= end; s += STAR_SPACING) {
       if (this.lineLeft <= 0) {
         if (s < this.lineGapTo) continue
+        if (!interactive && !freeLine) break
+        // start late enough that the line still has stars left to carry over / under the obstacle
+        if (interactive && s < end - (LINE_MIN - 6) * STAR_SPACING) continue
         this.startLine()
       }
       this.placeLineStar(path, s, 0.9, s0)
@@ -789,8 +802,9 @@ export class Track {
     // v27 spacing: most rows keep a minimum reaction gap; back-to-back rows only now and then, never
     // three tight rows running; an occasional empty breather
     if (!this.seqRow) {
-      const tight = this.tightRun < 1 && this.r() < 0.18 + 0.1 * L
-      const minT = (0.52 - 0.14 * L) * (1 - 0.8 * P)
+      // v28: late in a run (post-cap pressure) back-to-back rows come more often, up to 2 tight in a row
+      const tight = this.tightRun < (P > 0.3 ? 2 : 1) && this.r() < 0.18 + 0.1 * L + 0.7 * P
+      const minT = (0.52 - 0.14 * L) * Math.max(0, 1 - 1.1 * P)
       if (tight) this.tightRun++
       else {
         this.tightRun = 0

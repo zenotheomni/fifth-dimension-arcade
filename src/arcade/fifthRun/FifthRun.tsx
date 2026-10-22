@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { track } from '../analytics'
 import { useArcadeAudio } from '../audio/AudioProvider'
-import { unlockMusic } from '../audio/sceneMusic'
+import { holdMusicDecode, prepareSceneMusic, unlockMusic } from '../audio/sceneMusic'
 import { END_DOORS } from '../brandPlacement'
 import { COPY, FIFTH_RUN_COPY } from '../copyLocks'
 import { challengeFromScore, newRunId, submitRun, type ChallengeInfo, type RunResult } from '../core/arcadeApi'
@@ -123,6 +123,12 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
   useEffect(() => {
     if (hud.phase === 'playing') claimScene('fifth-run')
   }, [hud.phase, claimScene])
+  // v28: decode the Glide song while the how-to is up, so run start never pays for fetch + decodeAudioData
+  useEffect(() => {
+    if (!howto) return
+    const t = window.setTimeout(() => prepareSceneMusic('fifth-run'), 900)
+    return () => window.clearTimeout(t)
+  }, [howto])
 
   useEffect(() => {
     mutedRef.current = audio.muted
@@ -201,6 +207,7 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
   const startFromHowto = () => {
     setHowto(false)
     unlockMusic()
+    holdMusicDecode(12000)
     claimScene('fifth-run')
     gameRef.current?.start()
     track('arcade_fifth_run_howto_start')
