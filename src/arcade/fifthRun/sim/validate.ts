@@ -66,7 +66,7 @@ export function stepRow(reach: Reach, prevEnd: number, row: Row, v: number): Rea
           continue
         }
         if (c === 'B' || c === 'G' || c === 'P') {
-          const need = c === 'B' ? OB.barrier.h : c === 'P' ? OB.pipe.top : 0
+          const need = c === 'B' ? OB.barrier.clear : c === 'P' ? OB.pipe.clear : 0
           // still airborne from an earlier jump: that arc may already carry over this row
           if (f.act > row.s0 && arrive <= row.s0) {
             const t0 = f.act - J

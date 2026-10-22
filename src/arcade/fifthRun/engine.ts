@@ -551,7 +551,7 @@ class Engine {
         sfxBump()
         sfxRumble(0.8)
         this.shake = 0.8
-        this.say('Stumble! −1000m', 'coral', 1.2)
+        this.say('Stumble! −500m', 'coral', 1.2)
         if (navigator.vibrate) {
           try {
             navigator.vibrate(30)
@@ -575,7 +575,7 @@ class Engine {
         break
       case 'respawn':
         sfxStart()
-        this.say('−1000m · keep running!', 'coral', 1.2)
+        this.say('−500m · keep running!', 'coral', 1.2)
         break
       case 'turn':
         // the sim re-framed s / x onto the new heading this tick: don't interpolate across it

@@ -312,10 +312,10 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
               {hud.score.toLocaleString('en-US')}
               <small>m</small>
             </span>
-            {/* v30: every stumble / respawn costs 1000 m */}
+            {/* v30: every stumble / respawn costs 500 m (v31) */}
             {hud.penN > 0 ? (
               <span className="fr-pen" key={`pen${hud.penN}`} aria-live="polite">
-                −1000m
+                −500m
               </span>
             ) : null}
             {/* v19: boost doubles metres + stars while the logo power runs */}

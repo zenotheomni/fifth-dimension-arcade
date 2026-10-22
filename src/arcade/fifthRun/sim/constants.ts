@@ -92,12 +92,14 @@ export const BODY = { h: 1.75, slideH: 0.85, halfD: 0.28, halfW: 0.32 }
  * pipe = chest-high bar: slide under it OR jump over it (body must miss the [bottom, top] band).
  */
 export const OB = {
-  barrier: { h: 0.6, len: 0.4, halfW: 0.82 },
+  /** v31: `clear` = forgiving jump clearance — feet above it clear (visual top 0.6 m; the toes may brush the rail) */
+  barrier: { h: 0.6, clear: 0.42, len: 0.4, halfW: 0.82 },
   overhead: { bottom: 1.2, len: 0.45, halfW: 0.95 },
-  pipe: { bottom: 0.95, top: 1.2, len: 0.3, halfW: 0.95 },
-  block: { h: 2.6, len: 1.6, halfW: 0.85 },
+  /** v31: jumping, feet above `clear` (pipe centre-line ≈ 1.0) clear — the thin bar was eating near-misses */
+  pipe: { bottom: 0.95, top: 1.2, clear: 0.98, len: 0.3, halfW: 0.95 },
+  block: { h: 3.4, len: 1.6, halfW: 0.85 },
   /** crashed satellite lying across a lane (switch lanes); hits cost a life like a boulder */
-  car: { h: 1.5, len: 5.4, halfW: 0.9 },
+  car: { h: 3.4, len: 5.4, halfW: 0.9 },
   gap: { halfW: 1.0 },
 } as const
 
