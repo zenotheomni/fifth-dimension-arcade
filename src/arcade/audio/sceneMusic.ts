@@ -72,6 +72,32 @@ function keepBuffers() {
   for (const id of [...buffers.keys()]) if (buffers.size > 2 && !keep.has(id)) buffers.delete(id)
 }
 
+/** v28: decode hold — no fetch + decodeAudioData (big main-thread copy / GC) while a run is starting */
+let holdUntil = 0
+let holdTimer = 0
+const held: (() => void)[] = []
+function afterHold(fn: () => void): boolean {
+  const wait = holdUntil - performance.now()
+  if (wait <= 0) return false
+  held.push(fn)
+  if (!holdTimer)
+    holdTimer = window.setTimeout(() => {
+      holdTimer = 0
+      for (const f of held.splice(0)) f()
+    }, wait + 50)
+  return true
+}
+/** hold background song decodes for ms (call at run start) */
+export function holdMusicDecode(ms: number) {
+  holdUntil = Math.max(holdUntil, performance.now() + ms)
+}
+/** decode a scene's first song now (call on a how-to / intro screen, before gameplay starts) */
+export function prepareSceneMusic(scene: MusicScene) {
+  const t = SCENE_TRACKS[scene]
+  if (!t || noBuf || typeof window === 'undefined') return
+  void loadBuffer(t)
+}
+
 function loadBuffer(t: MusicTrack): Promise<AudioBuffer | null> {
   const have = buffers.get(t.id)
   if (have) return Promise.resolve(have)
@@ -204,6 +230,8 @@ function startNode(d: Deck, offset: number, at = 0) {
 function handoff(d: Deck) {
   if (noBuf || !d.routed || !d.track) return
   const id = d.track.id
+  // v28: not decoded yet and a run just started — stream for now, decode once the hot window is over
+  if (!buffers.has(id) && afterHold(() => handoff(d))) return
   void loadBuffer(d.track).then((b) => {
     const ctx = peekAudioContext()
     if (!b || !ctx || d.mode !== 'el' || d.track?.id !== id || !d.bufGain || !d.elGain) return
@@ -267,7 +295,7 @@ function nextSong(d: Deck) {
   }
   // decode the one after this in the background so the next change is gapless-ish
   const after = nextTrack(d)
-  if (after && after !== d.track) void loadBuffer(after)
+  if (after && after !== d.track && !afterHold(() => void loadBuffer(after))) void loadBuffer(after)
 }
 
 function pauseDeck(d: Deck) {
