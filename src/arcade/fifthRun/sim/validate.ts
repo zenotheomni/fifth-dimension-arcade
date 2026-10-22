@@ -15,7 +15,13 @@ export type Row = { s0: number; cells: Cell[]; len: number[]; end: number }
 
 /** time to switch one lane (s) and a small reaction allowance per decision */
 export const SWITCH_S = LANE_W / LANE_SPEED
-export const REACT_S = 0.08
+// v30: human timing, not frame-perfect — every lane change carries a real reaction allowance, and a
+// jump / slide needs a take-off WINDOW (not a single instant), so dense clusters stay achievable
+export const REACT_S = 0.2
+/** seconds of take-off window a jump / slide must leave (timing slack) */
+export const WIN_S = 0.06
+/** seconds between two separate inputs (swipe → swipe, swipe → jump, landing → jump) */
+export const GAP_S = 0.1
 
 /** Per-lane state: mv = earliest s a lane switch may start, act = earliest s on the ground (can jump). */
 export type St = { mv: number; act: number }
@@ -53,7 +59,8 @@ export function stepRow(reach: Reach, prevEnd: number, row: Row, v: number): Rea
     for (let from = 0; from < 3; from++) {
       for (const f of reach[from]) {
         const steps = Math.abs(to - from)
-        const arrive = steps === 0 ? -Infinity : Math.max(f.mv, prevEnd) + v * (steps * SWITCH_S + REACT_S)
+        const arrive = steps === 0 ? -Infinity : Math.max(f.mv, prevEnd) + v * (steps * (SWITCH_S + GAP_S) + REACT_S)
+        const ready = steps === 0 ? f.act : Math.max(f.act, arrive + v * GAP_S)
         if (c === 'E') {
           if (arrive <= row.s0) addState(out[to], { mv: Math.max(passEnd, steps ? arrive : f.mv), act: Math.max(f.act, arrive) })
           continue
@@ -70,8 +77,8 @@ export function stepRow(reach: Reach, prevEnd: number, row: Row, v: number): Rea
           const u = c === 'G' ? 0.02 : uFor(need)
           const tMin = row.s0 + len - (1 - u) * J
           const tMax = row.s0 - u * J
-          const T = Math.max(tMin, arrive, f.act)
-          if (T <= tMax) {
+          const T = Math.max(tMin, ready)
+          if (T + v * WIN_S <= tMax) {
             addState(out[to], { mv: Math.max(passEnd, T), act: T + J })
             // a late take-off too: its long arc can carry over the next row
             // later take-offs too: a longer arc can carry over the next row (and still land in time for the one after)
@@ -79,8 +86,8 @@ export function stepRow(reach: Reach, prevEnd: number, row: Row, v: number): Rea
           }
         }
         if (c === 'O' || c === 'P') {
-          const start = Math.max(arrive, f.act - v * 0.12)
-          if (start <= row.s0 - v * 0.04) addState(out[to], { mv: Math.max(passEnd, start), act: row.s0 + len })
+          const start = Math.max(steps === 0 ? -Infinity : arrive + v * GAP_S, f.act - v * 0.12)
+          if (start <= row.s0 - v * (0.04 + WIN_S)) addState(out[to], { mv: Math.max(passEnd, start), act: row.s0 + len })
         }
       }
     }

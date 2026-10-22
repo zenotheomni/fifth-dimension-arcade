@@ -114,6 +114,8 @@ export type RunState = {
   sBank: number
   /** streak bonus metres earned */
   bonusM: number
+  /** v30: metres lost to stumbles / respawns (STUMBLE_PEN_M each) */
+  penM: number
   /** v19 boost metres: the extra distance + star metres earned while boosted (2× scoring) */
   boostM: number
   /** v19 boost level 0..1 (eased; a second logo mid-boost never drops it) */
@@ -179,6 +181,7 @@ export function newRun(): RunState {
     tx: 0,
     sBank: 0,
     bonusM: 0,
+    penM: 0,
     boostM: 0,
     boostK: 0,
     edgeHold: 0,
@@ -197,7 +200,10 @@ export function newRun(): RunState {
 }
 
 /** Score = distance: metres run + STAR_M bonus metres per star. */
-export const scoreOf = (st: RunState) => Math.floor(st.s + st.sBank + st.boostM) + st.keys * STAR_M + st.bonusM
+/** v30: every stumble / respawn costs this many metres (score and distance never go below 0) */
+export const STUMBLE_PEN_M = 1000
+export const scoreOf = (st: RunState) => Math.max(0, Math.floor(st.s + st.sBank + st.boostM) + st.keys * STAR_M + st.bonusM - st.penM)
+export const distOf = (st: RunState) => Math.max(0, Math.floor(st.s + st.sBank - st.penM))
 
 /** Speed multiplier from stumble slow-down × logo surge (eased). */
 export function speedMul(st: RunState) {
@@ -410,6 +416,7 @@ function respawn(st: RunState, track: Track, ev: RunEvent[] | null | undefined) 
     const os = obstacleS(o, st.s)
     if (os <= st.s + 3 && os + o.len >= st.s - 1 && o.lane === st.lane && o.kind !== 'gap' && o.kind !== 'void') o.smashed = true
   }
+  st.penM += STUMBLE_PEN_M
   ev?.push({ type: 'respawn', cause })
 }
 
@@ -451,6 +458,7 @@ function applyHit(st: RunState, o: Obstacle, opts: StepOpts, ev: RunEvent[] | nu
   st.slowT = SLOW_TICKS
   st.stumble = Math.round(0.45 * FR_HZ)
   st.invuln = POWER_TICKS.stumble
+  st.penM += STUMBLE_PEN_M
   ev?.push({ type: 'stumble', ob: o.id, kind: o.kind })
 }
 

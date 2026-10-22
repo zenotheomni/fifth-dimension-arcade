@@ -48,6 +48,7 @@ const initialHud: FrHudState = {
   threat: 0,
   timeS: 0,
   callout: null,
+  penN: 0,
   pb: 0,
   newPb: false,
   hand: 0,
@@ -311,6 +312,12 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
               {hud.score.toLocaleString('en-US')}
               <small>m</small>
             </span>
+            {/* v30: every stumble / respawn costs 1000 m */}
+            {hud.penN > 0 ? (
+              <span className="fr-pen" key={`pen${hud.penN}`} aria-live="polite">
+                −1000m
+              </span>
+            ) : null}
             {/* v19: boost doubles metres + stars while the logo power runs */}
             {hud.hand > 0 ? (
               <span className="fr-x2" aria-label="double distance and stars">
