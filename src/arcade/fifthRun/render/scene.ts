@@ -118,6 +118,10 @@ class GradeEffect extends Effect {
 
 const VIEW_AHEAD = 180
 const CH = 30
+/** v32: per-frame work caps (boost doubles the rate things arrive) */
+const SPEEDLINE_MAX_V = 46
+const CHUNKS_PER_FRAME = 2
+const SPARKS_PER_FRAME = 24
 /** T-junction arms are drawn this far before a side is chosen (and the unchosen one stays) */
 const ARM_LEN = 120
 const rnd = (() => {
@@ -566,13 +570,21 @@ export class FrScene {
     if (seg < 0) return
     const p = this.layout.pt(seg, s, laneX(lane), this.wp2)
     let made = 0
-    for (const sp of this.sparkData) {
+    n = Math.min(n, SPARKS_PER_FRAME - this.sparkBudget)
+    if (n <= 0) return
+    this.sparkBudget += n
+    for (let j = 0; j < this.sparkData.length; j++) {
+      // pooled: round-robin from the last free slot instead of rescanning from 0 every burst
+      const sp = this.sparkData[(this.sparkNext + j) % this.sparkData.length]
       if (sp.life > 0) continue
       sp.p.set(p.x, y, p.z)
       sp.v.set((Math.random() - 0.5) * 5, 1.5 + Math.random() * 4, (Math.random() - 0.5) * 5)
       sp.max = 0.35 + Math.random() * 0.3
       sp.life = sp.max
-      if (++made >= n) break
+      if (++made >= n) {
+        this.sparkNext = (this.sparkNext + j + 1) % this.sparkData.length
+        break
+      }
     }
   }
 
@@ -936,7 +948,7 @@ export class FrScene {
         if (b - a < 0.05) continue
         const closed = b >= segEnd - 0.01
         const key = `${g.s0}|${k}|${closed ? 'c' : b.toFixed(0)}`
-        if (!this.chunks.has(key) && built > 3) continue
+        if (!this.chunks.has(key) && built >= CHUNKS_PER_FRAME) continue
         if (!this.chunks.has(key)) built++
         this.useChunk(
           this.chunks,
@@ -1322,7 +1334,10 @@ export class FrScene {
     }
   }
 
+  private sparkBudget = 0
+  private sparkNext = 0
   private updateSparks(dt: number) {
+    this.sparkBudget = 0
     const pos = this.sparkGeo.getAttribute('position') as THREE.BufferAttribute
     const a = this.sparkGeo.getAttribute('aA') as THREE.BufferAttribute
     this.sparkData.forEach((sp, i) => {
@@ -1450,12 +1465,13 @@ export class FrScene {
     this.camera.updateProjectionMatrix()
     this.camera.updateMatrixWorld(true)
 
-    const op = THREE.MathUtils.clamp((v.speed - 24) / 16, 0, 1) * 0.22 + (v.boost - 1) * 0.7
+    // v32: boost reads through FOV + streak length; capped opacity / travel so the lines never strobe at x1.75
+    const op = Math.min(0.4, THREE.MathUtils.clamp((v.speed - 24) / 16, 0, 1) * 0.22 + (v.boost - 1) * 0.24)
     this.speedMat.opacity = v.idle || v.dead ? 0 : op
     this.speedLines.visible = this.speedMat.opacity > 0.01
     if (this.speedLines.visible) {
       this.speedLineState.forEach((l, i) => {
-        l.z += v.speed * 2.2 * dt
+        l.z += Math.min(v.speed, SPEEDLINE_MAX_V) * 2.2 * Math.min(dt, 1 / 30)
         if (l.z > 2) {
           l.z = -40 - Math.random() * 10
           l.a = Math.random() * Math.PI * 2
@@ -1463,7 +1479,7 @@ export class FrScene {
         }
         this.tmpE.set(0, 0, l.a - Math.PI / 2)
         this.tmpQ.setFromEuler(this.tmpE)
-        this.tmpM.compose(this.tmpV.set(Math.cos(l.a) * l.r, Math.sin(l.a) * l.r * 0.8, l.z), this.tmpQ, this.tmpS.set(1, 1, l.len * (0.6 + speedF)))
+        this.tmpM.compose(this.tmpV.set(Math.cos(l.a) * l.r, Math.sin(l.a) * l.r * 0.8, l.z), this.tmpQ, this.tmpS.set(1, 1, l.len * (0.6 + speedF + (v.boost - 1) * 0.8)))
         this.speedLines.setMatrixAt(i, this.tmpM)
       })
       this.speedLines.instanceMatrix.needsUpdate = true

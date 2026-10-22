@@ -49,6 +49,7 @@ const initialHud: FrHudState = {
   timeS: 0,
   callout: null,
   penN: 0,
+  logoN: 0,
   pb: 0,
   newPb: false,
   hand: 0,
@@ -316,6 +317,12 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
             {hud.penN > 0 ? (
               <span className="fr-pen" key={`pen${hud.penN}`} aria-live="polite">
                 −500m
+              </span>
+            ) : null}
+            {/* v32: every 5D logo pickup is an instant +1000 m */}
+            {hud.logoN > 0 ? (
+              <span className="fr-pen fr-pen--bonus" key={`logo${hud.logoN}`} aria-live="polite">
+                +1000m
               </span>
             ) : null}
             {/* v19: boost doubles metres + stars while the logo power runs */}

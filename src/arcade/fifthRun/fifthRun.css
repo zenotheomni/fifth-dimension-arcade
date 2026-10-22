@@ -964,6 +964,10 @@
   white-space: nowrap;
   animation: fr-pen-pop 1.6s ease-out forwards;
 }
+.fr-pen--bonus {
+  color: #5dffb0;
+  font-size: 20px;
+}
 @keyframes fr-pen-pop {
   0% { opacity: 0; transform: translate(-50%, -6px) scale(1.4); }
   12% { opacity: 1; transform: translate(-50%, 4px) scale(1); }
