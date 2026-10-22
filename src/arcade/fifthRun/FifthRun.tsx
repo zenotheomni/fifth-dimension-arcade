@@ -108,6 +108,12 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
   onRunResultRef.current = onRunResult
 
   useEffect(() => onPlayerChange(setPlayer), [])
+  // v33: html.fr-playing turns off live blurs / looping UI animations over the canvas during a run
+  const inRun = hud.phase === 'playing'
+  useEffect(() => {
+    document.documentElement.classList.toggle('fr-playing', inRun)
+    return () => document.documentElement.classList.remove('fr-playing')
+  }, [inRun])
 
   // Lobby song plays through loading + how-to; START (inside the tap, for iOS) crossfades to
   // "Thousand Yard Stare", which stays through the end screen + restarts. Leaving releases it.
@@ -286,7 +292,7 @@ export default function FifthRun({ challenge = null, seeded = null, onChallengeR
 
       <div ref={hostRef} className="fr-stage" />
       <div className="fr-vignette" aria-hidden />
-      <div className="fr-threat" aria-hidden style={{ opacity: playing ? Math.min(1, hud.threat * 1.25) : 0 }} />
+      <div className={`fr-threat${playing && hud.threat > 0 ? '' : ' is-off'}`} aria-hidden style={{ opacity: playing ? Math.min(1, hud.threat * 1.25) : 0 }} />
       {hud.phase === 'playing' && (hud.speed > 95 || hud.hand > 0) ? <div className={`fr-speedwash${hud.hand > 0 ? ' is-surge' : ''}`} aria-hidden /> : null}
 
       {hud.phase === 'loading' ? (

@@ -6,6 +6,7 @@ import { FIFTH_RUN_COPY } from '../copyLocks'
 import { RuleBot, SKILLS } from './sim/bot'
 import { hudTap, maybeOpenTuneFromUrl, toggleTunePanel } from './tunePanel'
 import { RAMP_KMAX, stepAt } from './sim/constants'
+import { PerfLog } from './perfLog'
 import { BLINK_S, FR_DT, FR_HZ, POWER_TICKS, STAR_M } from './sim/constants'
 import { LOGO_BONUS_M, STUMBLE_PEN_M, distOf, newRun, queueAction, resetCursors, scoreOf, speedMul, step, type Action, type RunEvent, type RunState } from './sim/runner'
 import { Track } from './sim/track'
@@ -123,6 +124,7 @@ class Engine {
   private dbgFrame = 0
   private prevOverscroll = ''
   private pruneTick = 0
+  perf: PerfLog
 
   constructor(host: HTMLElement, bridge: FrBridge) {
     this.host = host
@@ -136,6 +138,7 @@ class Engine {
     this.canvas.className = 'fr-canvas'
     host.appendChild(this.canvas)
     if (DebugOverlay.enabled()) this.dbg = new DebugOverlay(host)
+    this.perf = new PerfLog(host)
     // no page scroll / rubber-band while playing: those resize the viewport (URL bar) on iOS
     this.prevOverscroll = document.documentElement.style.overscrollBehavior
     document.documentElement.style.overscrollBehavior = 'none'
@@ -169,6 +172,7 @@ class Engine {
     window.addEventListener('pointercancel', this.onCancel)
     window.addEventListener('keydown', this.onKey)
     document.addEventListener('visibilitychange', this.onVis)
+    window.addEventListener('pagehide', this.onPageHide)
     // warm the GPU (compile shaders) before revealing
     this.view.update(this.viewState(0), 0.016)
     this.view.render()
@@ -248,6 +252,10 @@ class Engine {
     unlockSfx()
     if (this.phase === 'paused') this.resume()
     this.input(a)
+  }
+
+  private onPageHide = () => {
+    if (this.phase === 'playing' || this.phase === 'paused') this.perfFlush('pagehide')
   }
 
   private onVis = () => {
@@ -354,10 +362,52 @@ class Engine {
     if (this.destroyed) return
     this.raf = requestAnimationFrame(this.loop)
     if (this.manual) return
-    const dt = Math.min(0.1, Math.max(0, (now - this.lastNow) / 1000))
+    const raw = Math.max(0, now - this.lastNow)
+    // v33: clamp a hitch to 50 ms of game time (was 100): after a stall the world slows for one frame instead
+    // of jumping 12 sim steps ahead
+    const dt = Math.min(0.05, raw / 1000)
     this.lastNow = now
+    const t0 = performance.now()
     this.update(dt)
+    const js = performance.now() - t0
     this.adapt(dt)
+    if (this.perf.on && this.view) this.perfFrame(raw, js)
+  }
+
+  private perfInfo = (): (string | number)[] => {
+    const r = this.view!.renderer
+    const i = r.info
+    return [Math.round(r.getPixelRatio() * 100) / 100, i.render.calls, i.render.triangles, i.programs?.length ?? 0, i.memory.textures, i.memory.geometries]
+  }
+
+  private perfCtx = { runS: 0, speed: 0, boost: false, turning: false, chunks: 0, callout: null as string | null, phase: '' }
+  private perfFrame(rawMs: number, js: number) {
+    const c = this.perfCtx
+    const v = this.view!
+    c.runS = this.run.tick / FR_HZ
+    c.speed = this.run.v * 3.6
+    c.boost = this.run.hand > 0
+    c.turning = v.turning
+    c.chunks = v.builtThisFrame
+    c.callout = this.callout?.text ?? null
+    c.phase = this.phase
+    this.perf.frame(rawMs, js, c, this.perfInfo)
+  }
+
+  private perfFlush(reason: string) {
+    const v = this.view
+    this.perf.flush({
+      reason,
+      runS: Math.round((this.run.tick / FR_HZ) * 10) / 10,
+      score: scoreOf(this.run),
+      death: this.run.deathKind ?? null,
+      tier: v?.tier,
+      composer: !!v?.composer,
+      dprCap: v?.dprCap,
+      reflEvery: v?.reflEvery,
+      seed: this.bridge.seed,
+      ctxLost: this.ctxLost,
+    })
   }
 
   setManual(on: boolean) {
@@ -650,6 +700,7 @@ class Engine {
   private finish() {
     if (this.phase === 'ended') return
     this.phase = 'ended'
+    this.perfFlush('end')
     const st = this.run
     const score = scoreOf(st)
     const newPb = score > this.pb
@@ -799,6 +850,9 @@ class Engine {
   }
 
   destroy() {
+    if (this.phase === 'playing' || this.phase === 'paused') this.perfFlush('exit')
+    this.perf.dispose()
+    window.removeEventListener('pagehide', this.onPageHide)
     this.destroyed = true
     cancelAnimationFrame(this.raf)
     this.ro?.disconnect()

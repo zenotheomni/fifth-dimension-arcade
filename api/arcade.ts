@@ -185,6 +185,21 @@ const GET: Record<string, Handler> = {
 }
 
 const POST: Record<string, Handler> = {
+  /** v33: real-device perf telemetry (no auth; size-capped, insert-only RPC). */
+  async perf(req, res) {
+    const b = bodyOf(req)
+    const summary = b.summary && typeof b.summary === 'object' ? b.summary : null
+    if (!summary) throw new HttpError(400, 'invalid_body')
+    await call('arcade_perf_log', {
+      p_game_id: str(b.gameId, 40) ?? 'fifth-run',
+      p_build: str(b.build, 80),
+      p_opted: Boolean(b.opted),
+      p_ua: str(req.headers['user-agent'], 300),
+      p_summary: summary,
+    })
+    return res.status(200).json({ ok: true })
+  },
+
   async session(req, res) {
     const a = readAuth(req)
     if (!a) throw new HttpError(400, 'invalid_device_id')
