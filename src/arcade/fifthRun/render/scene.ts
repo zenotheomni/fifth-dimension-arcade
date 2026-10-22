@@ -121,6 +121,11 @@ const CH = 30
 /** v32: per-frame work caps (boost doubles the rate things arrive) */
 const SPEEDLINE_MAX_V = 46
 const CHUNKS_PER_FRAME = 2
+/** v33: corner / arm pieces share a per-frame build budget (a turn used to build 6-7 meshes in one frame);
+ * pieces within NEAR_M of the runner are always built at once so nothing visible is ever missing */
+const CHUNK_BUDGET = 3
+const NEAR_M = 70
+const IS_IOS = typeof navigator !== 'undefined' && (/iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1))
 const SPARKS_PER_FRAME = 24
 /** T-junction arms are drawn this far before a side is chosen (and the unchosen one stays) */
 const ARM_LEN = 120
@@ -267,6 +272,9 @@ export class FrScene {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping
     this.renderer.toneMappingExposure = FrScene.EXPOSURE
     if (tier === 'low') this.dprCap = 2
+    // v33: iPhone/iPad: cap the backing store at 2x (3x DPR = 2.25x the pixels for every post pass) to stay
+    // inside the GPU + thermal budget for a 5-minute run
+    if (IS_IOS) this.dprCap = Math.min(this.dprCap, 2)
     this.camera = new THREE.PerspectiveCamera(64, 1, 0.1, 2400)
     this.scene.add(this.camera)
     this.scene.background = new THREE.Color('#05040a')
@@ -637,11 +645,12 @@ export class FrScene {
 
   enableComposer() {
     if (this.composer) return
-    const samples = Math.min(4, this.renderer.capabilities.maxSamples || 0)
+    // v33: no MSAA on iOS (SMAA already smooths edges; a multisampled half-float target is a big tile-memory cost)
+    const samples = IS_IOS ? 0 : Math.min(4, this.renderer.capabilities.maxSamples || 0)
     const composer = new EffectComposer(this.renderer, { frameBufferType: THREE.HalfFloatType, multisampling: samples })
     composer.addPass(new RenderPass(this.scene, this.camera))
     composer.addPass(new EffectPass(this.camera, new SanitizeEffect()))
-    this.bloom = new BloomEffect({ intensity: FrScene.BLOOM, luminanceThreshold: 0.82, luminanceSmoothing: 0.14, mipmapBlur: true, radius: 0.62, levels: 6 })
+    this.bloom = new BloomEffect({ intensity: FrScene.BLOOM, luminanceThreshold: 0.82, luminanceSmoothing: 0.14, mipmapBlur: true, radius: 0.62, levels: IS_IOS ? 4 : 6 })
     this.grade = new GradeEffect()
     composer.addPass(new EffectPass(this.camera, this.bloom, new ToneMappingEffect({ mode: ToneMappingMode.ACES_FILMIC }), this.grade))
     composer.addPass(new EffectPass(this.camera, new SMAAEffect({ preset: SMAAPreset.HIGH })))
@@ -895,9 +904,17 @@ export class FrScene {
     return out
   }
 
-  private useChunk(map: Map<string, Chunk>, key: string, make: () => { deck: THREE.BufferGeometry; glow: THREE.BufferGeometry }, place: (m: THREE.Object3D) => void) {
+  /** chunk meshes built during the last updateDeck (perf telemetry + budget) */
+  builtThisFrame = 0
+  get turning() {
+    return this.arc != null || this.pendingTurn != null
+  }
+
+  private useChunk(map: Map<string, Chunk>, key: string, make: () => { deck: THREE.BufferGeometry; glow: THREE.BufferGeometry }, place: (m: THREE.Object3D) => void, near = true) {
     let c = map.get(key)
     if (!c) {
+      if (!near && this.builtThisFrame >= CHUNK_BUDGET) return
+      this.builtThisFrame++
       const g = make()
       const deck = new THREE.Mesh(g.deck, this.deckMat)
       const glow = new THREE.Mesh(g.glow, this.stripMat)
@@ -935,6 +952,7 @@ export class FrScene {
     const lo0 = S - 50
     const hi0 = Math.min(S + VIEW_AHEAD, v.generatedTo - 4)
     let built = 0
+    this.builtThisFrame = 0
     for (let i = Math.max(0, L.runnerSeg - 1); i < L.segs.length; i++) {
       const g = L.segs[i]
       const segStart = i === 0 && g.s0 === 0 ? -40 : g.s0 + H
@@ -964,6 +982,7 @@ export class FrScene {
     }
     // corner squares (+ the arms of an unresolved T, + the unchosen arm of a taken T)
     const arm = (cid: number, cx: number, cz: number, fx: number, fz: number, sC: number, tag: string) => {
+      void tag // v33: keyed by direction, so the unchosen arm of a taken T reuses its pending-arm meshes
       for (let k = 0; k * CH < ARM_LEN; k++) {
         const d0 = H + k * CH
         const d1 = Math.min(H + ARM_LEN, d0 + CH)
@@ -971,13 +990,14 @@ export class FrScene {
         if (sC + d0 > S + VIEW_AHEAD + 30 || sC + d1 < S - 60) continue
         this.useChunk(
           this.corners,
-          `arm|${cid}|${tag}|${k}`,
+          `arm|${cid}|${Math.round(fx * 64)},${Math.round(fz * 64)}|${k}`,
           () => buildDeckChunk(d0, d1, [], false, d1 >= H + ARM_LEN - 0.01),
           (m) => {
             const p = PathLayout.ptFrom(cx, cz, fx, fz, d0, 0, this.wp2)
             m.position.set(p.x, 0, p.z)
             m.rotation.set(0, p.yaw, 0)
           },
+          sC + d0 < S + NEAR_M,
         )
       }
     }
@@ -994,6 +1014,7 @@ export class FrScene {
           m.position.set(p.x, 0, p.z)
           m.rotation.set(0, p.yaw, 0)
         },
+        c.s < S + NEAR_M,
       )
     }
     const pend = L.pending
@@ -1011,6 +1032,7 @@ export class FrScene {
           m.position.set(cx, 0, cz)
           m.rotation.set(0, p.yaw, 0)
         },
+        pend.s < S + NEAR_M,
       )
       for (const dir of [-1, 1]) {
         const [fx, fz] = turned(g.fx, g.fz, dir)
@@ -1490,6 +1512,9 @@ export class FrScene {
   reflEvery = 1
 
   render() {
+    // v33: count draw calls / triangles across every post pass of the frame (telemetry)
+    this.renderer.info.autoReset = false
+    this.renderer.info.reset()
     if (this.composer) this.composer.render()
     else this.renderer.render(this.scene, this.camera)
   }

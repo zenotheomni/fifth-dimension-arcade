@@ -55,7 +55,12 @@
 .fdnp__bars i:nth-child(2) { animation-delay: -0.3s; }
 .fdnp__bars i:nth-child(3) { animation-delay: -0.6s; }
 .fdnp__bars i:nth-child(4) { animation-delay: -0.15s; }
-@keyframes fdnp-eq { 0%, 100% { height: 30%; } 50% { height: 100%; } }
+/* v33: transform (compositor) instead of height (layout every frame) */
+.fdnp__bars i { height: 100%; transform-origin: 50% 100%; }
+@keyframes fdnp-eq { 0%, 100% { transform: scaleY(0.3); } 50% { transform: scaleY(1); } }
+/* v33: during gameplay no live blur over the WebGL canvas (re-blurred every frame on iOS) and no eq loop */
+html.fr-playing .fdnp__btn { backdrop-filter: none; -webkit-backdrop-filter: none; background-color: rgba(10, 10, 14, 0.78); }
+html.fr-playing .fdnp__bars i { animation-play-state: paused; }
 .fdnp__text {
   display: flex;
   flex-direction: column;

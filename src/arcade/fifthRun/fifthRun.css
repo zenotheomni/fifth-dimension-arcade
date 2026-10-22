@@ -881,10 +881,20 @@
   background:
     radial-gradient(ellipse 120% 70% at 50% 40%, transparent 45%, rgba(8, 2, 18, 0.65) 78%, rgba(4, 0, 10, 0.95) 100%),
     linear-gradient(to top, rgba(10, 2, 24, 0.85), transparent 38%);
+}
+/* v33: the pulse was an infinite full-screen filter animation (repainted every frame on iOS, even at
+   opacity 0); now a compositor-only opacity pulse on a tint layer, only while the smoke is visible */
+.fr-threat::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 120% 70% at 50% 40%, transparent 50%, rgba(120, 40, 170, 0.3) 100%);
+  opacity: 0;
   animation: fr-threat-pulse 1.1s ease-in-out infinite;
 }
+.fr-threat.is-off::after { animation: none; }
 @keyframes fr-threat-pulse {
-  50% { filter: brightness(1.25) hue-rotate(-8deg); }
+  50% { opacity: 1; }
 }
 .fr-speedwash.is-surge {
   background: radial-gradient(ellipse 80% 70% at 50% 45%, transparent 55%, rgba(170, 120, 255, 0.22) 100%);
@@ -910,7 +920,7 @@
 
 /* star / streak juice: the star count pops on every pickup */
 .fr-pop { animation: fr-pop 0.22s ease-out; display: inline-flex; }
-@keyframes fr-pop { 0% { transform: scale(1.32); filter: brightness(1.6); } 100% { transform: scale(1); filter: none; } }
+@keyframes fr-pop { 0% { transform: scale(1.32); } 100% { transform: scale(1); } }
 
 /* v19: x2 boost badge on the distance box while the 5D logo power runs */
 .fr-cell--main {
