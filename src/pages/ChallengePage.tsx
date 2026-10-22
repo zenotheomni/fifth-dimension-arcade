@@ -149,7 +149,7 @@ export default function ChallengePage() {
   if (phase === 'playing' && cvChallenge) {
     return (
       <div className="arcade-root arcade-root--game">
-        <Suspense fallback={<div className="cv3-suspense">Loading Court Vision…</div>}>
+        <Suspense fallback={<div className="cv3-suspense">Loading COURT VISION…</div>}>
           <CourtVision3D challenge={cvChallenge} lockMode onRunResult={onRunResult} />
         </Suspense>
       </div>
@@ -288,8 +288,8 @@ export default function ChallengePage() {
               {view.h2h && view.h2h.games > 0 ? <p className="soc-vs__series">{view.h2h.text}</p> : null}
               <p className="cvp-challenger__copy">
                 {isFifthRun
-                  ? 'Fifth Glide · same track, same stars, same traffic · run farther.'
-                  : `Court Vision · same court, same ${view.seed.startsWith('still:') ? 'setup' : 'wind'} · 60 seconds.`}
+                  ? 'FIFTH GLIDE · same track, same stars, same traffic · run farther.'
+                  : `COURT VISION · same court, same ${view.seed.startsWith('still:') ? 'setup' : 'wind'} · 60 seconds.`}
               </p>
 
               <button type="button" className="ffa-btn ffa-btn--primary" onClick={onAccept}>

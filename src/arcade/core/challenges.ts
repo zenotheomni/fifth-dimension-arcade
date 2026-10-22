@@ -2,9 +2,9 @@ import { challengePublicUrl } from './config'
 
 export { challengePublicUrl }
 
-export const GAME_TITLES: Record<string, string> = { 'court-vision': 'Court Vision', 'fifth-run': 'Fifth Glide' }
+export const GAME_TITLES: Record<string, string> = { 'court-vision': 'COURT VISION', 'fifth-run': 'FIFTH GLIDE' }
 
-export const gameTitle = (game?: string | null) => GAME_TITLES[game ?? ''] ?? 'Court Vision'
+export const gameTitle = (game?: string | null) => GAME_TITLES[game ?? ''] ?? 'COURT VISION'
 
 /** Same-seed promise shown on challenge cards. */
 export function sameSeedCopy(game: string | null | undefined, rivalHandle?: string | null): string {
@@ -19,7 +19,7 @@ export function sameSeedCopy(game: string | null | undefined, rivalHandle?: stri
 }
 
 export function challengeShareText(handle: string, score: number, game = 'court-vision'): string {
-  return `${handle} scored ${score} in ${GAME_TITLES[game] ?? 'Court Vision'}. Can you beat it?`
+  return `${handle} scored ${score} in ${GAME_TITLES[game] ?? 'COURT VISION'}. Can you beat it?`
 }
 
 export type ShareOutcome = 'shared' | 'copied' | 'cancelled' | 'failed'

@@ -18,7 +18,7 @@ export type Cabinet = {
 export const cabinets: Cabinet[] = [
   {
     id: 'court-vision',
-    title: 'Court Vision',
+    title: 'COURT VISION',
     tagline: 'Finger-flick basketball. Hold. Aim. Release.',
     status: 'lit',
     badge: 'NEW',
@@ -26,7 +26,7 @@ export const cabinets: Cabinet[] = [
   },
   {
     id: 'fifth-run',
-    title: 'Fifth Glide',
+    title: 'FIFTH GLIDE',
     tagline: 'Run the Fifth Dimension. Swipe. Jump. Slide.',
     status: 'lit',
     route: '/fifth-run',

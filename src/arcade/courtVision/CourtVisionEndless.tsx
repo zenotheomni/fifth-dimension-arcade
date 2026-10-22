@@ -60,7 +60,7 @@ export default function CourtVisionEndless({ onExit }: CourtVisionEndlessProps) 
 
         {!g.started ? (
           <div className="cv-overlay">
-            <p className="arcade-ticket">Court Vision</p>
+            <p className="arcade-ticket">COURT VISION</p>
             <h1 className="cv-overlay__title">Endless</h1>
             <p className="cv-overlay__copy">
               Hold the ball, pull to aim and power, release. One mid-air nudge.

@@ -274,7 +274,8 @@ export class FrScene {
     if (tier === 'low') this.dprCap = 2
     // v33: iPhone/iPad: cap the backing store at 2x (3x DPR = 2.25x the pixels for every post pass) to stay
     // inside the GPU + thermal budget for a 5-minute run
-    if (IS_IOS) this.dprCap = Math.min(this.dprCap, 2)
+    // v34: 1.5 (iPhone log: GPU-bound ~30 fps at 1.8x with JS ~5 ms/frame)
+    if (IS_IOS) this.dprCap = Math.min(this.dprCap, 1.5)
     this.camera = new THREE.PerspectiveCamera(64, 1, 0.1, 2400)
     this.scene.add(this.camera)
     this.scene.background = new THREE.Color('#05040a')
@@ -656,6 +657,8 @@ export class FrScene {
     composer.addPass(new EffectPass(this.camera, new SMAAEffect({ preset: SMAAPreset.HIGH })))
     this.composer = composer
     this.renderer.toneMapping = THREE.NoToneMapping
+    // v34: tone mapping / output target are part of every program key: re-prewarm before the next run
+    this.warmed = false
     composer.setSize(this.width, this.height, false)
   }
 
@@ -666,6 +669,9 @@ export class FrScene {
     this.bloom = null
     this.grade = null
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping
+    // v34: every program recompiles without the composer (tone mapping moves into each shader). v33's
+    // iPhone log: composer dropped on the how-to after prewarm -> 94 -> 126 programs compiled mid-run
+    this.warmed = false
   }
 
   resize(w: number, h: number) {

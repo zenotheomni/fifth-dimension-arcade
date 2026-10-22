@@ -22,8 +22,8 @@ type ChallengeView = {
 }
 
 const GAME_TITLES: Record<string, string> = {
-  'court-vision': 'Court Vision',
-  'fifth-run': 'Fifth Glide',
+  'court-vision': 'COURT VISION',
+  'fifth-run': 'FIFTH GLIDE',
 }
 
 async function loadChallenge(id: string): Promise<ChallengeView | null> {
@@ -66,7 +66,7 @@ async function render(req: Request): Promise<ImageResponse> {
 
   const handle = c?.creator_handle ?? 'Fifth Floor'
   const score = c ? String(c.target_score) : '—'
-  const game = GAME_TITLES[c?.game_id ?? 'court-vision'] ?? 'Court Vision'
+  const game = GAME_TITLES[c?.game_id ?? 'court-vision'] ?? 'COURT VISION'
   const line = c ? `${handle} scored ${score} in ${game}.` : 'Step onto the Fifth Floor.'
 
   const bungeeText = `FIFTH FLOOR ARCADE${game.toUpperCase()}${handle.toUpperCase()}${score}CAN YOU BEAT IT?CHALLENGE VS 0123456789`
