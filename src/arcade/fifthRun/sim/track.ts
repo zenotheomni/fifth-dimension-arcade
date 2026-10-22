@@ -267,10 +267,11 @@ export class Track {
     // nothing on the corner square itself
     // v28: just a 2-star marker into and out of the turn — most stars sit on jumps / slides
     // (the warm-up's first corners keep the full guide run: it teaches the turn)
-    const guide = warmAt(cs) > 0 || levelAt(cs) < STAR_CHOICE_L
-    const inFrom = Math.max(this.prevEnd + 2.2, this.starFloor, guide ? -1e9 : cs - CORNER.half - 2 - STAR_SPACING)
-    for (let s = inFrom; s <= cs - CORNER.half - 2; s += STAR_SPACING) this.addKey(this.pathLane, s, 0.9)
-    for (let s = cs + CORNER.half + 5, i = 0; s <= after && i < (guide ? 99 : 2); s += STAR_SPACING, i++) this.addKey(this.pathLane, s, 0.9)
+    // v29: full guide runs again (stars all run long); the exit run takes a FRESH random lane
+    for (let s = Math.max(this.prevEnd + 2.2, this.starFloor); s <= cs - CORNER.half - 2; s += STAR_SPACING) this.addKey(this.pathLane, s, 0.9)
+    this.pathLane = this.freshLane([0, 1, 2], true)
+    this.noteLine(this.pathLane)
+    for (let s = cs + CORNER.half + 5; s <= after; s += STAR_SPACING) this.addKey(this.pathLane, s, 0.9)
     if (this.lineLeft > 0) this.endLine(this.prevEnd, v)
     this.lineGapTo = Math.max(this.lineGapTo, after + 4)
     this.cursor = after
@@ -315,6 +316,8 @@ export class Track {
     // stars run the open lane (the one nearest the current line)
     let path = open[0]
     for (const l of open) if (Math.abs(l - this.pathLane) < Math.abs(path - this.pathLane)) path = l
+    // v29: a new line in the pinch takes a fresh open lane (rotation), a running one stays nearest
+    if (this.lineLeft <= 0) path = this.freshLane(open)
     // later on: a hurdle or an arch inside the narrow stretch
     let mid = -1
     // v18 chokepoint: the pinch holds a hurdle / truss / pipe across every open lane — jump or slide, no dodging
@@ -339,7 +342,10 @@ export class Track {
       this.vEnd = end
     }
     // v28: a void stretch only gets a line when it holds a hurdle / truss to clear (interactive)
-    if (this.lineLeft <= 0 && start >= this.lineGapTo && mid > 0) this.startLine()
+    if (this.lineLeft <= 0 && start >= this.lineGapTo && path !== this.blockedLane()) {
+      this.startLine()
+      this.noteLine(path)
+    }
     for (let s = Math.max(start + 3, this.starFloor); s <= end - 2 && this.lineLeft > 0; s += STAR_SPACING) {
       if (mid > 0 && Math.abs(s - mid) < v * 0.35) continue
       this.placeLineStar(path, s, 0.9, start)
@@ -413,6 +419,34 @@ export class Track {
     const pick = S[Math.floor(this.r() * S.length)]
     const mirror = this.r() < 0.5
     return pick.map((r) => (mirror ? [r[2], r[1], r[0]] : [r[0], r[1], r[2]]) as Tok[])
+  }
+
+  /** v29: lanes of recent star lines (rotation: never a third line in a row in the same lane) */
+  private lineLanes: number[] = []
+  /** stats: lane of every star line started (capped) */
+  lineLog: number[] = []
+  private noteLine(lane: number) {
+    if (this.lineLog.length < 5000) this.lineLog.push(lane)
+    this.lineLanes.push(lane)
+    if (this.lineLanes.length > 3) this.lineLanes.shift()
+  }
+  /** the lane a third same-lane line would repeat, or -1 */
+  private blockedLane(): number {
+    const h = this.lineLanes
+    return h.length >= 2 && h[h.length - 1] === h[h.length - 2] ? h[h.length - 1] : -1
+  }
+  /** random lane among options, least-recently used first; avoidLast also skips the previous line's lane */
+  private freshLane(options: number[], avoidLast = false): number {
+    const h = this.lineLanes
+    const bad = this.blockedLane()
+    let ok = options.filter((l) => l !== bad && !(avoidLast && h.length && l === h[h.length - 1]))
+    if (!ok.length) ok = options.filter((l) => l !== bad)
+    if (!ok.length) ok = options
+    // weight lanes used less in the last 3 lines higher
+    const w = ok.map((l) => 1 / (1 + h.filter((x) => x === l).length * 1.5))
+    let x = this.r() * w.reduce((a, b) => a + b, 0)
+    for (let i = 0; i < ok.length; i++) if ((x -= w[i]) < 0) return ok[i]
+    return ok[ok.length - 1]
   }
 
   private startLine() {
@@ -727,10 +761,13 @@ export class Track {
     }
     // a running coin line stays in its lane whenever that lane is open
     if (this.lineLeft > 0 && passable(toks[this.pathLane])) path = this.pathLane
+    // v29: a NEW line picks a fresh lane (rotation across left / middle / right)
+    else if (this.lineLeft <= 0) path = this.freshLane(options)
     // v27 star choice: at a jump / slide row, often route the line OVER / UNDER the obstacle (the
     // risky option holds the stars, the open lane holds none)
     if (this.postCorner <= 0 && W === 0 && L >= STAR_CHOICE_L && toks.includes('E')) {
-      const js = [0, 1, 2].filter((l) => toks[l] === 'B' || toks[l] === 'O' || toks[l] === 'P')
+      const bad = this.lineLeft <= 0 ? this.blockedLane() : -1
+      const js = [0, 1, 2].filter((l) => (toks[l] === 'B' || toks[l] === 'O' || toks[l] === 'P') && l !== bad)
       if (js.length) {
         let pick = js[0]
         for (const l of js) if (Math.abs(l - this.pathLane) < Math.abs(pick - this.pathLane)) pick = l
@@ -745,14 +782,18 @@ export class Track {
     const end = tok === 'E' ? rowEnd + 1 : s0 - (tok === 'O' ? 3.5 : v * 0.22 + 1.4)
     // v28: most new lines only start when they lead into a jump / slide (the player must commit to get them)
     const interactive = tok === 'B' || tok === 'O' || tok === 'P' || (tok === 'G' && L > 0.85)
-    const freeLine = L < STAR_CHOICE_L || this.r() < 0.06
+    // v29: free lines fill the open stretches again (coverage ~90 %); jump / slide rows still pull the line over / under
+    const freeLine = true
     for (let s = Math.max(start, this.starFloor); s <= end; s += STAR_SPACING) {
       if (this.lineLeft <= 0) {
         if (s < this.lineGapTo) continue
         if (!interactive && !freeLine) break
+        // v29: never a third line in a row in one lane — leave a short break instead
+        if (path === this.blockedLane()) break
         // start late enough that the line still has stars left to carry over / under the obstacle
         if (interactive && s < end - (LINE_MIN - 6) * STAR_SPACING) continue
         this.startLine()
+        this.noteLine(path)
       }
       this.placeLineStar(path, s, 0.9, s0)
     }
