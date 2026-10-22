@@ -22,7 +22,7 @@ export const SPEED = { v0: 21.6, vmax: 48.6, k: 2200 } // v22: −10%
  * and blends in over RAMP.blendM. After the cap, difficulty keeps rising through obstacle density
  * only (pressureAt). Pure function of distance (deterministic).
  */
-export const RAMP = { v0: 28.8, inc: 4.5, stepS: 18, blendM: 45, vMax: 50.4 } // v22: all speeds −10% (boost stays ×BOOST.mul)
+export const RAMP = { v0: 28.8, inc: 4.5, stepS: 18, blendM: 75, vMax: 50.4 } // v22: all speeds −10% (boost stays ×BOOST.mul)
 /** last step index (the one that reaches vMax) */
 export const RAMP_KMAX = Math.ceil((RAMP.vMax - RAMP.v0) / RAMP.inc)
 const vStep = (k: number) => Math.min(RAMP.vMax, RAMP.v0 + RAMP.inc * k)
@@ -172,7 +172,7 @@ export const SLOW_TICKS = Math.round(CHASE.slowS * FR_HZ)
 /** Logo pickup: 10 s invincible + speed surge. */
 /** v19: a real boost — ×1.75 speed (may pass RAMP.vMax, up to vMax × mul, during the power-up only),
  *  2× distance metres and 2× stars; eases in, and back down to normal speed over its last easeOutS */
-export const BOOST = { mul: 1.75, easeInS: 0.6, easeOutS: 1.8, distX: 2, starX: 2 }
+export const BOOST = { mul: 1.75, easeInS: 1.0, easeOutS: 1.8, distX: 2, starX: 2 }
 
 export const POWER_TICKS = {
   /** Fifth Dimension logo — 10 s invincible + 1.5× speed surge */

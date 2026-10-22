@@ -949,3 +949,24 @@
 }
 .fr-meter--ufo .fr-callout { top: 38.5%; }
 .fr-meter--bottom .fr-callout { top: auto; bottom: calc(13.5% + env(safe-area-inset-bottom)); }
+
+/* v30: −1000m stumble penalty pop under the distance */
+.fr-pen {
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  transform: translate(-50%, 0);
+  font-weight: 800;
+  font-size: 18px;
+  color: #ff6b6b;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
+  pointer-events: none;
+  white-space: nowrap;
+  animation: fr-pen-pop 1.6s ease-out forwards;
+}
+@keyframes fr-pen-pop {
+  0% { opacity: 0; transform: translate(-50%, -6px) scale(1.4); }
+  12% { opacity: 1; transform: translate(-50%, 4px) scale(1); }
+  75% { opacity: 1; transform: translate(-50%, 14px); }
+  100% { opacity: 0; transform: translate(-50%, 26px); }
+}

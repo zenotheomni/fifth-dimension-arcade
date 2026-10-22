@@ -231,6 +231,7 @@ export class FrScene {
   /** queued turn: camera leans in the moment the swipe is accepted */
   private lead: { dir: number; s: number } | null = null
   private fovKick = 0
+  private fovKickT = 0
   /** seconds for the camera to swing round a 90° corner */
   /** the segment we turned off, held BY REFERENCE: PathLayout.sync() drops old segments (shifting every
    * index) once a run has more than 8, so an index captured before the turn goes stale mid-run (v15 fix) */
@@ -603,8 +604,8 @@ export class FrScene {
 
   /** Speed-up beat: brief FOV punch. */
   punch() {
-    this.fovKick = 7
-    this.fov += 3
+    // v30: no instant FOV jump — the kick eases in and out (~0.3 s in, ~2 s out)
+    this.fovKickT = 5
   }
 
   applyAnisotropy(root: THREE.Object3D = this.scene) {
@@ -1413,7 +1414,8 @@ export class FrScene {
     const speedF = THREE.MathUtils.clamp((v.speed - 18) / 22, 0, 1)
     const aspect = this.camera.aspect
     const baseFov = aspect > 0.8 ? 52 : 66
-    this.fovKick = Math.max(0, this.fovKick - dt * 9)
+    this.fovKickT = Math.max(0, this.fovKickT - dt * 2.5)
+    this.fovKick += (this.fovKickT - this.fovKick) * (1 - Math.exp(-dt * 6))
     const tf = baseFov + CAM_TUNE.fov + (speedF * 8 + (v.boost - 1) * 20 + this.fovKick) * CAM_TUNE.fovKick
     this.fov += (tf - this.fov) * (1 - Math.exp(-dt * 3))
     const sh = v.shake * CAM_TUNE.shake

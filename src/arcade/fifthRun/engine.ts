@@ -7,7 +7,7 @@ import { RuleBot, SKILLS } from './sim/bot'
 import { hudTap, maybeOpenTuneFromUrl, toggleTunePanel } from './tunePanel'
 import { RAMP_KMAX, stepAt } from './sim/constants'
 import { BLINK_S, FR_DT, FR_HZ, POWER_TICKS, STAR_M } from './sim/constants'
-import { newRun, queueAction, resetCursors, scoreOf, speedMul, step, type Action, type RunEvent, type RunState } from './sim/runner'
+import { distOf, newRun, queueAction, resetCursors, scoreOf, speedMul, step, type Action, type RunEvent, type RunState } from './sim/runner'
 import { Track } from './sim/track'
 import { DebugOverlay } from './debugOverlay'
 import { FrScene, type QualityTier, type ViewState } from './render/scene'
@@ -551,7 +551,7 @@ class Engine {
         sfxBump()
         sfxRumble(0.8)
         this.shake = 0.8
-        this.say('Stumble! It’s gaining…', 'coral', 1.0)
+        this.say('Stumble! −1000m', 'coral', 1.2)
         if (navigator.vibrate) {
           try {
             navigator.vibrate(30)
@@ -575,7 +575,7 @@ class Engine {
         break
       case 'respawn':
         sfxStart()
-        this.say('Keep running!', 'teal', 0.9)
+        this.say('−1000m · keep running!', 'coral', 1.2)
         break
       case 'turn':
         // the sim re-framed s / x onto the new heading this tick: don't interpolate across it
@@ -657,11 +657,11 @@ class Engine {
     const ch = this.bridge.challenge
     this.bridge.onEnded({
       score,
-      distance: Math.floor(st.s + st.sBank),
+      distance: distOf(st),
       keys: st.keys,
       maxCombo: st.maxCombo,
       livesLeft: st.lives,
-      ranM: Math.floor(st.s + st.sBank),
+      ranM: distOf(st),
       starM: st.keys * STAR_M + st.bonusM,
       durationS: Math.round((st.tick / FR_HZ) * 10) / 10,
       deathKind: st.deathKind,
@@ -678,7 +678,7 @@ class Engine {
     const s: FrHudState = {
       phase: this.phase,
       score: scoreOf(st),
-      distance: Math.floor(st.s + st.sBank),
+      distance: distOf(st),
       keys: st.keys,
       combo: st.combo,
       threat: Math.round(st.threat * 20) / 20,
@@ -689,6 +689,7 @@ class Engine {
       pb: this.pb,
       newPb: this.newPb,
       hand: st.hand / POWER_TICKS.hand,
+      penN: Math.round(st.penM / 1000),
       speed: Math.round(st.v * 3.6),
       target: this.bridge.challenge && !this.bridge.challenge.setTheBar ? this.bridge.challenge.targetScore : null,
     }
@@ -721,7 +722,8 @@ class Engine {
       if (++this.fpsBad < 2) return
       this.fpsBad = 0
       if (v.reflEvery < 3) v.reflEvery++
-      else if (v.dprScale > 0.7 && this.clock - this.lastDprChange > 6) {
+      // v30: never resize the canvas mid-run (a setSize stall is a visible hitch): only between runs
+      else if (this.phase !== 'playing' && v.dprScale > 0.7 && this.clock - this.lastDprChange > 6) {
         v.dprScale = Math.max(0.7, v.dprScale - 0.1)
         this.lastDprChange = this.clock
         this.requestResize('dpr-down')
@@ -734,7 +736,7 @@ class Engine {
       this.fpsGood++
       if (this.fpsGood >= 3) {
         this.fpsGood = 0
-        if (v.dprScale < 1 && this.clock - this.lastDprChange > 10) {
+        if (this.phase !== 'playing' && v.dprScale < 1 && this.clock - this.lastDprChange > 10) {
           v.dprScale = Math.min(1, v.dprScale + 0.1)
           this.lastDprChange = this.clock
           this.requestResize('dpr-up')

@@ -27,6 +27,8 @@ export type FrHudState = {
   newPb: boolean
   /** 0..1 remaining — 🖐️ hand invuln */
   hand: number
+  /** v30: stumble / respawn penalties so far (each −1000 m) */
+  penN: number
   speed: number
   target: number | null
 }
