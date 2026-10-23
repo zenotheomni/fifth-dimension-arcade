@@ -86,23 +86,23 @@ type Pattern = { p: string; min: number; w: (L: number) => number }
  * Full-width rows (BBB / OOO / GGG) are the signature "you must jump / slide" moments. */
 // v21 declutter: a row holds at most 2 obstacles unless they're one unified wall (BBB / OOO / PPP / GGG)
 const PATTERNS: Pattern[] = [
-  // v35: more low hurdles + lane blockers early/mid (Jenks: rocks & sticks felt rare)
-  { p: 'BEE', min: 0, w: (L) => 2.8 - 0.5 * L },
-  { p: 'OEE', min: 0, w: (L) => 1.3 - 0.4 * L },
-  { p: 'KEE', min: 0, w: (L) => 2.6 + 0.2 * L },
+  // v36: rocks/sticks "here and there" — between v34 rare and v35 flood
+  { p: 'BEE', min: 0, w: (L) => 2.2 - 0.4 * L },
+  { p: 'OEE', min: 0, w: (L) => 1.4 - 0.4 * L },
+  { p: 'KEE', min: 0, w: (L) => 2.8 + 0.2 * L },
   { p: 'GEE', min: 0, w: (L) => 1.0 - 0.3 * L },
   { p: 'BBB', min: 0, w: (L) => 1.5 + 0.3 * L },
   { p: 'OOO', min: 0.02, w: (L) => 1.1 + 0.4 * L },
   { p: 'GGG', min: 0.05, w: (L) => 1.2 + 0.8 * L },
   // v18: most of the width missing — jump, or thread the one remaining lane
   { p: 'GGE', min: 0.15, w: (L) => 0.5 + 0.7 * L },
-  { p: 'KKE', min: 0.02, w: (L) => 1.2 + 1.0 * L },
+  { p: 'KKE', min: 0.2, w: (L) => 0.2 + 0.35 * L }, // v36: adjacent tall blockers rare
   { p: 'KBE', min: 0.08, w: (L) => 0.6 + 0.6 * L },
   { p: 'KOE', min: 0.08, w: (L) => 0.6 + 0.6 * L },
   { p: 'BOE', min: 0.14, w: (L) => 0.5 + 0.6 * L },
   // P = chest-high pipe: jump over OR slide under (Temple Run "either" gate)
-  { p: 'PEE', min: 0, w: (L) => 1.9 - 0.3 * L },
-  { p: 'PPP', min: 0, w: (L) => 1.25 + 0.15 * L },
+  { p: 'PEE', min: 0, w: (L) => 1.15 - 0.2 * L },
+  { p: 'PPP', min: 0.05, w: (L) => 0.8 + 0.2 * L },
   { p: 'KPE', min: 0.12, w: (L) => 0.4 + 0.5 * L },
   // H = pothole: a short missing piece of ONE lane (any lane, the middle one too) — switch round it
   { p: 'HEE', min: 0.02, w: (L) => 0.9 + 0.3 * L },
@@ -180,6 +180,8 @@ export class Track {
   /** v27: hazard look bags (block = 5 looks, car = 3 long looks), never the same look twice in a row */
   private lookLast: Record<string, number> = {}
   private lookBag: Record<string, number[]> = {}
+  /** v36: lanes that held a tall blocker on the previous row (space adjacent talls) */
+  private lastTallLanes: number[] = []
   /** v18 choreographed sequence: queued rows (left→right token triples) */
   private seqQ: Tok[][] = []
   private seqRow = false
@@ -237,12 +239,12 @@ export class Track {
     if (kind === 'gap' || kind === 'void') this.lastHole = Math.max(this.lastHole, s + len)
     let variant = Math.floor(this.r() * 1000)
     if (kind === 'block' || kind === 'car') {
-      // every look in turn (meteor · crates · statue · holo · wreckage). v35: short blockers overweight
-      // meteor in the bag so lava rocks show ~2–3× as often (still never twice in a row).
+      // every look in turn (meteor · crates · statue · holo · wreckage). v36: meteor ~2× baseline
+      // (between v34 rare and v35 flood; still never twice in a row).
       const n = kind === 'block' ? 5 : 3
       let bag = this.lookBag[kind]
       if (!bag || !bag.length) {
-        bag = kind === 'block' ? [0, 0, 0, 0, 1, 2, 3, 4] : Array.from({ length: n }, (_, i) => i)
+        bag = kind === 'block' ? [0, 0, 1, 2, 3, 4] : Array.from({ length: n }, (_, i) => i)
         for (let i = bag.length - 1; i > 0; i--) {
           const j = Math.floor(this.r() * (i + 1))
           const t = bag[i]
@@ -428,10 +430,10 @@ export class Track {
   /** v18 sequences: forced quick moves, mirrored at random. Every row still goes through the validator. */
   private pickSequence(): Tok[][] {
     const S: string[][] = [
-      ['KKE', 'EKK', 'KKE', 'OOO'], // right, left, back right, slide, go
-      ['EKK', 'KKE', 'EKK', 'BBB'], // left, right, left, jump
+      ['KEE', 'EEK', 'KEE', 'OOO'], // v36: weave without adjacent talls
+      ['EEK', 'KEE', 'EEK', 'BBB'], // left/right singles then jump
       ['KEE', 'EBE', 'EEK', 'KOE', 'EEK'], // v26: zigzag wall (no 3-in-a-row same side) with a jump / slide inside
-      ['KKE', 'KEE', 'EEK', 'EKK', 'OOO'], // weave
+      ['KEE', 'EKE', 'EEK', 'KEE', 'OOO'], // weave (tall next to empty / jumpable)
       ['EKE', 'KEK', 'EKE', 'GGG'], // centre, sides, centre, jump the gap
     ]
     const pick = S[Math.floor(this.r() * S.length)]
@@ -705,6 +707,25 @@ export class Track {
       // warm-up: teach jump and slide separately first (v35: only the very first stretch)
       for (let i = 0; i < 3; i++) if (toks[i] === 'P') toks[i] = 'O'
     }
+    // v36: adjacent tall blockers only rarely (≤~12%) — prefer tall next to jump/slide/empty
+    {
+      const open: Tok[] = ['E', 'E', 'O', 'B']
+      for (let i = 0; i < 2; i++) {
+        if (toks[i] === 'K' && toks[i + 1] === 'K' && this.r() > 0.06) {
+          const which = this.r() < 0.5 ? i : i + 1
+          toks[which] = open[Math.floor(this.r() * open.length)]
+        }
+      }
+      // also break talls that sit beside last row's tall (reads as a clump while running)
+      if (this.lastTallLanes.length) {
+        for (let i = 0; i < 3; i++) {
+          if (toks[i] !== 'K') continue
+          if (this.lastTallLanes.some((l) => Math.abs(l - i) <= 1) && this.r() > 0.08) {
+            toks[i] = open[Math.floor(this.r() * open.length)]
+          }
+        }
+      }
+    }
 
     // ── route validator: this row must leave at least one passable route from where the runner can be ──
     {
@@ -763,11 +784,12 @@ export class Track {
         rowEnd = Math.max(rowEnd, s0 + OB.pipe.len)
       } else if (t === 'K') {
         // crashed rocket or a crashed satellite across the lane
-        // rockets never share a row with, or sit right after, a jump/slide obstacle
+        // long cars need a clear gap from jump/slide; short talls may sit beside a hurdle/pipe
+        // (v36: Jenks prefers tall next to jumpable — and meteor rocks only exist on 'block')
         const jsRow = toks.some((x) => x === 'B' || x === 'O' || x === 'P' || x === 'G')
         const rocketOk = !jsRow && s0 - this.lastJS > Math.max(9, v * 0.5)
-        // v35: prefer short blockers (meteor rocks live only on 'block') over long cars
-        if (this.r() < 0.05 || !rocketOk) {
+        const wantCar = rocketOk ? this.r() < 0.12 : this.r() < 0.62
+        if (wantCar) {
           this.addOb('car', lane, s0, OB.car.len)
           this.cars++
           rowEnd = Math.max(rowEnd, s0 + OB.car.len)
@@ -785,6 +807,8 @@ export class Track {
         rowEnd = Math.max(rowEnd, s0 + gapLen)
       }
     }
+
+    this.lastTallLanes = [0, 1, 2].filter((l) => toks[l] === 'K')
 
     // ── stars: corridor line in the path lane leading into this row, then through/over it ──
     const options = [0, 1, 2].filter((l) => passable(toks[l]))
