@@ -15,8 +15,8 @@ export function sameSeedCopy(game: string | null | undefined, rivalHandle?: stri
   }
   if (game === 'street-shift') {
     return rivalHandle
-      ? `${rivalHandle} gets an alert. Same streets, same shifts.`
-      : 'Your friend runs the exact same Miami grid — same stars, same shifts.'
+      ? `${rivalHandle} gets an alert. Same maze, same shifts.`
+      : 'Your friend runs the exact same Fifth Dimension maze — same stars, same shifts.'
   }
   return rivalHandle
     ? `${rivalHandle} gets an alert. Same court, same wind.`

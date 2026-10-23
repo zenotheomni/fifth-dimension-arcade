@@ -49,7 +49,7 @@ export const GAMES: ArcadeGame[] = [
   {
     id: 'street-shift',
     title: 'Street Shift',
-    tagline: 'Pac-Man × Miami grid. Maze Shift.',
+    tagline: 'Pac-Man DNA. Fifth Dimension maze. It shifts.',
     status: 'new',
     boxArt: art('box-street-shift.webp'),
     route: '/street-shift',

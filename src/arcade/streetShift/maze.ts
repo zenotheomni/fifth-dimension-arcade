@@ -19,7 +19,6 @@ export function generateMaze(rng: () => number): Cell[] {
   const carve = (x: number, y: number) => {
     g[key(x, y)] = 0
   }
-  // start at (1,1)
   const stack: [number, number][] = [[1, 1]]
   carve(1, 1)
   while (stack.length) {
@@ -43,15 +42,14 @@ export function generateMaze(rng: () => number): Cell[] {
     carve(nx, ny)
     stack.push([nx, ny])
   }
-  // punch extra loops so it feels like a street grid, not a perfect tree
-  const punches = Math.floor(COLS * ROWS * 0.08)
+  // punch loops — dimensional corridors, not a perfect tree
+  const punches = Math.floor(COLS * ROWS * 0.1)
   for (let i = 0; i < punches; i++) {
     const x = 1 + Math.floor(rng() * (COLS - 2))
     const y = 1 + Math.floor(rng() * (ROWS - 2))
     if ((x + y) % 2 === 0) continue
     g[key(x, y)] = 0
   }
-  // keep outer border solid
   for (let x = 0; x < COLS; x++) {
     g[key(x, 0)] = 1
     g[key(x, ROWS - 1)] = 1
@@ -60,7 +58,7 @@ export function generateMaze(rng: () => number): Cell[] {
     g[key(0, y)] = 1
     g[key(COLS - 1, y)] = 1
   }
-  // wrap tunnels mid-row (Pac-Man style) — open left/right at mid
+  // wrap tunnels mid-row
   const mid = Math.floor(ROWS / 2)
   if (mid % 2 === 1) {
     g[key(0, mid)] = 0
@@ -76,7 +74,6 @@ export function isOpen(g: Cell[], x: number, y: number) {
   return g[key(x, y)] === 0
 }
 
-/** BFS reachability from (sx,sy). Returns set of reachable path cells. */
 export function reachable(g: Cell[], sx: number, sy: number): Set<number> {
   const out = new Set<number>()
   if (!isOpen(g, sx, sy)) return out
@@ -87,7 +84,6 @@ export function reachable(g: Cell[], sx: number, sy: number): Set<number> {
     for (const d of DIRS) {
       let nx = x + DX[d]
       let ny = y + DY[d]
-      // wrap tunnels
       if (nx < 0) nx = COLS - 1
       if (nx >= COLS) nx = 0
       if (!inBounds(nx, ny) || !isOpen(g, nx, ny)) continue
@@ -100,17 +96,14 @@ export function reachable(g: Cell[], sx: number, sy: number): Set<number> {
   return out
 }
 
-/** Open walls until player can reach at least `minCells` path cells (never trap). */
-export function ensureExits(g: Cell[], px: number, py: number, minCells = 40, rng: () => number): void {
-  // snap player to nearest open if needed
+export function ensureExits(g: Cell[], px: number, py: number, minCells = 48, rng: () => number): void {
   if (!isOpen(g, px, py)) {
     const n = nearestOpen(g, px, py)
     px = n.x
     py = n.y
   }
   let guard = 0
-  while (reachable(g, px, py).size < minCells && guard++ < 400) {
-    // pick a wall adjacent to the reachable set and carve it
+  while (reachable(g, px, py).size < minCells && guard++ < 500) {
     const reach = reachable(g, px, py)
     const candidates: number[] = []
     for (const k of reach) {
@@ -125,8 +118,7 @@ export function ensureExits(g: Cell[], px: number, py: number, minCells = 40, rn
       }
     }
     if (!candidates.length) break
-    const pick = candidates[Math.floor(rng() * candidates.length)]!
-    g[pick] = 0
+    g[candidates[Math.floor(rng() * candidates.length)]!] = 0
   }
 }
 
@@ -158,7 +150,6 @@ export function openNeighbors(g: Cell[], x: number, y: number): Dir[] {
   return out
 }
 
-/** Place power pellets near the four interior corners of the reachable set. */
 export function powerSpots(g: Cell[], px: number, py: number): { x: number; y: number }[] {
   const reach = reachable(g, px, py)
   const corners = [
