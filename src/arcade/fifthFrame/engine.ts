@@ -9,9 +9,9 @@ const LANE_HALF = 0.42
 const BALL_R = 0.055
 const PIN_R = 0.028
 const PIN_MASS = 1
-const BALL_MASS = 2.4
-const FRICTION = 0.55
-const PIN_FRICTION = 1.35
+const BALL_MASS = 2.8
+const FRICTION = 0.42
+const PIN_FRICTION = 1.15
 const SETTLE_SPEED = 0.04
 const SETTLE_NEED_S = 0.55
 const GUTTER_Z = 1.08
@@ -314,7 +314,7 @@ export class FifthFrameEngine {
     const lateral = Math.tan(angle) * 0.55
     // gentle assist toward center if almost straight
     const assist = Math.abs(lateral) < 0.12 ? lateral * 0.55 : lateral * 0.92
-    const vz = 0.55 + power * 1.15 // world units / s
+    const vz = 0.62 + power * 1.28 // world units / s — toy punch
     const vx = assist * vz * 0.85
     this.ball.x = Math.max(-0.18, Math.min(0.18, assist * 0.15))
     this.ball.z = 0.08
@@ -405,7 +405,7 @@ export class FifthFrameEngine {
           // relative velocity along normal
           const rv = (b.vx - p.vx) * nx + (b.vz - p.vz) * nz
           if (rv > 0) continue
-          const e = 0.55
+          const e = 0.72
           const j = (-(1 + e) * rv) / (1 / BALL_MASS + 1 / PIN_MASS)
           const ix = j * nx
           const iz = j * nz
@@ -413,7 +413,7 @@ export class FifthFrameEngine {
           b.vz -= iz / BALL_MASS
           p.vx += ix / PIN_MASS
           p.vz += iz / PIN_MASS
-          p.spin += (Math.random() - 0.5) * 6
+          p.spin += (Math.random() - 0.5) * 9
           // slight ball deflection feel
           b.vx *= 0.92
           b.vz *= 0.96
@@ -590,17 +590,19 @@ function analyzeFlick(samples: FlickSample[], release: FlickSample): { speed: nu
   return { speed, angle }
 }
 
-/** Perspective project world (x,z) → canvas */
+/** Perspective project world (x,z) → canvas.
+ * Low / first-person from behind the ball — long glossy lane taper (Lets Bowl vibe).
+ */
 export function project(x: number, z: number, W: number, H: number) {
-  const t = Math.max(0, Math.min(1.15, z))
-  // near (z=0) large at bottom; far (z=1) small near top
-  const yN = 0.88
-  const yF = 0.16
-  const sN = 0.92
-  const sF = 0.28
+  const t = Math.max(0, Math.min(1.2, z))
+  // near (z=0) huge at bottom; far (z=1) small under neon back wall
+  const yN = 0.92
+  const yF = 0.24
+  const sN = 1.38
+  const sF = 0.17
   const y = H * (yN + (yF - yN) * t)
   const scale = sN + (sF - sN) * t
-  const cx = W * 0.5 + x * W * 0.5 * scale / LANE_HALF
+  const cx = W * 0.5 + (x * W * 0.5 * scale) / LANE_HALF
   return { cx, cy: y, scale, rScale: scale }
 }
 
