@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import LobbyPage from './pages/LobbyPage'
 import CourtVisionPage from './pages/CourtVisionPage'
 import FifthRunPage from './pages/FifthRunPage'
+import StreetShiftPage from './pages/StreetShiftPage'
 import ChallengePage from './pages/ChallengePage'
 import KeyPage from './pages/KeyPage'
 import ClaimPage from './pages/ClaimPage'
@@ -19,6 +20,7 @@ export default function App() {
         <Route path="court-vision" element={<CourtVisionPage />} />
         <Route path="fifth-run" element={<FifthRunPage />} />
         <Route path="fifth-glide" element={<FifthRunPage />} />
+        <Route path="street-shift" element={<StreetShiftPage />} />
         <Route path="challenge/:id" element={<ChallengePage />} />
         <Route path="claim" element={<ClaimPage />} />
         <Route path="key" element={<KeyPage />} />

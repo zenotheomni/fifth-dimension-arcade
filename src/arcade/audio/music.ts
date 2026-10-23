@@ -4,7 +4,7 @@
  *
  * Owner rule: "ZENO 5" (court-vision-theme) plays ONLY inside Court Vision.
  */
-export type MusicScene = 'lobby' | 'court-vision' | 'fifth-run' | 'none'
+export type MusicScene = 'lobby' | 'court-vision' | 'fifth-run' | 'street-shift' | 'none'
 
 export type MusicTrack = {
   id: string
@@ -18,8 +18,8 @@ export type MusicTrack = {
 }
 
 const BASE = import.meta.env.BASE_URL
-/** v24: audio is served immutable (1 year) — bump AV whenever a song file changes */
-const AV = '?v=24'
+/** v25: audio is served immutable (1 year) — bump AV whenever a song file changes */
+const AV = '?v=25'
 
 /** "ZENO 5" — Jenks / Fifth Dimension Imperial. Court Vision only. */
 export const COURT_VISION_THEME: MusicTrack = {
@@ -80,6 +80,20 @@ const fromFile = (x: { id: string; title: string; file: string }): MusicTrack =>
   duckedLevel: FIFTH_GLIDE_THEME.duckedLevel,
 })
 
+
+
+/** Street Shift gameplay — "Eucalyptus Vibes" (Jenks / Fifth Dimension Imperial). */
+export const STREET_SHIFT_THEME: MusicTrack = {
+  id: 'street-shift-theme',
+  title: 'Jenks - Eucalyptus Vibes',
+  sources: [
+    { src: `${BASE}audio/street-shift-theme.m4a${AV}`, type: 'audio/mp4; codecs="mp4a.40.2"' },
+    { src: `${BASE}audio/street-shift-theme.mp3${AV}`, type: 'audio/mpeg' },
+  ],
+  level: 0.38,
+  duckedLevel: 0.22,
+}
+
 /** per-scene rotations (a scene without one just loops its SCENE_TRACKS song) */
 export const SCENE_PLAYLISTS: Partial<Record<MusicScene, MusicTrack[]>> = {
   'fifth-run': [FIFTH_GLIDE_THEME, ...FIFTH_GLIDE_SONGS.map(fromFile)],
@@ -89,6 +103,7 @@ export const SCENE_TRACKS: Record<MusicScene, MusicTrack | null> = {
   lobby: LOBBY_THEME,
   'court-vision': COURT_VISION_THEME,
   'fifth-run': FIFTH_GLIDE_THEME,
+  'street-shift': STREET_SHIFT_THEME,
   none: null,
 }
 
