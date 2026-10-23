@@ -5,7 +5,7 @@
  * only on the seed (never on the player). The path is straight segments joined by 90° corners and
  * T-junctions (`corners`), all addressed by path distance `s`; which way the path bends in 3D is a
  * render concern (render/layout.ts). Kit: low rubble (jump), arches (slide), pipes (either), gaps
- * (jump), missing lanes (narrow sections / edge drop-offs), crashed rockets and crashed satellites
+ * (jump), missing lanes (slim runways Mid/L/R + edge drop-offs), crashed rockets and crashed satellites
  * (switch lanes). Power-up: the Fifth Dimension logo. Collectibles: shooting stars (💫).
  */
 import { hashSeed, mulberry32 } from '../../core/seededRandom'
@@ -194,6 +194,8 @@ export class Track {
   private lastTallLanes: number[] = []
   /** v46: path-distance end of the last tall / car row — next hazard keeps a lane-settle window */
   private lastTallEnd = -1e9
+  /** v47: end of the last slim runway — used to force variety if none for VOID.forceGap */
+  private lastSlimEnd = -1e9
   /** v18 choreographed sequence: queued rows (left→right token triples) */
   private seqQ: Tok[][] = []
   private seqRow = false
@@ -320,24 +322,32 @@ export class Track {
   }
 
   /**
-   * A stretch where lanes are missing: narrow (only the middle lane) or an edge drop-off (one side
-   * lane gone). Starts with a reaction lead after the previous row. Returns false if it doesn't fit.
+   * v47 slim runway: a stretch where side lanes drop away so the player must stay on a one-lane
+   * strip (Mid / Left / Right bias). Rare softer edge-drops keep two lanes. Some slim stretches
+   * hold a jumpable hurdle on the strip. Starts with a react lead; exit respects #90 floors.
    */
   private maybeVoid(s0: number, v: number, L: number): boolean {
-    const p = voidChanceAt(s0)
+    const since = s0 - this.lastSlimEnd
+    const force = s0 >= VOID.startM && since > VOID.forceGap
+    const p = force ? 1 : voidChanceAt(s0)
     if (p <= 0 || this.r() >= p) return false
-    const lead = v * 0.55
-    // v26: never open a hole within ~1.2 s of a jump landing / slide exit
-    const start = q(Math.max(s0 + lead, this.lastBOP + v * HOLE_AFTER_T))
-    const len = q(VOID.minLen + this.r() * (VOID.maxLen - VOID.minLen) * (0.6 + 0.4 * L))
+    // lead: up to two lane switches + react so the strip is reachable (never land→void)
+    const lead = v * Math.max(0.55, MIN_POST_LANE_S + 0.24)
+    // v26/v46: never open a hole inside the post-land / post-BOP react window
+    const start = q(Math.max(s0 + lead, this.lastBOP + v * HOLE_AFTER_T, this.lastJS + v * MIN_POST_LAND_S))
+    const len = q(VOID.minLen + this.r() * (VOID.maxLen - VOID.minLen) * (0.55 + 0.45 * L))
     const end = start + len
-    if (end + v * 1.1 + CORNER.half + 8 > this.nextCornerS) return false
-    // narrow (only the middle left) · edge drop-off (a side lane gone) · centre hole (the MIDDLE lane gone)
-    const kr = this.r()
-    const side = this.r() < 0.5 ? 0 : 2
-    // v18: more one-lane pinches
-    const gone = kr < 0.4 ? [0, 2] : kr < 0.66 ? [side] : [1]
+    if (end + v * Math.max(1.1, MIN_POST_LAND_S + 0.5) + CORNER.half + 8 > this.nextCornerS) return false
+    // v47 bias: slim Mid · slim Left · slim Right · soft edge-drop (2-lane). No centre-hole — that
+    // fights "stay on the strip". Weights ≈ 38 / 25 / 25 / 12.
+    const roll = this.r()
+    let gone: number[]
+    if (roll < 0.38) gone = [0, 2] // slim mid
+    else if (roll < 0.63) gone = [1, 2] // slim left
+    else if (roll < 0.88) gone = [0, 1] // slim right
+    else gone = [this.r() < 0.5 ? 0 : 2] // soft edge-drop
     const open = [0, 1, 2].filter((l) => !gone.includes(l))
+    const oneLane = open.length === 1
     // route check: the open lanes must be reachable in time, else no void here
     const vcells = [0, 1, 2].map((l) => (gone.includes(l) ? 'X' : 'E')) as Cell[]
     const vReach = stepRow(this.reach, this.vEnd, { s0: start, cells: vcells, len: [len, len, len], end }, v)
@@ -350,21 +360,33 @@ export class Track {
     for (const l of open) if (Math.abs(l - this.pathLane) < Math.abs(path - this.pathLane)) path = l
     // v29: a new line in the pinch takes a fresh open lane (rotation), a running one stays nearest
     if (this.lineLeft <= 0) path = this.freshLane(open)
-    // later on: a hurdle or an arch inside the narrow stretch
+    // v47 jumpable on slim: mostly barriers (must jump); pipe / overhead less often. Edge-drops rarer.
     let mid = -1
-    // v18 chokepoint: the pinch holds a hurdle / truss / pipe across every open lane — jump or slide, no dodging
-    if (L > 0.1 && len > 20 && this.r() < 0.7 + 0.3 * L) {
-      mid = q(start + len * (0.4 + this.r() * 0.2))
+    let midKind: 'barrier' | 'overhead' | 'pipe' | null = null
+    // ~45–65% of one-lane slim stretches get a jumpable; edge-drops less often
+    const jumpP = oneLane ? 0.42 + 0.2 * L : 0.2 + 0.15 * L
+    if (L > 0.05 && len > 18 && this.r() < jumpP) {
+      mid = q(start + len * (0.36 + this.r() * 0.28))
       const kr2 = this.r()
-      const kind = kr2 < 0.38 ? 'barrier' : kr2 < 0.62 ? 'overhead' : 'pipe'
-      const ol = kind === 'barrier' ? OB.barrier.len : kind === 'overhead' ? OB.overhead.len : OB.pipe.len
-      for (const l of open) this.addOb(kind, l, mid, ol)
+      // on one-lane slim: ~70% barrier (jump over), ~15% pipe, ~15% overhead
+      midKind = oneLane
+        ? kr2 < 0.7
+          ? 'barrier'
+          : kr2 < 0.85
+            ? 'pipe'
+            : 'overhead'
+        : kr2 < 0.45
+          ? 'barrier'
+          : kr2 < 0.7
+            ? 'overhead'
+            : 'pipe'
+      const ol = midKind === 'barrier' ? OB.barrier.len : midKind === 'overhead' ? OB.overhead.len : OB.pipe.len
+      for (const l of open) this.addOb(midKind, l, mid, ol)
     }
     {
       let r = vReach
-      if (mid > 0) {
-        const lk = this.obstacles[this.obstacles.length - 1].kind
-        const tk = lk === 'barrier' ? 'B' : lk === 'pipe' ? 'P' : 'O'
+      if (mid > 0 && midKind) {
+        const tk = midKind === 'barrier' ? 'B' : midKind === 'pipe' ? 'P' : 'O'
         const ml = tk === 'B' ? OB.barrier.len : tk === 'P' ? OB.pipe.len : OB.overhead.len
         const mc = [0, 1, 2].map((l) => (gone.includes(l) ? 'X' : tk)) as Cell[]
         r = stepRow(r, start, { s0: mid, cells: mc, len: [ml, ml, ml], end: mid + ml }, v)
@@ -396,7 +418,10 @@ export class Track {
     this.pathLane = path
     this.prevEnd = end
     this.starFloor = end + STAR_SPACING
-    this.cursor = q(end + Math.max(8, v * 0.6))
+    // v47/#90: exit react window — post-land if a jumpable sat on the strip, else MIN_WAVE_S
+    const exitS = midKind ? Math.max(MIN_POST_LAND_S, MIN_WAVE_S) : Math.max(MIN_WAVE_S, 0.55)
+    this.cursor = q(end + Math.max(v * exitS, 8))
+    this.lastSlimEnd = end
     this.rows++
     return true
   }
