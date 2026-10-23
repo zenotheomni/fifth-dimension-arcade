@@ -147,12 +147,21 @@ export const CORNER = {
 export const PATH_HALF = 2.25
 
 /**
- * Narrow sections / edge drop-offs: a lane of the path simply isn't there for `len` metres (void).
- * Narrow = both side lanes missing; drop-off = one side lane missing.
+ * Slim runways / edge drop-offs (v47): a lane of the path simply isn't there for `len` metres (void).
+ * Most voids are one-lane slim strips biased Mid / Left / Right; a few softer edge-drops keep 2 lanes.
+ * startM ≈ first 15 s at early speed stays light (no slim yet).
  */
-export const VOID = { startM: 260, pMax: 0.32, fullM: 2000, minLen: 18, maxLen: 44 }
+export const VOID = {
+  startM: 450, // ≈ first 15 s light — no slim yet
+  pMax: 0.48,
+  fullM: 1800,
+  minLen: 20,
+  maxLen: 48,
+  /** if no slim for this many metres after startM, next maybeVoid is forced (when it fits) */
+  forceGap: 400,
+}
 export const voidChanceAt = (s: number) =>
-  s < VOID.startM ? 0 : s >= VOID.fullM ? VOID.pMax : 0.06 + ((VOID.pMax - 0.06) * (s - VOID.startM)) / (VOID.fullM - VOID.startM)
+  s < VOID.startM ? 0 : s >= VOID.fullM ? VOID.pMax : 0.08 + ((VOID.pMax - 0.08) * (s - VOID.startM)) / (VOID.fullM - VOID.startM)
 
 /**
  * Temple Run continue: a life lost plays the fall / crash for DOWN_S seconds (no forward motion),
