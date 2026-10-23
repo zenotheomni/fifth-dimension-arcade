@@ -17,7 +17,7 @@ export type Row = { s0: number; cells: Cell[]; len: number[]; end: number }
 export const SWITCH_S = LANE_W / LANE_SPEED
 // v30: human timing, not frame-perfect — every lane change carries a real reaction allowance, and a
 // jump / slide needs a take-off WINDOW (not a single instant), so dense clusters stay achievable
-export const REACT_S = 0.2
+export const REACT_S = 0.28 // v46: human react floor aligned with track MIN_WAVE_S / post-land
 /** seconds of take-off window a jump / slide must leave (timing slack) */
 export const WIN_S = 0.06
 /** seconds between two separate inputs (swipe → swipe, swipe → jump, landing → jump) */
