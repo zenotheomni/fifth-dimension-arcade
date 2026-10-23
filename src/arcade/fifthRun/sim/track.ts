@@ -123,6 +123,16 @@ const q = (x: number) => Math.round(x * 100) / 100
 /** v26: seconds of travel kept hole-free after a jump / slide obstacle, and clear after a hole before one */
 const HOLE_AFTER_T = 1.2
 const HOLE_BEFORE_T = 0.45
+/**
+ * v46: hard human react floors. Late-game pressure may tighten *toward* these, never below them.
+ * Metres = speed × seconds, so the window scales automatically with the speed ramp.
+ */
+/** Minimum clear travel time between any two obstacle waves (s) */
+const MIN_WAVE_S = 0.36
+/** After jump / slide / gap: runway so landing isn't instant-death into the next hazard */
+const MIN_POST_LAND_S = 0.42
+/** After a tall-block / car row (forced lane change): settle + react before the next hazard */
+const MIN_POST_LANE_S = 0.34
 /** v28: below this level (first ~40 s) stars stay on the easy line; after it they sit on jumps / slides */
 const STAR_CHOICE_L = 0.75
 /** v27: main obstacle type of a pattern (first non-empty, holes grouped) */
@@ -182,6 +192,8 @@ export class Track {
   private lookBag: Record<string, number[]> = {}
   /** v36: lanes that held a tall blocker on the previous row (space adjacent talls) */
   private lastTallLanes: number[] = []
+  /** v46: path-distance end of the last tall / car row — next hazard keeps a lane-settle window */
+  private lastTallEnd = -1e9
   /** v18 choreographed sequence: queued rows (left→right token triples) */
   private seqQ: Tok[][] = []
   private seqRow = false
@@ -686,19 +698,30 @@ export class Track {
     // v26 hole buffer: no gap / pothole within ~1.2 s of travel after a jump landing or slide exit,
     // and a little room after a hole before the next jump / slide. Push the row back; if that would
     // crowd the corner, turn its holes into hurdles / blockers instead.
+    // v46: ALSO keep a react window after the previous jump/slide landing or tall-blocker lane-change
+    // before ANY next hazard (not only holes) — kills land→instant-death clusters.
     {
       const lim = this.nextCornerS - CORNER.half - v * CORNER.preS - 8
       const hasHole = toks.some((t) => t === 'G' || t === 'H')
       const hasBOP = toks.some((t) => t === 'B' || t === 'O' || t === 'P')
+      const hasHazard = toks.some((t) => t !== 'E')
       let want = s0
       if (hasHole) want = Math.max(want, q(this.lastBOP + v * HOLE_AFTER_T))
       if (hasBOP) want = Math.max(want, q(this.lastHole + v * HOLE_BEFORE_T))
+      if (hasHazard) {
+        want = Math.max(want, q(this.lastJS + v * MIN_POST_LAND_S))
+        want = Math.max(want, q(this.lastTallEnd + v * MIN_POST_LANE_S))
+      }
       if (want > s0) {
         if (want <= lim) s0 = want
         else {
           // keep the row's challenge: a gap becomes a hurdle, a pothole a lane blocker
           for (let i = 0; i < 3; i++) if (toks[i] === 'G') toks[i] = 'B'; else if (toks[i] === 'H') toks[i] = 'K'
           if (hasBOP) s0 = Math.max(s0, Math.min(lim, q(this.lastHole + v * HOLE_BEFORE_T)))
+          if (hasHazard) {
+            s0 = Math.max(s0, Math.min(lim, q(this.lastJS + v * MIN_POST_LAND_S)))
+            s0 = Math.max(s0, Math.min(lim, q(this.lastTallEnd + v * MIN_POST_LANE_S)))
+          }
         }
       }
     }
@@ -809,6 +832,7 @@ export class Track {
     }
 
     this.lastTallLanes = [0, 1, 2].filter((l) => toks[l] === 'K')
+    if (this.lastTallLanes.length) this.lastTallEnd = Math.max(this.lastTallEnd, rowEnd)
 
     // ── stars: corridor line in the path lane leading into this row, then through/over it ──
     const options = [0, 1, 2].filter((l) => passable(toks[l]))
@@ -918,30 +942,39 @@ export class Track {
     this.pathLane = path
     this.prevEnd = rowEnd
 
-    // ── spacing to next wave: reaction window shrinks; density ramps like Surfers ──
+    // ── spacing to next wave (v46): late pressure tightens toward a HARD react floor, never under it ──
+    // Metres = v × Tq, so the window scales with the speed ramp. Early warm-up still much roomier.
     const base = 0.84 - 0.54 * L // v22: a touch roomier early (speeds −10% shortened jumps)
       * (1 - MID_TIGHT * Math.min(1, Math.max(0, (L - 0.7) / 0.3))) // v32: mid / late a little tighter, warm-up untouched
     // warm-up: up to ~2.9× the gap between waves at the start line, tapering by WARM_M; a little
     // extra breathing room while the level is still low (fades out as L → 1)
-    // after top speed, waves keep tightening (density-only difficulty); the validator still guards every row
+    // after top speed, waves keep tightening (density-only difficulty) but never below MIN_WAVE_S
     const P = pressureAt(s0)
-    const T = Math.max(0.24 - 0.12 * P, base * (0.7 + 0.35 * this.r()) * (1 + 1.6 * W + 0.3 * (1 - L)) * (1 - P))
+    const T = Math.max(MIN_WAVE_S, Math.max(0.24 - 0.12 * P, base * (0.7 + 0.35 * this.r()) * (1 + 1.6 * W + 0.3 * (1 - L)) * (1 - P)))
     // sequence rows: a fixed reaction window in seconds (≈ lane switch + reaction), so metres scale with speed
-    let Tq = this.seqRow ? 0.62 + 0.15 * (1 - L) - 0.06 * P : T // v32: late sequences a touch quicker
-    // v27 spacing: most rows keep a minimum reaction gap; back-to-back rows only now and then, never
-    // three tight rows running; an occasional empty breather
+    let Tq = this.seqRow ? Math.max(MIN_WAVE_S, 0.62 + 0.15 * (1 - L) - 0.06 * P) : T // v32: late sequences a touch quicker
+    // v27/v46 spacing: most rows keep a minimum reaction gap; "tight" runs still respect MIN_WAVE_S
     if (!this.seqRow) {
-      // v28: late in a run (post-cap pressure) back-to-back rows come more often, up to 2 tight in a row
-      const tight = this.tightRun < (P > 0.6 ? 3 : P > 0.3 ? 2 : 1) && this.r() < 0.18 + 0.1 * L + 0.7 * P
-      const minT = (0.52 - 0.14 * L) * Math.max(0, 1 - 1.1 * P)
-      if (tight) this.tightRun++
-      else {
+      // late denser, but max 2 tight in a row, and every gap stays ≥ MIN_WAVE_S
+      const tight = this.tightRun < (P > 0.3 ? 2 : 1) && this.r() < 0.14 + 0.08 * L + 0.45 * P
+      // floor that pressure cannot erase (pre-v46 minT could collapse to 0)
+      const minT = Math.max(MIN_WAVE_S, (0.52 - 0.14 * L) * Math.max(0.4, 1 - 0.55 * P))
+      if (tight) {
+        this.tightRun++
+        Tq = Math.max(Tq, MIN_WAVE_S)
+      } else {
         this.tightRun = 0
         Tq = Math.max(Tq, minT)
       }
       if (W === 0 && this.r() < 0.07 - 0.03 * P) Tq += 1.3 + this.r() * 0.9
     }
-    this.cursor = q(rowEnd + Math.max(rocketRow ? Math.max(9, v * 0.5) : 5.2, v * Tq))
+    // post-action react: landing after jump/slide, or settle after a forced lane change
+    const hadJumpSlide = toks.some((t) => t === 'B' || t === 'O' || t === 'P' || t === 'G')
+    const hadLaneForce = toks.some((t) => t === 'K')
+    if (hadJumpSlide) Tq = Math.max(Tq, MIN_POST_LAND_S)
+    else if (hadLaneForce) Tq = Math.max(Tq, MIN_POST_LANE_S)
+    // metre floor scales with speed (old absolute 5.2 m was ~0.1 s at vmax — unplayable)
+    this.cursor = q(rowEnd + Math.max(rocketRow ? Math.max(9, v * 0.5) : v * MIN_WAVE_S, v * Tq))
     this.rows++
   }
 }
