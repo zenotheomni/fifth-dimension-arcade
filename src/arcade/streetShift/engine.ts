@@ -284,11 +284,37 @@ export class StreetShiftEngine {
     const px = Math.round(this.px)
     const py = Math.round(this.py)
     const keptStars = new Set<number>()
+    // Full regen — real corridor rewrite (not a cosmetic pulse).
     this.grid = generateMaze(this.rng)
+    // Extra chaos punches so successive mazes look obviously different.
+    const chaos = Math.floor(COLS * ROWS * 0.08)
+    for (let i = 0; i < chaos; i++) {
+      const x = 1 + Math.floor(this.rng() * (COLS - 2))
+      const y = 1 + Math.floor(this.rng() * (ROWS - 2))
+      if (x === 0 || y === 0 || x === COLS - 1 || y === ROWS - 1) continue
+      const k = key(x, y)
+      this.grid[k] = this.grid[k] === 1 ? 0 : 1
+    }
+    // keep border solid except wrap tunnels
+    for (let x = 0; x < COLS; x++) {
+      this.grid[key(x, 0)] = 1
+      this.grid[key(x, ROWS - 1)] = 1
+    }
+    for (let y = 0; y < ROWS; y++) {
+      this.grid[key(0, y)] = 1
+      this.grid[key(COLS - 1, y)] = 1
+    }
+    const mid = Math.floor(ROWS / 2)
+    if (mid % 2 === 1) {
+      this.grid[key(0, mid)] = 0
+      this.grid[key(COLS - 1, mid)] = 0
+      this.grid[key(1, mid)] = 0
+      this.grid[key(COLS - 2, mid)] = 0
+    }
     const n = nearestOpen(this.grid, px, py)
     this.px = n.x
     this.py = n.y
-    ensureExits(this.grid, n.x, n.y, 50, this.rng)
+    ensureExits(this.grid, n.x, n.y, 55, this.rng)
     const reach = reachable(this.grid, n.x, n.y)
     for (const k of this.stars) {
       if (reach.has(k)) keptStars.add(k)
@@ -538,43 +564,56 @@ export class StreetShiftEngine {
     }
   }
 
+  private pickGhostDir(g: Ghost, tx: number, ty: number) {
+    const cx = snap(g.x)
+    const cy = snap(g.y)
+    let opts = openNeighbors(this.grid, cx, cy)
+    const noRev = opts.filter((d) => d !== OPP[g.dir])
+    if (noRev.length) opts = noRev
+    if (!opts.length) return
+    let best = opts[0]!
+    let bestScore = Infinity
+    for (const d of opts) {
+      let nx = cx + DX[d]
+      let ny = cy + DY[d]
+      if (nx < 0) nx = COLS - 1
+      if (nx >= COLS) nx = 0
+      const dist = (nx - tx) ** 2 + (ny - ty) ** 2
+      const score = g.mode === 'frightened' ? -dist : dist
+      const j = this.rng() * 0.02
+      if (score + j < bestScore) {
+        bestScore = score + j
+        best = d
+      }
+    }
+    g.dir = best
+  }
+
   private stepActor(g: Ghost, step: number, tx: number, ty: number) {
-    if (atCenter(g.x, 0.18) && atCenter(g.y, 0.18)) {
+    // Pac-Man style: decide at cell centers using INTEGER grid coords (floats froze ghosts).
+    if (atCenter(g.x, 0.28) && atCenter(g.y, 0.28)) {
       g.x = snap(g.x)
       g.y = snap(g.y)
-      let opts = openNeighbors(this.grid, g.x, g.y)
-      const noRev = opts.filter((d) => d !== OPP[g.dir])
-      if (noRev.length) opts = noRev
-      if (!opts.length) return
-      let best = opts[0]!
-      let bestScore = Infinity
-      for (const d of opts) {
-        let nx = g.x + DX[d]
-        let ny = g.y + DY[d]
-        if (nx < 0) nx = COLS - 1
-        if (nx >= COLS) nx = 0
-        const dist = (nx - tx) ** 2 + (ny - ty) ** 2
-        const score = g.mode === 'frightened' ? -dist : dist
-        const j = this.rng() * 0.02
-        if (score + j < bestScore) {
-          bestScore = score + j
-          best = d
-        }
-      }
-      g.dir = best
+      this.pickGhostDir(g, tx, ty)
+    }
+    let lookX = snap(g.x + DX[g.dir] * 0.55)
+    const lookY = snap(g.y + DY[g.dir] * 0.55)
+    if (lookX < 0) lookX = COLS - 1
+    if (lookX >= COLS) lookX = 0
+    if (!isOpen(this.grid, lookX, lookY)) {
+      g.x = snap(g.x)
+      g.y = snap(g.y)
+      this.pickGhostDir(g, tx, ty)
+      lookX = snap(g.x + DX[g.dir] * 0.55)
+      const ly = snap(g.y + DY[g.dir] * 0.55)
+      let lx = lookX
+      if (lx < 0) lx = COLS - 1
+      if (lx >= COLS) lx = 0
+      if (!isOpen(this.grid, lx, ly)) return
     }
     let nx = g.x + DX[g.dir] * step
     let ny = g.y + DY[g.dir] * step
     nx = wrapX(nx)
-    let cx = snap(g.x + DX[g.dir] * 0.55)
-    const cy = snap(g.y + DY[g.dir] * 0.55)
-    if (cx < 0) cx = COLS - 1
-    if (cx >= COLS) cx = 0
-    if (!isOpen(this.grid, cx, cy)) {
-      g.x = snap(g.x)
-      g.y = snap(g.y)
-      return
-    }
     if (g.dir === 1 || g.dir === 3) {
       g.x = nx
       g.y = snap(g.y)

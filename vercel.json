@@ -12,6 +12,7 @@
     { "source": "/arcade/fifth-glide", "destination": "/arcade/index.html" },
     { "source": "/arcade/street-shift", "destination": "/arcade/index.html" },
     { "source": "/arcade/nova-slide", "destination": "/arcade/index.html" },
+    { "source": "/arcade/nova-5", "destination": "/arcade/index.html" },
     { "source": "/arcade/challenge/:id", "destination": "/api/challenge-page?id=:id" },
     { "source": "/arcade/claim", "destination": "/arcade/index.html" },
     { "source": "/arcade/key", "destination": "/arcade/index.html" },

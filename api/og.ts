@@ -24,8 +24,9 @@ type ChallengeView = {
 const GAME_TITLES: Record<string, string> = {
   'court-vision': 'COURT VISION',
   'fifth-run': 'FIFTH GLIDE',
-  'street-shift': 'NOVA-SLIDE',
-  'nova-slide': 'NOVA-SLIDE',
+  'street-shift': 'NOVA 5',
+  'nova-slide': 'NOVA 5',
+  'nova-5': 'NOVA 5',
 }
 
 async function loadChallenge(id: string): Promise<ChallengeView | null> {
@@ -76,7 +77,7 @@ async function render(req: Request): Promise<ImageResponse> {
   const tagline =
     c?.game_id === 'fifth-run'
       ? 'Same run. Outrun the dark.'
-      : c?.game_id === 'street-shift' || c?.game_id === 'nova-slide'
+      : c?.game_id === 'street-shift' || c?.game_id === 'nova-slide' || c?.game_id === 'nova-5'
         ? 'Same maze. Same shifts.'
         : 'Same court. 60 seconds.'
   const bodyText = `${line} ${tagline} PTS`

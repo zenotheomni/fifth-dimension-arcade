@@ -46,15 +46,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const fifthRun = gameId === 'fifth-run'
-  const novaSlide = gameId === 'street-shift' || gameId === 'nova-slide'
-  const gameTitle = fifthRun ? 'FIFTH GLIDE' : novaSlide ? 'NOVA-SLIDE' : 'COURT VISION'
+  const novaSlide = gameId === 'street-shift' || gameId === 'nova-slide' || gameId === 'nova-5'
+  const gameTitle = fifthRun ? 'FIFTH GLIDE' : novaSlide ? 'NOVA 5' : 'COURT VISION'
   const title = handle
     ? `${handle} scored ${score} in ${gameTitle}. Can you beat it?`
     : `${gameTitle} Challenge · Fifth Floor Arcade`
   const description = fifthRun
     ? 'FIFTH GLIDE · same road, same stars, same dark energy on your heels. Run farther. Tap to play — no download.'
     : novaSlide
-      ? 'NOVA-SLIDE · Pac-Man DNA in the Fifth Dimension. Same maze, same shifts. Tap to play — no download.'
+      ? 'NOVA 5 · Pac-Man DNA in the Fifth Dimension. Same maze, same shifts. Tap to play — no download.'
       : 'Same court, same conditions. 60 seconds. Tap to play — no download.'
   const image = `${origin}/api/og?id=${encodeURIComponent(id)}${score != null ? `&s=${score}` : ''}`
   const url = id ? challengePublicUrl(id) : `${origin}/arcade`

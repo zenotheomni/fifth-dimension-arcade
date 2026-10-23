@@ -43,7 +43,7 @@ export function generateMaze(rng: () => number): Cell[] {
     stack.push([nx, ny])
   }
   // punch loops — dimensional corridors, not a perfect tree
-  const punches = Math.floor(COLS * ROWS * 0.1)
+  const punches = Math.floor(COLS * ROWS * 0.14)
   for (let i = 0; i < punches; i++) {
     const x = 1 + Math.floor(rng() * (COLS - 2))
     const y = 1 + Math.floor(rng() * (ROWS - 2))
