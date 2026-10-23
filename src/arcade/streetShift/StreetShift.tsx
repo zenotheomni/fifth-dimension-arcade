@@ -327,7 +327,7 @@ export default function StreetShift() {
             <img src={BRAND_LOGO} alt="" width={56} height={56} className="ss-howto__logo" />
             <p className="ss-howto__eyebrow">How to play</p>
             <h2 className="ss-howto__title">NOVA 5</h2>
-            <p className="ss-howto__tag">Fifth Dimension maze chase. Soft neon corridors. Void drones hunt you.</p>
+            <p className="ss-howto__tag">Fifth Dimension maze chase. Neon light trails. Astronaut vs void drones.</p>
             <section>
               <h3>Controls</h3>
               <ul>
@@ -343,7 +343,7 @@ export default function StreetShift() {
               <h3>Rules</h3>
               <ul>
                 <li>
-                  <b>·</b> Collect star motes. Clear the board to keep the run going.
+                  <b>·</b> Collect neon light trails. Clear the board to keep the run going.
                 </li>
                 <li>
                   <img src={BRAND_LOGO} alt="" width={22} height={22} className="ss-inline-logo" />
@@ -361,7 +361,7 @@ export default function StreetShift() {
               <h3>Scoring</h3>
               <ul>
                 <li>
-                  <b>Motes</b> +10 · <b>Tags</b> 200→1600 · <b>Time</b> bonus at the end
+                  <b>Neon lights</b> +10 · <b>Tags</b> 200→1600 · <b>Time</b> bonus at the end
                 </li>
               </ul>
             </section>
@@ -382,7 +382,7 @@ export default function StreetShift() {
           </div>
           <div className="ss-end__stats">
             <span>
-              <b>{ended.stars}</b> motes
+              <b>{ended.stars}</b> lights
             </span>
             <span>
               <b>{ended.tags}</b> tags
@@ -501,81 +501,138 @@ function paint(
       ? 'rgba(255, 200, 60, 0.22)'
       : 'rgba(123, 63, 228, 0.28)'
 
-  // Soft neon corridor edges — not Minecraft boxes
+  // Dark void mass for walls (no block cells) + continuous neon EDGE ribbons
   for (let y = 0; y < ROWS; y++) {
     for (let x = 0; x < COLS; x++) {
       const s = wallStrength(x, y)
-      if (s < 0.04) continue
+      if (s < 0.35) continue
       const px = ox + x * cell
       const py = oy + y * cell
-      const inset = cell * (0.18 + (1 - s) * 0.22)
-      const rw = cell - inset * 2
-      const rh = cell - inset * 2
-      const rr = Math.max(2.5, cell * 0.28)
-      ctx.save()
-      ctx.globalAlpha = 0.35 + 0.55 * s
-      // soft fill — translucent ink, not solid brick
-      const g = ctx.createRadialGradient(px + cell / 2, py + cell / 2, 0, px + cell / 2, py + cell / 2, cell * 0.55)
-      g.addColorStop(0, glowCol)
-      g.addColorStop(1, 'rgba(10, 6, 24, 0.55)')
-      ctx.fillStyle = g
-      roundRect(ctx, px + inset * 0.55, py + inset * 0.55, cell - inset * 1.1, cell - inset * 1.1, rr)
-      ctx.fill()
-      ctx.strokeStyle = strokeCol
-      ctx.lineWidth = Math.max(1.2, cell * 0.09 * (0.55 + 0.45 * s))
-      ctx.shadowColor = strokeCol
-      ctx.shadowBlur = cell * 0.22 * s
-      roundRect(ctx, px + inset, py + inset, rw, rh, rr * 0.85)
-      ctx.stroke()
-      ctx.restore()
+      ctx.fillStyle = `rgba(6, 4, 16, ${0.55 * s})`
+      ctx.fillRect(px, py, cell + 0.5, cell + 0.5)
     }
   }
 
-  // Floor path wash on open cells (depth)
+  // Corridor path wash — soft floor glow, not empty open blocks
   ctx.save()
   for (let y = 0; y < ROWS; y++) {
     for (let x = 0; x < COLS; x++) {
-      if (wallStrength(x, y) > 0.55) continue
-      const px = ox + x * cell
-      const py = oy + y * cell
-      ctx.fillStyle = 'rgba(0, 200, 196, 0.035)'
-      ctx.fillRect(px + cell * 0.18, py + cell * 0.18, cell * 0.64, cell * 0.64)
+      if (wallStrength(x, y) > 0.45) continue
+      const cx = ox + (x + 0.5) * cell
+      const cy = oy + (y + 0.5) * cell
+      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, cell * 0.55)
+      g.addColorStop(0, power ? 'rgba(255, 200, 60, 0.06)' : 'rgba(0, 200, 196, 0.07)')
+      g.addColorStop(1, 'rgba(0,0,0,0)')
+      ctx.fillStyle = g
+      ctx.fillRect(ox + x * cell, oy + y * cell, cell, cell)
     }
   }
   ctx.restore()
 
-  // Star motes — soft glowing dots (not classic Pac pellets)
+  // Neon light ribbons along wall↔open edges (energy lines, not box outlines)
+  const isWallish = (x: number, y: number) => {
+    if (x < 0 || y < 0 || x >= COLS || y >= ROWS) return true
+    return wallStrength(x, y) > 0.45
+  }
+  ctx.save()
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      if (!isWallish(x, y)) continue
+      const px = ox + x * cell
+      const py = oy + y * cell
+      const segs: [number, number, number, number][] = []
+      if (!isWallish(x, y - 1)) segs.push([px, py, px + cell, py])
+      if (!isWallish(x, y + 1)) segs.push([px, py + cell, px + cell, py + cell])
+      if (!isWallish(x - 1, y)) segs.push([px, py, px, py + cell])
+      if (!isWallish(x + 1, y)) segs.push([px + cell, py, px + cell, py + cell])
+      for (const [x0, y0, x1, y1] of segs) {
+        ctx.strokeStyle = glowCol
+        ctx.lineWidth = Math.max(3, cell * 0.22)
+        ctx.shadowColor = strokeCol
+        ctx.shadowBlur = cell * 0.45
+        ctx.globalAlpha = 0.35 + 0.25 * pulse
+        ctx.beginPath()
+        ctx.moveTo(x0, y0)
+        ctx.lineTo(x1, y1)
+        ctx.stroke()
+        ctx.strokeStyle = strokeCol
+        ctx.lineWidth = Math.max(1.4, cell * 0.08)
+        ctx.shadowBlur = cell * 0.2
+        ctx.globalAlpha = 0.85
+        ctx.beginPath()
+        ctx.moveTo(x0, y0)
+        ctx.lineTo(x1, y1)
+        ctx.stroke()
+      }
+    }
+  }
+  ctx.restore()
+
+  // Collectibles = neon LIGHT STRIPS / energy filaments (not Pac dots)
   for (const k of e.stars) {
     const x = k % COLS
     const y = (k / COLS) | 0
     const cx = ox + (x + 0.5) * cell
     const cy = oy + (y + 0.5) * cell
-    const beat = 0.85 + 0.15 * Math.sin(t * 4 + k * 0.4)
-    const r = Math.max(1.6, cell * 0.1) * beat
+    const openH = !isWallish(x - 1, y) || !isWallish(x + 1, y)
+    const openV = !isWallish(x, y - 1) || !isWallish(x, y + 1)
+    const horiz = openH && (!openV || (k + y) % 2 === 0)
+    const beat = 0.82 + 0.18 * Math.sin(t * 5 + k * 0.35)
+    const len = cell * (0.42 + 0.08 * beat)
+    const thick = Math.max(1.8, cell * 0.09 * beat)
     ctx.save()
-    ctx.shadowColor = 'rgba(246, 240, 216, 0.7)'
-    ctx.shadowBlur = cell * 0.25
-    ctx.fillStyle = 'rgba(246, 240, 216, 0.92)'
+    ctx.lineCap = 'round'
+    ctx.shadowColor = power ? 'rgba(255, 200, 60, 0.85)' : 'rgba(0, 220, 210, 0.9)'
+    ctx.shadowBlur = cell * 0.4
+    ctx.strokeStyle = power ? 'rgba(255, 220, 120, 0.95)' : 'rgba(180, 255, 250, 0.95)'
+    ctx.lineWidth = thick
     ctx.beginPath()
-    ctx.arc(cx, cy, r, 0, Math.PI * 2)
-    ctx.fill()
+    if (horiz) {
+      ctx.moveTo(cx - len / 2, cy)
+      ctx.lineTo(cx + len / 2, cy)
+    } else {
+      ctx.moveTo(cx, cy - len / 2)
+      ctx.lineTo(cx, cy + len / 2)
+    }
+    ctx.stroke()
+    // hot core
+    ctx.shadowBlur = 0
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)'
+    ctx.lineWidth = Math.max(0.8, thick * 0.35)
+    ctx.beginPath()
+    if (horiz) {
+      ctx.moveTo(cx - len * 0.28, cy)
+      ctx.lineTo(cx + len * 0.28, cy)
+    } else {
+      ctx.moveTo(cx, cy - len * 0.28)
+      ctx.lineTo(cx, cy + len * 0.28)
+    }
+    ctx.stroke()
     ctx.restore()
   }
 
-  // Power orbs — brand logo in soft gold halo
+  // Power nodes — brand logo in soft gold halo
   for (const k of e.powers) {
     const x = k % COLS
     const y = (k / COLS) | 0
     const cx = ox + (x + 0.5) * cell
     const cy = oy + (y + 0.5) * cell
     const beat = 0.88 + 0.12 * Math.sin(t * 6.5)
-    const s = cell * 0.7 * beat
+    const s = cell * 0.72 * beat
     ctx.save()
-    ctx.shadowColor = 'rgba(255, 200, 60, 0.65)'
-    ctx.shadowBlur = cell * 0.45
+    ctx.shadowColor = 'rgba(255, 200, 60, 0.75)'
+    ctx.shadowBlur = cell * 0.55
+    // energy ring
+    ctx.strokeStyle = `rgba(255, 200, 60, ${0.55 + 0.35 * beat})`
+    ctx.lineWidth = Math.max(2, cell * 0.07)
+    ctx.beginPath()
+    ctx.arc(cx, cy, s * 0.5, 0, Math.PI * 2)
+    ctx.stroke()
     if (logo && logo.complete && logo.naturalWidth) {
       ctx.beginPath()
-      ctx.arc(cx, cy, s * 0.46, 0, Math.PI * 2)
+      ctx.arc(cx, cy, s * 0.42, 0, Math.PI * 2)
       ctx.clip()
       ctx.drawImage(logo, cx - s / 2, cy - s / 2, s, s)
     } else {
@@ -585,126 +642,50 @@ function paint(
       ctx.fill()
     }
     ctx.restore()
-    ctx.strokeStyle = `rgba(255, 200, 60, ${0.45 + 0.4 * beat})`
-    ctx.lineWidth = Math.max(1.4, cell * 0.055)
-    ctx.beginPath()
-    ctx.arc(cx, cy, s * 0.48, 0, Math.PI * 2)
-    ctx.stroke()
   }
 
-  // VOID DRONES — mini UFOs (Glide family), not cartoon ghosts
+  // VOID DRONES — bigger, clearer mini UFOs
   for (const g of e.ghosts) {
-    const cx = ox + (g.x + 0.5) * cell
-    const cy = oy + (g.y + 0.5) * cell
-    const r = cell * 0.34
-    if (g.mode === 'eaten') {
-      // wreckage lights
-      ctx.fillStyle = 'rgba(246, 244, 239, 0.85)'
-      ctx.beginPath()
-      ctx.arc(cx - r * 0.22, cy, r * 0.12, 0, Math.PI * 2)
-      ctx.arc(cx + r * 0.22, cy, r * 0.12, 0, Math.PI * 2)
-      ctx.fill()
-      continue
-    }
-    const fright = g.mode === 'frightened'
-    const blink = fright && e.powerT < 2.2 && Math.floor(e.powerT * 7) % 2 === 0
-    const body = fright ? (blink ? '#f6f4ef' : '#7b3fe4') : g.color
-    const hover = Math.sin(t * 5 + g.id) * cell * 0.04
-
-    // soft thruster glow
-    ctx.save()
-    ctx.globalAlpha = 0.35
-    ctx.fillStyle = body
-    ctx.beginPath()
-    ctx.ellipse(cx, cy + r * 0.55 + hover, r * 0.55, r * 0.18, 0, 0, Math.PI * 2)
-    ctx.fill()
-    ctx.restore()
-
-    // saucer disc
-    ctx.save()
-    ctx.shadowColor = body
-    ctx.shadowBlur = cell * 0.35
-    ctx.fillStyle = body
-    ctx.beginPath()
-    ctx.ellipse(cx, cy + hover, r * 1.05, r * 0.42, 0, 0, Math.PI * 2)
-    ctx.fill()
-    // dome
-    const dome = fright ? 'rgba(200, 180, 255, 0.9)' : 'rgba(230, 245, 255, 0.88)'
-    ctx.fillStyle = dome
-    ctx.beginPath()
-    ctx.ellipse(cx, cy - r * 0.12 + hover, r * 0.48, r * 0.38, 0, Math.PI, 0)
-    ctx.fill()
-    // rim lights
-    if (!fright) {
-      ctx.fillStyle = 'rgba(255,255,255,0.85)'
-      for (let i = -2; i <= 2; i++) {
-        ctx.beginPath()
-        ctx.arc(cx + i * r * 0.32, cy + r * 0.08 + hover, r * 0.07, 0, Math.PI * 2)
-        ctx.fill()
-      }
-    }
-    ctx.restore()
+    drawVoidDrone(ctx, ox + (g.x + 0.5) * cell, oy + (g.y + 0.5) * cell, cell, g, e.powerT, t)
   }
 
-  // Runner — soft cyan energy orb (NOT Pac yellow pizza)
+  // Fifth Floor astronaut runner (top-down) — NOT a ball
   {
     const cx = ox + (e.px + 0.5) * cell
     const cy = oy + (e.py + 0.5) * cell
-    const r = cell * 0.36
     const flash = e.invulnT > 0 && Math.floor(e.invulnT * 12) % 2 === 0
     if (!flash) {
-      const pulseR = 0.92 + 0.08 * Math.sin(t * 10)
+      // neon boot trail
       ctx.save()
-      // trail wash
       for (let i = e.pTrail.length - 1; i >= 0; i--) {
         const tr = e.pTrail[i]!
         const tx = ox + (tr.x + 0.5) * cell
         const ty = oy + (tr.y + 0.5) * cell
-        const a = ((i + 1) / e.pTrail.length) * 0.22
+        const a = ((i + 1) / Math.max(1, e.pTrail.length)) * 0.35
         ctx.globalAlpha = a
-        ctx.fillStyle = power ? '#ffc83c' : '#00c8c4'
+        ctx.strokeStyle = power ? '#ffc83c' : '#00c8c4'
+        ctx.lineWidth = Math.max(2, cell * 0.08 * ((i + 1) / e.pTrail.length))
+        ctx.lineCap = 'round'
         ctx.beginPath()
-        ctx.arc(tx, ty, r * 0.45 * ((i + 1) / e.pTrail.length), 0, Math.PI * 2)
-        ctx.fill()
+        ctx.moveTo(tx, ty)
+        ctx.lineTo(tx + 0.01, ty)
+        ctx.stroke()
       }
-      ctx.globalAlpha = 1
-      const core = power ? '#ffc83c' : '#7ff5f1'
-      const rim = power ? '#ff8c28' : '#00c8c4'
-      ctx.shadowColor = rim
-      ctx.shadowBlur = cell * 0.55
-      const grd = ctx.createRadialGradient(cx - r * 0.2, cy - r * 0.25, r * 0.1, cx, cy, r * pulseR)
-      grd.addColorStop(0, '#ffffff')
-      grd.addColorStop(0.35, core)
-      grd.addColorStop(1, rim)
-      ctx.fillStyle = grd
-      ctx.beginPath()
-      ctx.arc(cx, cy, r * pulseR, 0, Math.PI * 2)
-      ctx.fill()
-      // facing chevron
-      const ang =
-        e.pDir === 0 ? -Math.PI / 2 : e.pDir === 1 ? 0 : e.pDir === 2 ? Math.PI / 2 : Math.PI
-      ctx.translate(cx, cy)
-      ctx.rotate(ang)
-      ctx.fillStyle = 'rgba(10, 6, 24, 0.55)'
-      ctx.beginPath()
-      ctx.moveTo(r * 0.55, 0)
-      ctx.lineTo(r * 0.15, -r * 0.22)
-      ctx.lineTo(r * 0.15, r * 0.22)
-      ctx.closePath()
-      ctx.fill()
       ctx.restore()
+      drawAstronaut(ctx, cx, cy, cell, e.pDir, power, t)
     }
     if (e.queued != null && hud.phase === 'playing') {
       const q = e.queued
-      const ax = cx + DX[q] * cell * 0.82
-      const ay = cy + DY[q] * cell * 0.82
+      const r = cell * 0.42
+      const ax = cx + DX[q] * cell * 0.85
+      const ay = cy + DY[q] * cell * 0.85
       ctx.save()
       ctx.globalAlpha = 0.55 + 0.25 * Math.sin(t * 8)
       ctx.fillStyle = '#00c8c4'
       ctx.strokeStyle = '#00c8c4'
       ctx.lineWidth = Math.max(2, cell * 0.07)
       ctx.beginPath()
-      ctx.moveTo(cx + DX[q] * r * 1.05, cy + DY[q] * r * 1.05)
+      ctx.moveTo(cx + DX[q] * r * 0.9, cy + DY[q] * r * 0.9)
       ctx.lineTo(ax, ay)
       ctx.stroke()
       const ox2 = -DY[q]
@@ -724,7 +705,7 @@ function paint(
     const cx = ox + (f.x + 0.5) * cell
     const cy = oy + (f.y + 0.5) * cell - (1 - f.t) * cell * 0.75
     ctx.globalAlpha = Math.max(0, Math.min(1, f.t * 2))
-    ctx.fillStyle = f.kind === 'tag' ? '#00c8c4' : f.kind === 'power' ? '#ffc83c' : '#f6f0d8'
+    ctx.fillStyle = f.kind === 'tag' ? '#00c8c4' : f.kind === 'power' ? '#ffc83c' : '#7ff5f1'
     ctx.font = `600 ${Math.max(11, cell * 0.42)}px Inter, system-ui, sans-serif`
     ctx.textAlign = 'center'
     ctx.fillText(f.kind === 'tag' ? `+${f.pts}` : f.kind === 'power' ? '5D' : '+10', cx, cy)
@@ -750,6 +731,217 @@ function paint(
   vig.addColorStop(1, 'rgba(6, 3, 16, 0.55)')
   ctx.fillStyle = vig
   ctx.fillRect(0, 0, W, H)
+}
+
+
+/** Top-down Fifth Floor astronaut — Glide-family runner, not a ball. */
+function drawAstronaut(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  cell: number,
+  dir: Dir,
+  powered: boolean,
+  t: number,
+) {
+  const s = cell * 0.92
+  const ang = dir === 0 ? -Math.PI / 2 : dir === 1 ? 0 : dir === 2 ? Math.PI / 2 : Math.PI
+  const bob = Math.sin(t * 12) * cell * 0.015
+  ctx.save()
+  ctx.translate(cx, cy + bob)
+  ctx.rotate(ang)
+  // underglow
+  ctx.shadowColor = powered ? 'rgba(255, 200, 60, 0.85)' : 'rgba(0, 200, 196, 0.75)'
+  ctx.shadowBlur = cell * 0.55
+  ctx.fillStyle = powered ? 'rgba(255, 180, 60, 0.35)' : 'rgba(0, 200, 196, 0.28)'
+  ctx.beginPath()
+  ctx.ellipse(0, s * 0.22, s * 0.28, s * 0.12, 0, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.shadowBlur = cell * 0.25
+
+  // backpack
+  ctx.fillStyle = '#2a1f4a'
+  ctx.strokeStyle = powered ? '#ffc83c' : '#00c8c4'
+  ctx.lineWidth = Math.max(1, cell * 0.04)
+  roundRect(ctx, -s * 0.22, -s * 0.08, s * 0.2, s * 0.28, s * 0.04)
+  ctx.fill()
+  ctx.stroke()
+
+  // torso suit
+  const suit = ctx.createLinearGradient(-s * 0.2, 0, s * 0.25, 0)
+  suit.addColorStop(0, '#d8dde8')
+  suit.addColorStop(0.5, '#f4f6fb')
+  suit.addColorStop(1, '#a8b0c4')
+  ctx.fillStyle = suit
+  roundRect(ctx, -s * 0.16, -s * 0.12, s * 0.38, s * 0.34, s * 0.08)
+  ctx.fill()
+  ctx.strokeStyle = powered ? 'rgba(255, 200, 60, 0.7)' : 'rgba(0, 200, 196, 0.65)'
+  ctx.lineWidth = Math.max(1.2, cell * 0.035)
+  roundRect(ctx, -s * 0.16, -s * 0.12, s * 0.38, s * 0.34, s * 0.08)
+  ctx.stroke()
+
+  // chest 5D stripe
+  ctx.fillStyle = powered ? '#ffc83c' : '#00c8c4'
+  ctx.fillRect(-s * 0.02, -s * 0.02, s * 0.18, s * 0.05)
+
+  // arms
+  ctx.fillStyle = '#c5cad8'
+  roundRect(ctx, -s * 0.22, -s * 0.02, s * 0.1, s * 0.16, s * 0.04)
+  ctx.fill()
+  roundRect(ctx, s * 0.16, -s * 0.02, s * 0.1, s * 0.16, s * 0.04)
+  ctx.fill()
+
+  // boots
+  ctx.fillStyle = '#1a1430'
+  roundRect(ctx, -s * 0.12, s * 0.18, s * 0.12, s * 0.1, s * 0.03)
+  ctx.fill()
+  roundRect(ctx, s * 0.04, s * 0.18, s * 0.12, s * 0.1, s * 0.03)
+  ctx.fill()
+  ctx.fillStyle = powered ? '#ffc83c' : '#00c8c4'
+  ctx.fillRect(-s * 0.1, s * 0.24, s * 0.08, s * 0.03)
+  ctx.fillRect(s * 0.06, s * 0.24, s * 0.08, s * 0.03)
+
+  // helmet
+  ctx.shadowColor = powered ? '#ffc83c' : '#00c8c4'
+  ctx.shadowBlur = cell * 0.35
+  ctx.fillStyle = '#e8ecf5'
+  ctx.beginPath()
+  ctx.arc(s * 0.02, -s * 0.28, s * 0.2, 0, Math.PI * 2)
+  ctx.fill()
+  // visor
+  const vis = ctx.createLinearGradient(-s * 0.08, -s * 0.36, s * 0.16, -s * 0.18)
+  vis.addColorStop(0, powered ? '#ffe08a' : '#5ef0ea')
+  vis.addColorStop(0.55, powered ? '#ff8c28' : '#1a6b9a')
+  vis.addColorStop(1, '#0a1830')
+  ctx.fillStyle = vis
+  ctx.beginPath()
+  ctx.ellipse(s * 0.06, -s * 0.28, s * 0.13, s * 0.11, 0.15, 0, Math.PI * 2)
+  ctx.fill()
+  // visor shine
+  ctx.fillStyle = 'rgba(255,255,255,0.55)'
+  ctx.beginPath()
+  ctx.ellipse(s * 0.02, -s * 0.32, s * 0.04, s * 0.02, -0.4, 0, Math.PI * 2)
+  ctx.fill()
+  // helmet rim
+  ctx.shadowBlur = 0
+  ctx.strokeStyle = powered ? '#ffc83c' : '#00c8c4'
+  ctx.lineWidth = Math.max(1.5, cell * 0.04)
+  ctx.beginPath()
+  ctx.arc(s * 0.02, -s * 0.28, s * 0.2, 0, Math.PI * 2)
+  ctx.stroke()
+
+  ctx.restore()
+}
+
+/** Bigger, high-contrast void drone (mini UFO). */
+function drawVoidDrone(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  cell: number,
+  g: { id: number; mode: string; color: string; dir: Dir },
+  powerT: number,
+  t: number,
+) {
+  const r = cell * 0.52
+  if (g.mode === 'eaten') {
+    ctx.fillStyle = 'rgba(246, 244, 239, 0.9)'
+    ctx.beginPath()
+    ctx.arc(cx - r * 0.28, cy, r * 0.14, 0, Math.PI * 2)
+    ctx.arc(cx + r * 0.28, cy, r * 0.14, 0, Math.PI * 2)
+    ctx.fill()
+    return
+  }
+  const fright = g.mode === 'frightened'
+  const blink = fright && powerT < 2.2 && Math.floor(powerT * 7) % 2 === 0
+  const body = fright ? (blink ? '#f6f4ef' : '#7b3fe4') : g.color
+  const hover = Math.sin(t * 4.5 + g.id * 1.7) * cell * 0.05
+  const spin = t * 3.2 + g.id
+
+  ctx.save()
+  // under searchlight
+  ctx.globalAlpha = 0.4
+  ctx.fillStyle = body
+  ctx.shadowColor = body
+  ctx.shadowBlur = cell * 0.7
+  ctx.beginPath()
+  ctx.ellipse(cx, cy + r * 0.62 + hover, r * 0.75, r * 0.22, 0, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.restore()
+
+  ctx.save()
+  ctx.translate(cx, cy + hover)
+  ctx.shadowColor = body
+  ctx.shadowBlur = cell * 0.55
+
+  // lower hull
+  ctx.fillStyle = fright ? body : '#2a2e38'
+  ctx.beginPath()
+  ctx.ellipse(0, r * 0.08, r * 1.05, r * 0.32, 0, 0, Math.PI * 2)
+  ctx.fill()
+
+  // main saucer disc
+  const disc = ctx.createRadialGradient(-r * 0.2, -r * 0.1, r * 0.1, 0, 0, r * 1.15)
+  disc.addColorStop(0, fright ? body : '#e8ecf4')
+  disc.addColorStop(0.45, fright ? body : body)
+  disc.addColorStop(1, fright ? body : '#1a1e28')
+  ctx.fillStyle = disc
+  ctx.beginPath()
+  ctx.ellipse(0, 0, r * 1.18, r * 0.48, 0, 0, Math.PI * 2)
+  ctx.fill()
+
+  // rim ring
+  ctx.strokeStyle = fright ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.35)'
+  ctx.lineWidth = Math.max(1.5, cell * 0.05)
+  ctx.beginPath()
+  ctx.ellipse(0, 0, r * 1.05, r * 0.4, 0, 0, Math.PI * 2)
+  ctx.stroke()
+
+  // spinning rim lights
+  if (!fright) {
+    for (let i = 0; i < 8; i++) {
+      const a = spin + (i / 8) * Math.PI * 2
+      const lx = Math.cos(a) * r * 0.88
+      const ly = Math.sin(a) * r * 0.32
+      ctx.fillStyle = i % 2 === 0 ? '#ffffff' : body
+      ctx.beginPath()
+      ctx.arc(lx, ly, r * 0.1, 0, Math.PI * 2)
+      ctx.fill()
+    }
+  }
+
+  // glass dome
+  const dome = ctx.createRadialGradient(-r * 0.1, -r * 0.35, r * 0.05, 0, -r * 0.15, r * 0.55)
+  dome.addColorStop(0, 'rgba(255,255,255,0.95)')
+  dome.addColorStop(0.35, fright ? 'rgba(200, 180, 255, 0.85)' : 'rgba(160, 230, 255, 0.75)')
+  dome.addColorStop(1, fright ? 'rgba(80, 40, 140, 0.7)' : 'rgba(20, 40, 80, 0.65)')
+  ctx.fillStyle = dome
+  ctx.beginPath()
+  ctx.ellipse(0, -r * 0.18, r * 0.55, r * 0.48, 0, Math.PI, Math.PI * 2)
+  ctx.ellipse(0, -r * 0.18, r * 0.55, r * 0.22, 0, 0, Math.PI)
+  ctx.fill()
+
+  // antenna
+  if (!fright) {
+    ctx.strokeStyle = '#cfd5e2'
+    ctx.lineWidth = Math.max(1.2, cell * 0.035)
+    ctx.beginPath()
+    ctx.moveTo(0, -r * 0.55)
+    ctx.lineTo(0, -r * 0.78)
+    ctx.stroke()
+    ctx.fillStyle = body
+    ctx.beginPath()
+    ctx.arc(0, -r * 0.82, r * 0.09, 0, Math.PI * 2)
+    ctx.fill()
+  }
+
+  // cockpit slit (facing-ish)
+  ctx.fillStyle = 'rgba(10, 8, 20, 0.55)'
+  ctx.beginPath()
+  ctx.ellipse(DX[g.dir] * r * 0.12, -r * 0.22 + DY[g.dir] * r * 0.06, r * 0.22, r * 0.1, 0, 0, Math.PI * 2)
+  ctx.fill()
+
+  ctx.restore()
 }
 
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
