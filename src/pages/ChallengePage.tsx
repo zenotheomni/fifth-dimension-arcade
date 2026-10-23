@@ -21,6 +21,7 @@ import BrandLockup from '../arcade/brand/BrandLockup'
 
 const CourtVision3D = lazy(() => import('../arcade/courtVision3d/CourtVision3D'))
 const FifthRun = lazy(() => import('../arcade/fifthRun/FifthRun'))
+const FifthFrame = lazy(() => import('../arcade/fifthFrame/FifthFrame'))
 
 type Phase = 'loading' | 'ready' | 'handle' | 'starting' | 'playing' | 'vs' | 'creator' | 'error'
 
@@ -112,6 +113,7 @@ export default function ChallengePage() {
 
   const gameId = view?.game_id ?? 'court-vision'
   const isFifthRun = gameId === 'fifth-run'
+  const isFifthFrame = gameId === 'fifth-frame'
   const title = gameTitle(gameId)
 
   const onRunResult = useCallback(
@@ -135,6 +137,16 @@ export default function ChallengePage() {
   const cvChallenge: CvChallengeConfig | null = view
     ? { id: view.id, targetScore: view.target_score, seed: view.seed || '', creatorHandle: view.creator_handle }
     : null
+
+  if (phase === 'playing' && cvChallenge && isFifthFrame) {
+    return (
+      <div className="arcade-root arcade-root--game">
+        <Suspense fallback={<div className="cv3-suspense">Loading FIFTH FRAME…</div>}>
+          <FifthFrame challenge={cvChallenge} onRunResult={onRunResult} />
+        </Suspense>
+      </div>
+    )
+  }
 
   if (phase === 'playing' && cvChallenge && isFifthRun) {
     return (
@@ -179,7 +191,7 @@ export default function ChallengePage() {
   return (
     <div className="arcade-root arcade-root--game">
       <div className="cvp-challenger">
-        <div className="cvp-challenger__bg" style={{ backgroundImage: `url(${BASE}art/${isFifthRun ? 'box-fifth-run.webp' : 'court-bg.webp'})` }} aria-hidden />
+        <div className="cvp-challenger__bg" style={{ backgroundImage: `url(${BASE}art/${isFifthFrame ? 'box-fifth-frame.webp' : isFifthRun ? 'box-fifth-run.webp' : 'court-bg.webp'})` }} aria-hidden />
         <div className="cvp-challenger__scan" aria-hidden />
         <div className="cvp-challenger__vignette" aria-hidden />
 
@@ -190,7 +202,7 @@ export default function ChallengePage() {
           {phase === 'loading' || phase === 'starting' ? (
             <>
               <p className="cvp-challenger__badge">Challenge</p>
-              <h1 className="cvp-challenger__title">{phase === 'starting' ? (isFifthRun ? 'Tuning the engine…' : 'Racking up…') : 'Loading…'}</h1>
+              <h1 className="cvp-challenger__title">{phase === 'starting' ? (isFifthFrame ? 'Oiling the lane…' : isFifthRun ? 'Tuning the engine…' : 'Racking up…') : 'Loading…'}</h1>
               <p className="cvp-challenger__copy">Pulling the challenge card.</p>
             </>
           ) : null}

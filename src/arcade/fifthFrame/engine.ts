@@ -1,5 +1,5 @@
 /**
- * FIFTH FRAME — neon alley finger-flick bowling.
+ * FIFTH FRAME — Neon Paradise finger-flick bowling.
  * World: x ∈ [-0.5, 0.5] lane width, z ∈ [0, 1] foul→pins.
  */
 import type { EndStats, FrameMark, Hud, Phase } from './types'
@@ -50,6 +50,7 @@ export type Ball = {
   z: number
   vx: number
   vz: number
+  spin: number
   alive: boolean
   rolling: boolean
 }
@@ -161,7 +162,7 @@ export function scoreGame(pinfalls: number[][]): { frames: FrameMark[]; total: n
 
 export class FifthFrameEngine {
   phase: Phase = 'howto'
-  ball: Ball = { x: 0, z: 0.04, vx: 0, vz: 0, alive: true, rolling: false }
+  ball: Ball = { x: 0, z: 0.04, vx: 0, vz: 0, spin: 0, alive: true, rolling: false }
   pins: Pin[] = []
   frame = 1
   ballInFrame = 1
@@ -261,7 +262,7 @@ export class FifthFrameEngine {
   }
 
   private resetBall() {
-    this.ball = { x: 0, z: 0.04, vx: 0, vz: 0, alive: true, rolling: false }
+    this.ball = { x: 0, z: 0.04, vx: 0, vz: 0, spin: 0, alive: true, rolling: false }
     this.aimX = 0
     this.aimPower = 0
     this.samples = []
@@ -321,6 +322,7 @@ export class FifthFrameEngine {
     this.ball.z = 0.04
     this.ball.vx = vx
     this.ball.vz = vz
+    this.ball.spin = Math.tan(angle) * 1.15 // curve from horizontal flick
     this.ball.rolling = true
     this.ball.alive = true
     this.phase = 'rolling'
@@ -346,6 +348,9 @@ export class FifthFrameEngine {
     if (b.alive && b.rolling) {
       b.x += b.vx * dt
       b.z += b.vz * dt
+      // Hook / curve from spin (arcade-accessible, skill-readable)
+      b.vx += b.spin * dt * 0.55
+      b.spin *= Math.exp(-1.8 * dt)
       const drag = Math.exp(-FRICTION * dt)
       b.vx *= drag
       b.vz *= drag

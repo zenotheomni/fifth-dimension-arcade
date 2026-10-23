@@ -28,16 +28,21 @@
 }
 
 .ff-back {
-  width: 2.2rem;
-  height: 2.2rem;
-  display: grid;
-  place-items: center;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  height: 2.05rem;
+  padding: 0 0.75rem;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(0, 200, 196, 0.25);
+  border: 1px solid rgba(0, 200, 196, 0.28);
   color: #f2f0ea;
   text-decoration: none;
-  font-size: 1.05rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .ff-hud {
@@ -281,4 +286,56 @@
   display: grid;
   gap: 0.45rem;
   margin-top: 0.85rem;
+}
+
+
+.ff-hud__chrome {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+}
+
+.ff-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: rgba(8, 4, 24, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(242, 240, 234, 0.75);
+}
+.ff-chip b { color: var(--teal); font-weight: 800; }
+.ff-chip--chal {
+  border-color: rgba(255, 90, 60, 0.45);
+  color: #ffc8b0;
+}
+.ff-chip--dim {
+  border-color: rgba(255, 80, 180, 0.35);
+  color: rgba(255, 180, 220, 0.85);
+}
+
+.ff-mute {
+  flex: 0 0 auto;
+  width: 2.05rem;
+  height: 2.05rem;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 200, 196, 0.25);
+  background: rgba(255, 255, 255, 0.06);
+  color: #f2f0ea;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+/* Full-bleed stage — Glide / CV presence */
+.ff-board {
+  margin: 0;
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
 }
