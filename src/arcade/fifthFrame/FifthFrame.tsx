@@ -408,7 +408,7 @@ function paint(ctx: CanvasRenderingContext2D, W: number, H: number, e: FifthFram
 
   for (let i = 0; i < 5; i++) {
     const x = -0.2 + i * 0.1
-    const p = project(x, 0.34, W, H)
+    const p = project(x, 0.16, W, H)
     ctx.fillStyle = 'rgba(40, 160, 140, 0.45)'
     ctx.beginPath()
     ctx.moveTo(p.cx, p.cy - 5 * p.scale)
@@ -427,7 +427,7 @@ function paint(ctx: CanvasRenderingContext2D, W: number, H: number, e: FifthFram
     const steps = 16
     for (let i = 1; i <= steps; i++) {
       const z = 0.08 + (0.78 * i) / steps
-      const x = e.ball.x + e.aimX * (z - 0.08) * 0.9
+      const x = e.ball.x + e.aimX * (z - 0.04) * 0.9
       const p = project(x, z, W, H)
       ctx.fillStyle = `rgba(0, 220, 200, ${0.05 + (1 - i / steps) * 0.22})`
       ctx.beginPath()
@@ -442,9 +442,9 @@ function paint(ctx: CanvasRenderingContext2D, W: number, H: number, e: FifthFram
 function drawSideWalls(ctx: CanvasRenderingContext2D, W: number, H: number, t: number) {
   // Soft architectural walls flanking the alley — dark paneling catching neon
   const nearL = project(-VIEW.LANE_HALF * 1.55, 0.0, W, H)
-  const farL = project(-VIEW.LANE_HALF * 1.35, 1.05, W, H)
+  const farL = project(-VIEW.LANE_HALF * 1.35, 0.74, W, H)
   const nearR = project(VIEW.LANE_HALF * 1.55, 0.0, W, H)
-  const farR = project(VIEW.LANE_HALF * 1.35, 1.05, W, H)
+  const farR = project(VIEW.LANE_HALF * 1.35, 0.74, W, H)
   const top = H * 0.08
 
   ctx.save()
@@ -475,12 +475,53 @@ function drawSideWalls(ctx: CanvasRenderingContext2D, W: number, H: number, t: n
 
   // Neon wash on walls
   const pulse = 0.55 + 0.45 * Math.sin(t * 1.6)
-  ctx.globalAlpha = 0.22 * pulse
+  // Opaque side booths — fill phone edges like a real alley / Glide corridor
+  const wallL = ctx.createLinearGradient(0, 0, W * 0.22, 0)
+  wallL.addColorStop(0, '#2a1048')
+  wallL.addColorStop(0.7, '#160a28')
+  wallL.addColorStop(1, 'rgba(8,4,18,0.15)')
+  ctx.fillStyle = wallL
+  ctx.fillRect(0, 0, W * 0.22, H)
+  const wallR = ctx.createLinearGradient(W, 0, W * 0.78, 0)
+  wallR.addColorStop(0, '#321456')
+  wallR.addColorStop(0.7, '#140820')
+  wallR.addColorStop(1, 'rgba(8,4,18,0.15)')
+  ctx.fillStyle = wallR
+  ctx.fillRect(W * 0.78, 0, W * 0.22, H)
+  // Ceiling neon grid strip
+  ctx.fillStyle = 'rgba(20, 8, 48, 0.85)'
+  ctx.fillRect(0, 0, W, H * 0.14)
+  ctx.strokeStyle = 'rgba(0, 230, 210, 0.25)'
+  ctx.lineWidth = 1.5
+  for (let i = 0; i < 8; i++) {
+    const x = (W * i) / 7
+    ctx.beginPath()
+    ctx.moveTo(x, 0)
+    ctx.lineTo(W * 0.5 + (x - W * 0.5) * 0.35, H * 0.14)
+    ctx.stroke()
+  }
+
+  ctx.globalAlpha = 0.35 * pulse
   ctx.fillStyle = '#00e0c8'
-  ctx.fillRect(0, H * 0.25, W * 0.08, H * 0.45)
+  ctx.fillRect(0, H * 0.18, W * 0.045, H * 0.55)
   ctx.fillStyle = '#7b3fe4'
-  ctx.fillRect(W * 0.92, H * 0.2, W * 0.08, H * 0.5)
+  ctx.fillRect(W * 0.955, H * 0.14, W * 0.045, H * 0.58)
   ctx.globalAlpha = 1
+
+  // Neon rib lines on side walls
+  ctx.strokeStyle = `rgba(0, 230, 210, ${0.22 * pulse})`
+  ctx.lineWidth = 2
+  for (let i = 0; i < 6; i++) {
+    const y = H * (0.2 + i * 0.1)
+    ctx.beginPath()
+    ctx.moveTo(0, y)
+    ctx.lineTo(W * 0.18, y + H * 0.02)
+    ctx.stroke()
+    ctx.beginPath()
+    ctx.moveTo(W, y)
+    ctx.lineTo(W * 0.82, y + H * 0.02)
+    ctx.stroke()
+  }
   ctx.restore()
 }
 
@@ -492,8 +533,8 @@ function drawGutters(ctx: CanvasRenderingContext2D, W: number, H: number) {
   const farGR = project(gHalf, 1.05, W, H)
   const nearL = project(-VIEW.LANE_HALF, 0.0, W, H)
   const nearR = project(VIEW.LANE_HALF, 0.0, W, H)
-  const farL = project(-VIEW.LANE_HALF, 1.05, W, H)
-  const farR = project(VIEW.LANE_HALF, 1.05, W, H)
+  const farL = project(-VIEW.LANE_HALF, 0.74, W, H)
+  const farR = project(VIEW.LANE_HALF, 0.74, W, H)
 
   // Left gutter channel
   ctx.beginPath()
@@ -527,8 +568,8 @@ function drawGutters(ctx: CanvasRenderingContext2D, W: number, H: number) {
 function drawLane(ctx: CanvasRenderingContext2D, W: number, H: number, e: FifthFrameEngine, t: number) {
   const nearL = project(-VIEW.LANE_HALF, 0.0, W, H)
   const nearR = project(VIEW.LANE_HALF, 0.0, W, H)
-  const farL = project(-VIEW.LANE_HALF, 1.05, W, H)
-  const farR = project(VIEW.LANE_HALF, 1.05, W, H)
+  const farL = project(-VIEW.LANE_HALF, 0.74, W, H)
+  const farR = project(VIEW.LANE_HALF, 0.74, W, H)
 
   ctx.beginPath()
   ctx.moveTo(nearL.cx, nearL.cy)
@@ -582,11 +623,12 @@ function drawLane(ctx: CanvasRenderingContext2D, W: number, H: number, e: FifthF
 
   // Oil / polish specular streak (physical gloss)
   const gloss = ctx.createLinearGradient(W * 0.5, nearL.cy, W * 0.5, farL.cy)
-  gloss.addColorStop(0, 'rgba(255, 240, 210, 0.28)')
-  gloss.addColorStop(0.15, 'rgba(255, 255, 255, 0.16)')
-  gloss.addColorStop(0.35, 'rgba(200, 230, 255, 0.1)')
-  gloss.addColorStop(0.65, 'rgba(0, 230, 210, 0.12)')
-  gloss.addColorStop(1, 'rgba(140, 90, 230, 0.14)')
+  gloss.addColorStop(0, 'rgba(255, 245, 220, 0.42)')
+  gloss.addColorStop(0.12, 'rgba(255, 255, 255, 0.28)')
+  gloss.addColorStop(0.3, 'rgba(200, 230, 255, 0.16)')
+  gloss.addColorStop(0.55, 'rgba(0, 240, 220, 0.18)')
+  gloss.addColorStop(0.8, 'rgba(160, 100, 240, 0.16)')
+  gloss.addColorStop(1, 'rgba(255, 120, 80, 0.1)')
   ctx.fillStyle = gloss
   ctx.fillRect(0, 0, W, H)
 
@@ -709,10 +751,10 @@ function drawRails(ctx: CanvasRenderingContext2D, W: number, H: number, t: numbe
 }
 
 function drawBackWall(ctx: CanvasRenderingContext2D, W: number, H: number, t: number) {
-  const deck = project(0, 1.02, W, H)
-  const left = project(-VIEW.LANE_HALF * 1.2, 1.02, W, H)
-  const right = project(VIEW.LANE_HALF * 1.2, 1.02, W, H)
-  const wallTop = deck.cy - H * 0.26
+  const deck = project(0, 0.72, W, H)
+  const left = project(-VIEW.LANE_HALF * 1.3, 0.72, W, H)
+  const right = project(VIEW.LANE_HALF * 1.3, 0.72, W, H)
+  const wallTop = deck.cy - H * 0.48
   const wallBot = deck.cy + H * 0.035
 
   // Physical pin-deck wall
@@ -750,8 +792,8 @@ function drawBackWall(ctx: CanvasRenderingContext2D, W: number, H: number, t: nu
   ctx.fillRect(0, wallTop - 30, W, wallBot - wallTop + 60)
 
   const ex = W * 0.5
-  const ey = deck.cy - H * 0.125
-  const er = Math.min(W, H) * 0.09
+  const ey = deck.cy - H * 0.26
+  const er = Math.min(W, H) * 0.155
 
   // Neon ring frame around emblem (like a lit sign housing)
   ctx.save()
@@ -806,11 +848,11 @@ function drawBackWall(ctx: CanvasRenderingContext2D, W: number, H: number, t: nu
   ctx.save()
   ctx.textAlign = 'center'
   ctx.textBaseline = 'top'
-  const fs = Math.max(12, Math.round(H * 0.022))
+  const fs = Math.max(18, Math.round(H * 0.038))
   ctx.font = `800 ${fs}px Inter, system-ui, sans-serif`
   ctx.shadowColor = `rgba(0, 230, 210, ${0.75 * pulse})`
   ctx.shadowBlur = 14
-  const grad = ctx.createLinearGradient(ex - 70, 0, ex + 70, 0)
+  const grad = ctx.createLinearGradient(ex - 110, 0, ex + 110, 0)
   grad.addColorStop(0, '#00f0d8')
   grad.addColorStop(0.45, '#8a5cff')
   grad.addColorStop(0.8, '#ff6a45')
@@ -859,9 +901,9 @@ function drawVenueSparkles(ctx: CanvasRenderingContext2D, W: number, H: number, 
 
 function drawSideParticles(ctx: CanvasRenderingContext2D, W: number, H: number, t: number) {
   const nearL = project(-VIEW.LANE_HALF, 0.05, W, H)
-  const farL = project(-VIEW.LANE_HALF, 1.0, W, H)
+  const farL = project(-VIEW.LANE_HALF, 0.72, W, H)
   const nearR = project(VIEW.LANE_HALF, 0.05, W, H)
-  const farR = project(VIEW.LANE_HALF, 1.0, W, H)
+  const farR = project(VIEW.LANE_HALF, 0.72, W, H)
   ctx.save()
   for (let i = 0; i < 28; i++) {
     const u = (i * 0.07 + t * 0.06) % 1
@@ -892,11 +934,11 @@ function drawPin(
 ) {
   const p = project(pin.x, pin.z, W, H)
   const s = p.scale
-  // Classic ten-pin proportions (relative units)
-  const h = 42 * s
-  const bellyW = 14 * s
-  const neckW = 5.2 * s
-  const headW = 7.2 * s
+  // Classic ten-pin proportions — hero scale (CV hoop energy, real pin silhouette)
+  const h = Math.min(W, H) * 0.26 * s
+  const bellyW = h * 0.175
+  const neckW = h * 0.068
+  const headW = h * 0.095
 
   ctx.save()
   ctx.translate(p.cx, p.cy)
@@ -945,10 +987,11 @@ function drawPin(
 
   // Specular (glossy plastic/wood finish)
   ctx.shadowBlur = 0
-  const spec = ctx.createLinearGradient(-bellyW * 0.4, -h * 0.7, bellyW * 0.2, h * 0.2)
-  spec.addColorStop(0, 'rgba(255,255,255,0.55)')
-  spec.addColorStop(0.25, 'rgba(255,255,255,0.18)')
-  spec.addColorStop(0.5, 'rgba(255,255,255,0)')
+  const spec = ctx.createLinearGradient(-bellyW * 0.5, -h * 0.75, bellyW * 0.35, h * 0.25)
+  spec.addColorStop(0, 'rgba(255,255,255,0.75)')
+  spec.addColorStop(0.2, 'rgba(255,255,255,0.35)')
+  spec.addColorStop(0.45, 'rgba(255,255,255,0.08)')
+  spec.addColorStop(0.6, 'rgba(255,255,255,0)')
   ctx.fillStyle = spec
   ctx.beginPath()
   ctx.ellipse(-bellyW * 0.28, -h * 0.15, bellyW * 0.28, h * 0.38, -0.15, 0, Math.PI * 2)
@@ -985,7 +1028,8 @@ function drawBall(ctx: CanvasRenderingContext2D, W: number, H: number, e: FifthF
   const b = e.ball
   if (!b.alive && e.phase !== 'aim') return
   const p = project(b.x, b.z, W, H)
-  const r = (VIEW.BALL_R * W * 0.5 * p.scale) / VIEW.LANE_HALF
+  // Visual mul: Court Vision–size hero ball (physics radius unchanged)
+  const r = ((VIEW.BALL_R * W * 0.5 * p.scale) / VIEW.LANE_HALF) * 2.35
 
   ctx.save()
   // Shadow on wood

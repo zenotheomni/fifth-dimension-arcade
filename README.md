@@ -6,6 +6,10 @@ Mobile-web arcade for [Fifth Dimension / 5D Imperial](https://5dimperial.com).
 - **Base path:** `/arcade/`
 - **Live:** https://fifth-dimension-arcade.vercel.app/arcade
 
+## Quality bar
+
+Every game ships to the **Fifth Floor** bar (full-screen presence, big props, real materials under neon, one-motion phone controls). See [`docs/FIFTH-FLOOR-QUALITY.md`](./docs/FIFTH-FLOOR-QUALITY.md). Thin prototypes are not a deliverable.
+
 ## Scripts
 
 ```bash
