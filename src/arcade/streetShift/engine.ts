@@ -590,35 +590,54 @@ export class StreetShiftEngine {
   }
 
   private stepActor(g: Ghost, step: number, tx: number, ty: number) {
-    // Pac-Man style: decide at cell centers using INTEGER grid coords (floats froze ghosts).
-    if (atCenter(g.x, 0.28) && atCenter(g.y, 0.28)) {
+    // Decide only when landing on a tile center — threshold MUST be < one step,
+    // or ghosts snap back every frame and jitter in place (look frozen).
+    const centerEps = Math.min(0.12, Math.max(0.04, step * 0.55))
+    if (atCenter(g.x, centerEps) && atCenter(g.y, centerEps)) {
       g.x = snap(g.x)
       g.y = snap(g.y)
       this.pickGhostDir(g, tx, ty)
     }
-    let lookX = snap(g.x + DX[g.dir] * 0.55)
-    const lookY = snap(g.y + DY[g.dir] * 0.55)
+
+    // Peek into the next cell along current heading (integer grid — never floats).
+    let lookX = snap(g.x) + DX[g.dir]
+    let lookY = snap(g.y) + DY[g.dir]
     if (lookX < 0) lookX = COLS - 1
     if (lookX >= COLS) lookX = 0
     if (!isOpen(this.grid, lookX, lookY)) {
+      // Hit a wall mid-tile or chose a dead end: snap + rechoose, then re-check.
       g.x = snap(g.x)
       g.y = snap(g.y)
       this.pickGhostDir(g, tx, ty)
-      lookX = snap(g.x + DX[g.dir] * 0.55)
-      const ly = snap(g.y + DY[g.dir] * 0.55)
-      let lx = lookX
-      if (lx < 0) lx = COLS - 1
-      if (lx >= COLS) lx = 0
-      if (!isOpen(this.grid, lx, ly)) return
+      lookX = snap(g.x) + DX[g.dir]
+      lookY = snap(g.y) + DY[g.dir]
+      if (lookX < 0) lookX = COLS - 1
+      if (lookX >= COLS) lookX = 0
+      if (!isOpen(this.grid, lookX, lookY)) return
     }
-    let nx = g.x + DX[g.dir] * step
-    let ny = g.y + DY[g.dir] * step
-    nx = wrapX(nx)
-    if (g.dir === 1 || g.dir === 3) {
-      g.x = nx
+
+    // Don't overshoot the next center — stop exactly on it so the next tick can turn.
+    const ax = DX[g.dir]
+    const ay = DY[g.dir]
+    if (ax !== 0) {
+      const target = snap(g.x) + ax // next center along axis
+      const dist = (target - g.x) * ax // positive distance remaining toward target
+      if (dist > 0 && step >= dist) {
+        g.x = wrapX(target)
+        g.y = snap(g.y)
+        return
+      }
+      g.x = wrapX(g.x + ax * step)
       g.y = snap(g.y)
     } else {
-      g.y = ny
+      const target = snap(g.y) + ay
+      const dist = (target - g.y) * ay
+      if (dist > 0 && step >= dist) {
+        g.y = target
+        g.x = snap(g.x)
+        return
+      }
+      g.y = g.y + ay * step
       g.x = snap(g.x)
     }
   }
