@@ -596,10 +596,10 @@ function analyzeFlick(samples: FlickSample[], release: FlickSample): { speed: nu
 export function project(x: number, z: number, W: number, H: number) {
   const t = Math.max(0, Math.min(1.2, z))
   // near (z=0) huge at bottom; far (z=1) small under neon back wall
-  const yN = 0.92
-  const yF = 0.24
-  const sN = 1.38
-  const sF = 0.17
+  const yN = 0.90
+  const yF = 0.30
+  const sN = 1.28
+  const sF = 0.28
   const y = H * (yN + (yF - yN) * t)
   const scale = sN + (sF - sN) * t
   const cx = W * 0.5 + (x * W * 0.5 * scale) / LANE_HALF
