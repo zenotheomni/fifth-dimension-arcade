@@ -351,147 +351,329 @@ function fmtRoll(v: number | 'X' | '/' | null | undefined) {
 }
 
 function paint(ctx: CanvasRenderingContext2D, W: number, H: number, e: FifthFrameEngine, t: number) {
-  // Galaxy void
-  ctx.fillStyle = '#070412'
+  // Dark club venue void
+  ctx.fillStyle = '#04020c'
   ctx.fillRect(0, 0, W, H)
-  const wash = ctx.createRadialGradient(W * 0.5, H * 0.35, 0, W * 0.5, H * 0.45, Math.max(W, H) * 0.85)
-  wash.addColorStop(0, 'rgba(0, 200, 196, 0.08)')
-  wash.addColorStop(0.35, 'rgba(123, 63, 228, 0.12)')
-  wash.addColorStop(0.7, 'rgba(18, 8, 40, 0.55)')
-  wash.addColorStop(1, 'rgba(4, 2, 12, 0.95)')
+  const wash = ctx.createRadialGradient(W * 0.5, H * 0.18, 0, W * 0.5, H * 0.5, Math.max(W, H))
+  wash.addColorStop(0, 'rgba(40, 20, 90, 0.55)')
+  wash.addColorStop(0.35, 'rgba(8, 4, 28, 0.85)')
+  wash.addColorStop(1, '#020108')
   ctx.fillStyle = wash
   ctx.fillRect(0, 0, W, H)
 
-  // stars
-  ctx.save()
-  for (let i = 0; i < 48; i++) {
-    const sx = ((i * 97) % 1000) / 1000
-    const sy = ((i * 53) % 1000) / 1000
-    const tw = 0.35 + 0.65 * Math.abs(Math.sin(t * 0.7 + i))
-    ctx.fillStyle = `rgba(220, 230, 255, ${0.15 + tw * 0.35})`
-    ctx.fillRect(sx * W, sy * H * 0.55, 1.4, 1.4)
-  }
-  ctx.restore()
+  // Ceiling / ambient bokeh sparkles (sides of venue)
+  drawVenueSparkles(ctx, W, H, t)
 
-  // lane trapezoid
-  const nearL = project(-VIEW.LANE_HALF, 0.02, W, H)
-  const nearR = project(VIEW.LANE_HALF, 0.02, W, H)
-  const farL = project(-VIEW.LANE_HALF, 1.02, W, H)
-  const farR = project(VIEW.LANE_HALF, 1.02, W, H)
+  // Neon back wall behind pins
+  drawBackWall(ctx, W, H, t)
 
-  const lane = ctx.createLinearGradient(0, nearL.cy, 0, farL.cy)
-  lane.addColorStop(0, '#1a1430')
-  lane.addColorStop(0.55, '#12102a')
-  lane.addColorStop(1, '#0c0a1c')
+  const nearL = project(-VIEW.LANE_HALF, 0.0, W, H)
+  const nearR = project(VIEW.LANE_HALF, 0.0, W, H)
+  const farL = project(-VIEW.LANE_HALF, 1.05, W, H)
+  const farR = project(VIEW.LANE_HALF, 1.05, W, H)
+
+  // Soft approach apron under the ball (near)
+  const apron = ctx.createLinearGradient(0, H, 0, nearL.cy - 20)
+  apron.addColorStop(0, '#0a0614')
+  apron.addColorStop(1, 'rgba(10, 6, 20, 0)')
+  ctx.fillStyle = apron
+  ctx.fillRect(0, nearL.cy - 40, W, H - nearL.cy + 40)
+
+  // Glossy dark glass lane
   ctx.beginPath()
   ctx.moveTo(nearL.cx, nearL.cy)
   ctx.lineTo(nearR.cx, nearR.cy)
   ctx.lineTo(farR.cx, farR.cy)
   ctx.lineTo(farL.cx, farL.cy)
   ctx.closePath()
+  const lane = ctx.createLinearGradient(0, nearL.cy, 0, farL.cy)
+  lane.addColorStop(0, '#14102a')
+  lane.addColorStop(0.35, '#0c0a1c')
+  lane.addColorStop(0.7, '#080614')
+  lane.addColorStop(1, '#060410')
   ctx.fillStyle = lane
   ctx.fill()
 
-  // center oil sheen
+  // Mirror sheen + neon reflection wash on lane
   ctx.save()
   ctx.beginPath()
   ctx.moveTo(nearL.cx, nearL.cy)
   ctx.lineTo(nearR.cx, nearR.cy)
   ctx.lineTo(farR.cx, farR.cy)
   ctx.lineTo(farL.cx, farL.cy)
+  ctx.closePath()
   ctx.clip()
+
+  // Center oil / glass highlight
   const sheen = ctx.createLinearGradient(W * 0.5, nearL.cy, W * 0.5, farL.cy)
-  sheen.addColorStop(0, 'rgba(0, 200, 196, 0.07)')
-  sheen.addColorStop(0.5, 'rgba(255, 255, 255, 0.03)')
-  sheen.addColorStop(1, 'rgba(123, 63, 228, 0.08)')
+  sheen.addColorStop(0, 'rgba(140, 210, 255, 0.2)')
+  sheen.addColorStop(0.2, 'rgba(255, 255, 255, 0.1)')
+  sheen.addColorStop(0.45, 'rgba(0, 230, 210, 0.12)')
+  sheen.addColorStop(0.75, 'rgba(123, 63, 228, 0.2)')
+  sheen.addColorStop(1, 'rgba(255, 90, 60, 0.1)')
   ctx.fillStyle = sheen
   ctx.fillRect(0, 0, W, H)
 
-  // lane boards (subtle)
-  for (let i = 1; i < 8; i++) {
-    const x = -VIEW.LANE_HALF + (VIEW.LANE_HALF * 2 * i) / 8
-    const a = project(x, 0.02, W, H)
-    const b = project(x, 1.02, W, H)
-    ctx.strokeStyle = 'rgba(255,255,255,0.035)'
+  // Mirrored back-wall glow on far lane
+  const mir = ctx.createRadialGradient(W * 0.5, farL.cy + 8, 4, W * 0.5, farL.cy + 30, W * 0.28)
+  mir.addColorStop(0, 'rgba(0, 230, 210, 0.38)')
+  mir.addColorStop(0.35, 'rgba(123, 63, 228, 0.22)')
+  mir.addColorStop(1, 'rgba(0,0,0,0)')
+  ctx.fillStyle = mir
+  ctx.fillRect(0, 0, W, H)
+
+  // Longitudinal glass streaks
+  for (let i = 1; i < 9; i++) {
+    const x = -VIEW.LANE_HALF + (VIEW.LANE_HALF * 2 * i) / 9
+    const a = project(x, 0.01, W, H)
+    const b = project(x, 1.04, W, H)
+    ctx.strokeStyle = i === 4 || i === 5 ? 'rgba(255,255,255,0.055)' : 'rgba(180,200,255,0.03)'
     ctx.lineWidth = 1
     ctx.beginPath()
     ctx.moveTo(a.cx, a.cy)
     ctx.lineTo(b.cx, b.cy)
     ctx.stroke()
   }
-  ctx.restore()
 
-  // neon gutters / rails
-  const drawRail = (x: number) => {
-    const a = project(x, 0.0, W, H)
-    const b = project(x, 1.05, W, H)
+  // Reflect pins faintly on the glass lane
+  for (const pin of e.pins) {
+    if (!pin.up) continue
+    const p = project(pin.x, pin.z, W, H)
     ctx.save()
-    ctx.strokeStyle = 'rgba(0, 200, 196, 0.55)'
-    ctx.shadowColor = 'rgba(0, 200, 196, 0.85)'
-    ctx.shadowBlur = 14
-    ctx.lineWidth = 3
+    ctx.globalAlpha = 0.28
+    ctx.translate(p.cx, p.cy + 10 * p.scale)
+    ctx.scale(1, -0.55)
+    ctx.fillStyle = 'rgba(220, 230, 255, 0.9)'
     ctx.beginPath()
-    ctx.moveTo(a.cx, a.cy)
-    ctx.lineTo(b.cx, b.cy)
-    ctx.stroke()
-    ctx.strokeStyle = 'rgba(123, 63, 228, 0.45)'
-    ctx.shadowColor = 'rgba(123, 63, 228, 0.7)'
-    ctx.lineWidth = 1.5
-    ctx.beginPath()
-    ctx.moveTo(a.cx + (x < 0 ? -4 : 4), a.cy)
-    ctx.lineTo(b.cx + (x < 0 ? -2 : 2), b.cy)
-    ctx.stroke()
+    ctx.ellipse(0, 0, 4.5 * p.scale, 11 * p.scale, 0, 0, Math.PI * 2)
+    ctx.fill()
     ctx.restore()
   }
-  drawRail(-VIEW.LANE_HALF)
-  drawRail(VIEW.LANE_HALF)
 
-  // approach dots / foul line
-  const foulL = project(-VIEW.LANE_HALF, 0.12, W, H)
-  const foulR = project(VIEW.LANE_HALF, 0.12, W, H)
-  ctx.strokeStyle = 'rgba(255, 200, 60, 0.35)'
-  ctx.lineWidth = 2
+  ctx.restore()
+
+  // Glowing gutter rails (green + cyan energy — not copying LB green 1:1, ours lean teal→lime)
+  drawRail(ctx, W, H, -VIEW.LANE_HALF, t)
+  drawRail(ctx, W, H, VIEW.LANE_HALF, t)
+
+  // Foul line
+  const foulL = project(-VIEW.LANE_HALF, 0.1, W, H)
+  const foulR = project(VIEW.LANE_HALF, 0.1, W, H)
+  ctx.save()
+  ctx.strokeStyle = 'rgba(255, 200, 60, 0.45)'
+  ctx.shadowColor = 'rgba(255, 180, 40, 0.55)'
+  ctx.shadowBlur = 8
+  ctx.lineWidth = 2.2
   ctx.beginPath()
   ctx.moveTo(foulL.cx, foulL.cy)
   ctx.lineTo(foulR.cx, foulR.cy)
   ctx.stroke()
+  ctx.restore()
 
-  // arrows on lane
+  // Lane arrows
   for (let i = 0; i < 5; i++) {
-    const x = -0.22 + i * 0.11
-    const p = project(x, 0.38, W, H)
-    ctx.fillStyle = 'rgba(0, 200, 196, 0.35)'
+    const x = -0.2 + i * 0.1
+    const p = project(x, 0.36, W, H)
+    ctx.fillStyle = 'rgba(0, 230, 210, 0.4)'
     ctx.beginPath()
-    ctx.moveTo(p.cx, p.cy - 5 * p.scale)
-    ctx.lineTo(p.cx - 4 * p.scale, p.cy + 3 * p.scale)
-    ctx.lineTo(p.cx + 4 * p.scale, p.cy + 3 * p.scale)
+    ctx.moveTo(p.cx, p.cy - 5.5 * p.scale)
+    ctx.lineTo(p.cx - 4.2 * p.scale, p.cy + 3.2 * p.scale)
+    ctx.lineTo(p.cx + 4.2 * p.scale, p.cy + 3.2 * p.scale)
     ctx.closePath()
     ctx.fill()
   }
 
-  // pins (far first already by z — draw back-to-front by sorting z desc then... front = higher z wait z increases away)
-  // near z small = bottom of screen; draw high z first (far), then low z
-  const pins = [...e.pins].sort((a, b) => b.z - a.z)
-  for (const pin of pins) {
-    drawPin(ctx, W, H, pin, t)
-  }
+  // Side aisle sparkles / light trails
+  drawSideParticles(ctx, W, H, t)
 
-  // aim ghost
+  // Pins back-to-front
+  const pins = [...e.pins].sort((a, b) => b.z - a.z)
+  for (const pin of pins) drawPin(ctx, W, H, pin, t)
+
+  // Aim ghost
   if (e.phase === 'aim' && e.aimPower > 0.05) {
-    const steps = 14
+    const steps = 16
     for (let i = 1; i <= steps; i++) {
-      const z = 0.08 + (0.75 * i) / steps
+      const z = 0.08 + (0.78 * i) / steps
       const x = e.ball.x + e.aimX * (z - 0.08) * 0.9
       const p = project(x, z, W, H)
-      ctx.fillStyle = `rgba(0, 200, 196, ${0.08 + (1 - i / steps) * 0.25})`
+      ctx.fillStyle = `rgba(0, 230, 210, ${0.06 + (1 - i / steps) * 0.28})`
       ctx.beginPath()
-      ctx.arc(p.cx, p.cy, 3.5 * p.scale, 0, Math.PI * 2)
+      ctx.arc(p.cx, p.cy, 3.8 * p.scale, 0, Math.PI * 2)
       ctx.fill()
     }
   }
 
-  // ball
   drawBall(ctx, W, H, e, t)
+}
+
+function drawBackWall(ctx: CanvasRenderingContext2D, W: number, H: number, t: number) {
+  const deck = project(0, 1.02, W, H)
+  const left = project(-VIEW.LANE_HALF * 1.15, 1.02, W, H)
+  const right = project(VIEW.LANE_HALF * 1.15, 1.02, W, H)
+  const wallTop = deck.cy - H * 0.22
+  const wallBot = deck.cy + H * 0.02
+
+  // Dark wall panel
+  const wg = ctx.createLinearGradient(0, wallTop, 0, wallBot)
+  wg.addColorStop(0, '#0a0618')
+  wg.addColorStop(1, '#120a28')
+  ctx.fillStyle = wg
+  ctx.beginPath()
+  ctx.moveTo(left.cx - 18, wallBot)
+  ctx.lineTo(left.cx - 10, wallTop)
+  ctx.lineTo(right.cx + 10, wallTop)
+  ctx.lineTo(right.cx + 18, wallBot)
+  ctx.closePath()
+  ctx.fill()
+
+  // Soft neon halo behind signage
+  const halo = ctx.createRadialGradient(W * 0.5, deck.cy - H * 0.08, 4, W * 0.5, deck.cy - H * 0.06, W * 0.32)
+  halo.addColorStop(0, 'rgba(0, 220, 210, 0.28)')
+  halo.addColorStop(0.45, 'rgba(123, 63, 228, 0.18)')
+  halo.addColorStop(1, 'rgba(0,0,0,0)')
+  ctx.fillStyle = halo
+  ctx.fillRect(0, wallTop - 20, W, wallBot - wallTop + 40)
+
+  // Fifth Dimension emblem: neon "5" in a soft ring (own brand — not LB)
+  const ex = W * 0.5
+  const ey = deck.cy - H * 0.11
+  const er = Math.min(W, H) * 0.055
+  ctx.save()
+  ctx.shadowColor = 'rgba(0, 230, 210, 0.9)'
+  ctx.shadowBlur = 18
+  ctx.strokeStyle = 'rgba(0, 230, 210, 0.85)'
+  ctx.lineWidth = 2.4
+  ctx.beginPath()
+  ctx.arc(ex, ey, er, 0, Math.PI * 2)
+  ctx.stroke()
+  ctx.shadowColor = 'rgba(255, 90, 60, 0.7)'
+  ctx.strokeStyle = 'rgba(255, 120, 70, 0.55)'
+  ctx.lineWidth = 1.2
+  ctx.beginPath()
+  ctx.arc(ex, ey, er * 1.18, 0.2, Math.PI * 1.6)
+  ctx.stroke()
+  ctx.fillStyle = '#f4f0ea'
+  ctx.shadowColor = 'rgba(123, 63, 228, 0.85)'
+  ctx.shadowBlur = 12
+  ctx.font = `800 ${Math.round(er * 1.35)}px Inter, system-ui, sans-serif`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText('5', ex, ey + 1)
+  ctx.restore()
+
+  // FIFTH FLOOR wordmark
+  ctx.save()
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'top'
+  const pulse = 0.75 + 0.25 * Math.sin(t * 2.2)
+  ctx.font = `800 ${Math.max(11, Math.round(H * 0.018))}px Inter, system-ui, sans-serif`
+  ctx.letterSpacing = '0.18em'
+  ctx.shadowColor = `rgba(0, 230, 210, ${0.55 * pulse})`
+  ctx.shadowBlur = 10
+  const grad = ctx.createLinearGradient(ex - 60, 0, ex + 60, 0)
+  grad.addColorStop(0, '#00e6d2')
+  grad.addColorStop(0.45, '#7b3fe4')
+  grad.addColorStop(0.75, '#ff5a3c')
+  grad.addColorStop(1, '#ffc83c')
+  ctx.fillStyle = grad
+  ctx.fillText('FIFTH FLOOR', ex, ey + er + 6)
+  ctx.font = `600 ${Math.max(8, Math.round(H * 0.011))}px Inter, system-ui, sans-serif`
+  ctx.shadowBlur = 6
+  ctx.fillStyle = `rgba(180, 240, 255, ${0.55 + 0.25 * pulse})`
+  ctx.fillText('ARCADE ALLEY', ex, ey + er + 6 + Math.max(12, H * 0.018))
+  ctx.restore()
+
+  // Pin deck light strip
+  ctx.save()
+  ctx.strokeStyle = 'rgba(0, 230, 210, 0.55)'
+  ctx.shadowColor = 'rgba(0, 230, 210, 0.8)'
+  ctx.shadowBlur = 12
+  ctx.lineWidth = 2
+  ctx.beginPath()
+  ctx.moveTo(left.cx + 6, deck.cy + 2)
+  ctx.lineTo(right.cx - 6, deck.cy + 2)
+  ctx.stroke()
+  ctx.restore()
+}
+
+function drawRail(ctx: CanvasRenderingContext2D, W: number, H: number, x: number, t: number) {
+  const a = project(x, 0.0, W, H)
+  const b = project(x, 1.06, W, H)
+  const pulse = 0.7 + 0.3 * Math.sin(t * 3 + x * 8)
+  ctx.save()
+  // Outer lime-teal glow
+  ctx.strokeStyle = `rgba(40, 255, 160, ${0.35 * pulse})`
+  ctx.shadowColor = 'rgba(40, 255, 160, 0.95)'
+  ctx.shadowBlur = 22
+  ctx.lineWidth = 7
+  ctx.lineCap = 'round'
+  ctx.beginPath()
+  ctx.moveTo(a.cx, a.cy)
+  ctx.lineTo(b.cx, b.cy)
+  ctx.stroke()
+  // Core cyan
+  ctx.strokeStyle = `rgba(0, 240, 220, ${0.85 * pulse})`
+  ctx.shadowColor = 'rgba(0, 230, 210, 1)'
+  ctx.shadowBlur = 14
+  ctx.lineWidth = 2.8
+  ctx.beginPath()
+  ctx.moveTo(a.cx, a.cy)
+  ctx.lineTo(b.cx, b.cy)
+  ctx.stroke()
+  // Inner hot line
+  ctx.strokeStyle = 'rgba(255,255,255,0.55)'
+  ctx.shadowBlur = 0
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  ctx.moveTo(a.cx, a.cy)
+  ctx.lineTo(b.cx, b.cy)
+  ctx.stroke()
+  ctx.restore()
+}
+
+function drawVenueSparkles(ctx: CanvasRenderingContext2D, W: number, H: number, t: number) {
+  ctx.save()
+  for (let i = 0; i < 64; i++) {
+    const side = i % 2 === 0 ? 0.08 : 0.92
+    const sx = (side + (((i * 37) % 100) / 1000) * (i % 2 === 0 ? 1 : -1)) * W
+    const sy = (((i * 61) % 1000) / 1000) * H * 0.72
+    const tw = 0.35 + 0.65 * Math.abs(Math.sin(t * 1.4 + i * 0.7))
+    const r = 0.8 + (i % 4) * 0.5
+    ctx.fillStyle = i % 5 === 0
+      ? `rgba(40, 255, 180, ${0.2 + tw * 0.45})`
+      : `rgba(140, 200, 255, ${0.15 + tw * 0.4})`
+    ctx.beginPath()
+    ctx.arc(sx, sy, r, 0, Math.PI * 2)
+    ctx.fill()
+  }
+  ctx.restore()
+}
+
+function drawSideParticles(ctx: CanvasRenderingContext2D, W: number, H: number, t: number) {
+  const nearL = project(-VIEW.LANE_HALF, 0.05, W, H)
+  const farL = project(-VIEW.LANE_HALF, 1.0, W, H)
+  const nearR = project(VIEW.LANE_HALF, 0.05, W, H)
+  const farR = project(VIEW.LANE_HALF, 1.0, W, H)
+  ctx.save()
+  for (let i = 0; i < 36; i++) {
+    const u = ((i * 0.07 + t * 0.08) % 1)
+    const side = i % 2 === 0 ? -1 : 1
+    const ax = side < 0 ? nearL.cx : nearR.cx
+    const ay = side < 0 ? nearL.cy : nearR.cy
+    const bx = side < 0 ? farL.cx : farR.cx
+    const by = side < 0 ? farL.cy : farR.cy
+    const x = ax + (bx - ax) * u + side * (8 + (i % 5) * 3)
+    const y = ay + (by - ay) * u
+    const tw = 0.4 + 0.6 * Math.abs(Math.sin(t * 2.5 + i))
+    ctx.fillStyle = `rgba(60, 255, 200, ${0.15 + tw * 0.35})`
+    ctx.shadowColor = 'rgba(0, 255, 200, 0.6)'
+    ctx.shadowBlur = 6
+    ctx.beginPath()
+    ctx.arc(x, y, 1.2 + (i % 3) * 0.4, 0, Math.PI * 2)
+    ctx.fill()
+  }
+  ctx.restore()
 }
 
 function drawPin(
@@ -502,23 +684,27 @@ function drawPin(
   t: number,
 ) {
   const p = project(pin.x, pin.z, W, H)
-  const h = 26 * p.scale
-  const w = 9 * p.scale
+  const h = 30 * p.scale
+  const w = 10 * p.scale
   ctx.save()
   ctx.translate(p.cx, p.cy)
   if (!pin.up) {
     const ang = pin.angle || Math.atan2(pin.vz, pin.vx) || 0.9
     ctx.rotate(ang)
-    ctx.globalAlpha = 0.55
+    ctx.globalAlpha = 0.5
   }
-  // glow
-  ctx.shadowColor = 'rgba(200, 180, 255, 0.55)'
-  ctx.shadowBlur = 10 * p.scale
-  // body
-  const body = ctx.createLinearGradient(0, -h, 0, h * 0.35)
-  body.addColorStop(0, '#f4f0ea')
-  body.addColorStop(0.45, '#ddd6cc')
-  body.addColorStop(1, '#b8b0a4')
+  // Floor contact glow
+  ctx.fillStyle = 'rgba(0, 220, 210, 0.12)'
+  ctx.beginPath()
+  ctx.ellipse(0, h * 0.42, w * 1.1, w * 0.35, 0, 0, Math.PI * 2)
+  ctx.fill()
+
+  ctx.shadowColor = 'rgba(255, 240, 220, 0.65)'
+  ctx.shadowBlur = 12 * p.scale
+  const body = ctx.createLinearGradient(0, -h, 0, h * 0.4)
+  body.addColorStop(0, '#fff8f0')
+  body.addColorStop(0.4, '#efe6da')
+  body.addColorStop(1, '#c8bdb0')
   ctx.fillStyle = body
   ctx.beginPath()
   ctx.moveTo(0, -h)
@@ -527,15 +713,23 @@ function drawPin(
   ctx.bezierCurveTo(-w * 0.85, h * 0.45, -w * 0.95, h * 0.2, -w * 0.7, h * 0.05)
   ctx.bezierCurveTo(-w * 0.85, -h * 0.2, -w * 0.7, -h * 0.75, 0, -h)
   ctx.fill()
-  // neck band
-  ctx.strokeStyle = 'rgba(72, 32, 120, 0.75)'
-  ctx.lineWidth = Math.max(1, 2 * p.scale)
+
+  // Classic red neck stripe (readable under neon)
+  ctx.shadowBlur = 0
+  ctx.fillStyle = '#c62828'
   ctx.beginPath()
-  ctx.ellipse(0, -h * 0.35, w * 0.45, w * 0.18, 0, 0, Math.PI * 2)
+  ctx.ellipse(0, -h * 0.32, w * 0.48, w * 0.22, 0, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.strokeStyle = 'rgba(255,255,255,0.35)'
+  ctx.lineWidth = Math.max(0.8, 1.2 * p.scale)
   ctx.stroke()
-  // neon rim
-  ctx.strokeStyle = `rgba(0, 200, 196, ${0.35 + 0.15 * Math.sin(t * 3 + pin.x * 10)})`
+
+  // Soft neon rim so pins pop on dark lane
+  ctx.strokeStyle = `rgba(0, 230, 210, ${0.25 + 0.12 * Math.sin(t * 3 + pin.x * 10)})`
   ctx.lineWidth = 1
+  ctx.beginPath()
+  ctx.moveTo(0, -h)
+  ctx.bezierCurveTo(w * 0.7, -h * 0.75, w * 0.85, -h * 0.2, w * 0.7, h * 0.05)
   ctx.stroke()
   ctx.restore()
 }
@@ -544,51 +738,94 @@ function drawBall(ctx: CanvasRenderingContext2D, W: number, H: number, e: FifthF
   const b = e.ball
   if (!b.alive && e.phase !== 'aim') return
   const p = project(b.x, b.z, W, H)
-  const r = VIEW.BALL_R * W * 0.55 * p.scale / VIEW.LANE_HALF
-  // shadow
+  const r = (VIEW.BALL_R * W * 0.52 * p.scale) / VIEW.LANE_HALF
+
   ctx.save()
-  ctx.fillStyle = 'rgba(0,0,0,0.35)'
+  // Contact shadow on glass
+  ctx.fillStyle = 'rgba(0,0,0,0.5)'
   ctx.beginPath()
-  ctx.ellipse(p.cx, p.cy + r * 0.55, r * 0.9, r * 0.28, 0, 0, Math.PI * 2)
+  ctx.ellipse(p.cx, p.cy + r * 0.7, r * 1.05, r * 0.34, 0, 0, Math.PI * 2)
   ctx.fill()
-  // glow trail when rolling
+
+  // Glass reflection under ball
+  ctx.globalAlpha = 0.35
+  ctx.fillStyle = 'rgba(100, 180, 255, 0.25)'
+  ctx.beginPath()
+  ctx.ellipse(p.cx, p.cy + r * 0.95, r * 0.75, r * 0.22, 0, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.globalAlpha = 1
+
   if (b.rolling) {
-    ctx.strokeStyle = 'rgba(0, 200, 196, 0.35)'
-    ctx.shadowColor = 'rgba(0, 200, 196, 0.7)'
+    ctx.strokeStyle = 'rgba(0, 230, 210, 0.4)'
+    ctx.shadowColor = 'rgba(140, 80, 255, 0.7)'
     ctx.shadowBlur = 16
-    ctx.lineWidth = r * 0.45
+    ctx.lineWidth = Math.max(2, r * 0.28)
     ctx.beginPath()
-    const trail = project(b.x - b.vx * 0.08, b.z - b.vz * 0.08, W, H)
+    const trail = project(b.x - b.vx * 0.06, b.z - b.vz * 0.06, W, H)
     ctx.moveTo(trail.cx, trail.cy)
     ctx.lineTo(p.cx, p.cy)
     ctx.stroke()
+    ctx.shadowBlur = 0
   }
-  // sphere
-  const g = ctx.createRadialGradient(p.cx - r * 0.35, p.cy - r * 0.4, r * 0.1, p.cx, p.cy, r)
-  g.addColorStop(0, '#5a4a8a')
-  g.addColorStop(0.45, '#2a1a48')
-  g.addColorStop(1, '#0e0818')
+
+  // Solid dark sphere
+  const g = ctx.createRadialGradient(p.cx - r * 0.32, p.cy - r * 0.38, r * 0.05, p.cx, p.cy, r)
+  g.addColorStop(0, '#4a3a6e')
+  g.addColorStop(0.35, '#1a102e')
+  g.addColorStop(0.75, '#0a0614')
+  g.addColorStop(1, '#030208')
   ctx.fillStyle = g
-  ctx.shadowColor = 'rgba(123, 63, 228, 0.65)'
+  ctx.shadowColor = 'rgba(100, 60, 200, 0.55)'
   ctx.shadowBlur = 18
   ctx.beginPath()
   ctx.arc(p.cx, p.cy, r, 0, Math.PI * 2)
   ctx.fill()
-  // finger holes
   ctx.shadowBlur = 0
-  ctx.fillStyle = 'rgba(0,0,0,0.55)'
-  const spin = t * (b.rolling ? 8 : 0.4)
-  for (let i = 0; i < 3; i++) {
-    const ang = spin + (i * Math.PI * 2) / 3
-    const hx = p.cx + Math.cos(ang) * r * 0.28
-    const hy = p.cy + Math.sin(ang) * r * 0.28 - r * 0.08
+
+  // Specular highlight
+  const hl = ctx.createRadialGradient(p.cx - r * 0.3, p.cy - r * 0.35, 0, p.cx - r * 0.3, p.cy - r * 0.35, r * 0.45)
+  hl.addColorStop(0, 'rgba(255,255,255,0.35)')
+  hl.addColorStop(1, 'rgba(255,255,255,0)')
+  ctx.fillStyle = hl
+  ctx.beginPath()
+  ctx.arc(p.cx, p.cy, r, 0, Math.PI * 2)
+  ctx.fill()
+
+  // Neon accent rings — full closed bands on the sphere
+  const spin = t * (b.rolling ? 6.5 : 0.5)
+  ctx.save()
+  ctx.beginPath()
+  ctx.arc(p.cx, p.cy, r, 0, Math.PI * 2)
+  ctx.clip()
+  for (let ring = 0; ring < 2; ring++) {
+    const tilt = 0.55 + ring * 0.12
+    const rr = r * (0.72 - ring * 0.18)
+    ctx.strokeStyle = ring === 0 ? 'rgba(170, 90, 255, 0.9)' : 'rgba(0, 235, 215, 0.85)'
+    ctx.shadowColor = ring === 0 ? 'rgba(170, 90, 255, 1)' : 'rgba(0, 235, 215, 1)'
+    ctx.shadowBlur = 8
+    ctx.lineWidth = Math.max(1.6, r * 0.09)
     ctx.beginPath()
-    ctx.arc(hx, hy, r * 0.1, 0, Math.PI * 2)
+    ctx.ellipse(p.cx, p.cy + Math.sin(spin + ring) * r * 0.08, rr, rr * tilt, spin * 0.4 + ring * 0.9, 0, Math.PI * 2)
+    ctx.stroke()
+  }
+  ctx.restore()
+
+  // Finger holes
+  ctx.fillStyle = 'rgba(0,0,0,0.65)'
+  for (let i = 0; i < 3; i++) {
+    const ang = -0.6 + i * 0.55 + (b.rolling ? spin * 0.15 : 0)
+    const hx = p.cx + Math.cos(ang) * r * 0.22 - r * 0.05
+    const hy = p.cy + Math.sin(ang) * r * 0.22 - r * 0.22
+    ctx.beginPath()
+    ctx.arc(hx, hy, Math.max(1.5, r * 0.085), 0, Math.PI * 2)
     ctx.fill()
   }
-  // cyan rim
-  ctx.strokeStyle = 'rgba(0, 200, 196, 0.55)'
-  ctx.lineWidth = Math.max(1.2, r * 0.08)
+
+  // Cyan outer rim
+  ctx.strokeStyle = 'rgba(0, 240, 220, 0.7)'
+  ctx.lineWidth = Math.max(1.5, r * 0.065)
+  ctx.shadowColor = 'rgba(0, 240, 220, 0.8)'
+  ctx.shadowBlur = 10
   ctx.beginPath()
   ctx.arc(p.cx, p.cy, r, 0, Math.PI * 2)
   ctx.stroke()
