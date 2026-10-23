@@ -45,8 +45,8 @@ export type EndStats = {
 export const STAR_PTS = 10
 export const TAG_BASE = 200
 export const POWER_S = 7
-export const SHIFT_EVERY_S = 12
-export const SHIFT_WARN_S = 2.2
+export const SHIFT_EVERY_S = 20
+export const SHIFT_WARN_S = 3
 export const START_LIVES = 3
 /** cells / s — player slightly faster than chase ghosts */
 export const PLAYER_SPEED = 6.1
