@@ -10,6 +10,7 @@ import { StreetShiftEngine, COLS, ROWS, type Hud } from './engine'
 import type { Dir } from './types'
 import { DX, DY, START_LIVES } from './types'
 import './streetShift.css'
+import { isTypingTarget } from '../core/typingTarget'
 
 const DPR_CAP = 2
 /** Min swipe distance — forgiving but needs a clear axis */
@@ -162,6 +163,9 @@ export default function StreetShift() {
 
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
+      // Don't steal A/W/S/D while a handle / name field is focused (or end overlay is up).
+      if (isTypingTarget(ev.target)) return
+      if (ended) return
       const map: Record<string, Dir> = {
         ArrowUp: 0,
         KeyW: 0,
@@ -179,7 +183,7 @@ export default function StreetShift() {
     }
     window.addEventListener('keydown', onKey, { passive: false })
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [ended])
 
   const queue = (d: Dir) => eng.current?.queueDir(d)
 

@@ -77,10 +77,16 @@ export default function HandlePrompt({
         maxLength={16}
         autoComplete="off"
         autoCapitalize="off"
+        autoCorrect="off"
         spellCheck={false}
+        inputMode="text"
+        enterKeyHint="done"
         placeholder="Your handle"
         value={draft}
+        autoFocus
         onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => e.stopPropagation()}
+        onKeyUp={(e) => e.stopPropagation()}
       />
       {err ? <p className="soc-handle__err">{err}</p> : <p className="soc-handle__hint">3–16 · letters, numbers, _</p>}
       <div className="soc-handle__row">

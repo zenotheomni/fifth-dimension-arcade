@@ -10,6 +10,7 @@ import { PerfLog } from './perfLog'
 import { BLINK_S, FR_DT, FR_HZ, POWER_TICKS, STAR_M } from './sim/constants'
 import { LOGO_BONUS_M, STUMBLE_PEN_M, distOf, newRun, queueAction, resetCursors, scoreOf, speedMul, step, type Action, type RunEvent, type RunState } from './sim/runner'
 import { Track } from './sim/track'
+import { isTypingTarget } from '../core/typingTarget'
 import { DebugOverlay } from './debugOverlay'
 import { FrScene, type QualityTier, type ViewState } from './render/scene'
 import { loadTexture } from './render/textures'
@@ -235,6 +236,9 @@ class Engine {
   }
 
   private onKey = (e: KeyboardEvent) => {
+    // End-screen HandlePrompt (and any other text field) must receive A/W/S/D/Space.
+    if (isTypingTarget(e.target)) return
+    if (this.phase === 'ended' || this.phase === 'crashed' || this.destroyed) return
     const map: Record<string, Action> = {
       ArrowLeft: 'left',
       KeyA: 'left',
