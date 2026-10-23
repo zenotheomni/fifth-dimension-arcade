@@ -4,7 +4,7 @@
  *
  * Owner rule: "ZENO 5" (court-vision-theme) plays ONLY inside Court Vision.
  */
-export type MusicScene = 'lobby' | 'court-vision' | 'fifth-run' | 'street-shift' | 'none'
+export type MusicScene = 'lobby' | 'court-vision' | 'fifth-run' | 'street-shift' | 'nova-slide' | 'none'
 
 export type MusicTrack = {
   id: string
@@ -82,7 +82,7 @@ const fromFile = (x: { id: string; title: string; file: string }): MusicTrack =>
 
 
 
-/** Street Shift gameplay — "Eucalyptus Vibes" (Jenks / Fifth Dimension Imperial). */
+/** Nova-Slide gameplay — "Eucalyptus Vibes" (Jenks / Fifth Dimension Imperial). */
 export const STREET_SHIFT_THEME: MusicTrack = {
   id: 'street-shift-theme',
   title: 'Jenks - Eucalyptus Vibes',
@@ -104,6 +104,7 @@ export const SCENE_TRACKS: Record<MusicScene, MusicTrack | null> = {
   'court-vision': COURT_VISION_THEME,
   'fifth-run': FIFTH_GLIDE_THEME,
   'street-shift': STREET_SHIFT_THEME,
+  'nova-slide': STREET_SHIFT_THEME,
   none: null,
 }
 

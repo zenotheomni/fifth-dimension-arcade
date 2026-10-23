@@ -227,8 +227,8 @@ export default function StreetShift() {
 
   const challengeStub = async () => {
     if (!ended) return
-    const url = `${window.location.origin}${import.meta.env.BASE_URL}street-shift`
-    const text = `I scored ${ended.score.toLocaleString('en-US')} in STREET SHIFT. Can you beat it?`
+    const url = `${window.location.origin}${import.meta.env.BASE_URL}nova-slide`
+    const text = `I scored ${ended.score.toLocaleString('en-US')} in NOVA-SLIDE. Can you beat it?`
     const how = await shareOrCopy(text, url)
     setShareNote(how === 'shared' ? 'Sent!' : how === 'copied' ? 'Link copied — paste it in a text' : how === 'cancelled' ? null : 'Copy failed')
     track('arcade_street_shift_share', { how, v: 2 })
@@ -312,11 +312,11 @@ export default function StreetShift() {
       ) : null}
 
       {howto && !ended ? (
-        <div className="ss-howto" role="dialog" aria-label="How to play STREET SHIFT">
+        <div className="ss-howto" role="dialog" aria-label="How to play NOVA-SLIDE">
           <div className="ss-howto__card">
             <img src={BRAND_LOGO} alt="" width={56} height={56} className="ss-howto__logo" />
             <p className="ss-howto__eyebrow">How to play</p>
-            <h2 className="ss-howto__title">STREET SHIFT</h2>
+            <h2 className="ss-howto__title">NOVA-SLIDE</h2>
             <p className="ss-howto__tag">Pac-Man DNA. Fifth Dimension maze. The grid rewrites itself.</p>
             <section>
               <h3>Controls</h3>
@@ -364,7 +364,7 @@ export default function StreetShift() {
 
       {ended ? (
         <div className="ss-end">
-          <p className="ss-end__eyebrow">STREET SHIFT</p>
+          <p className="ss-end__eyebrow">NOVA-SLIDE</p>
           <h2>{ended.score >= hud.pb && ended.score > 0 ? 'Fifth State unlocked.' : 'Glitch. Rearrange. Run it back.'}</h2>
           <div className="ss-end__score">
             {ended.score.toLocaleString('en-US')}

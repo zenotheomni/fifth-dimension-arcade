@@ -24,7 +24,8 @@ type ChallengeView = {
 const GAME_TITLES: Record<string, string> = {
   'court-vision': 'COURT VISION',
   'fifth-run': 'FIFTH GLIDE',
-  'street-shift': 'STREET SHIFT',
+  'street-shift': 'NOVA-SLIDE',
+  'nova-slide': 'NOVA-SLIDE',
 }
 
 async function loadChallenge(id: string): Promise<ChallengeView | null> {
@@ -72,7 +73,12 @@ async function render(req: Request): Promise<ImageResponse> {
 
   const bungeeText = `FIFTH FLOOR ARCADE${game.toUpperCase()}${handle.toUpperCase()}${score}CAN YOU BEAT IT?CHALLENGE VS 0123456789`
   const bungee = await loadFont('Bungee', bungeeText)
-  const tagline = c?.game_id === 'fifth-run' ? 'Same run. Outrun the dark.' : 'Same court. 60 seconds.'
+  const tagline =
+    c?.game_id === 'fifth-run'
+      ? 'Same run. Outrun the dark.'
+      : c?.game_id === 'street-shift' || c?.game_id === 'nova-slide'
+        ? 'Same maze. Same shifts.'
+        : 'Same court. 60 seconds.'
   const bodyText = `${line} ${tagline} PTS`
   const host = publicArcadeHost()
   const [inter, logo] = await Promise.all([

@@ -21,6 +21,7 @@ export default function App() {
         <Route path="fifth-run" element={<FifthRunPage />} />
         <Route path="fifth-glide" element={<FifthRunPage />} />
         <Route path="street-shift" element={<StreetShiftPage />} />
+        <Route path="nova-slide" element={<StreetShiftPage />} />
         <Route path="challenge/:id" element={<ChallengePage />} />
         <Route path="claim" element={<ClaimPage />} />
         <Route path="key" element={<KeyPage />} />

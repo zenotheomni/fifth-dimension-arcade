@@ -31,4 +31,4 @@ each song by crossfading (1.2 s) into a second copy of itself, so there's no gap
 A "Now Playing" tab names the song when each scene's music starts.
 
 
-v25 (Oct 2026): added Street Shift theme (Eucalyptus Vibes). AV cache-bust bumped to `?v=25`.
+v25 (Oct 2026): added Nova-Slide (Street Shift) theme (Eucalyptus Vibes). AV cache-bust bumped to `?v=25`.
