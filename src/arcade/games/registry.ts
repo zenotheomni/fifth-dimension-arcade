@@ -47,6 +47,16 @@ export const GAMES: ArcadeGame[] = [
     accentAlt: '#FF8C28',
   },
   {
+    id: 'street-shift',
+    title: 'Street Shift',
+    tagline: 'Pac-Man × Miami grid. Maze Shift.',
+    status: 'new',
+    boxArt: art('box-street-shift.webp'),
+    route: '/street-shift',
+    accent: '#00C8C4',
+    accentAlt: '#FF5A3C',
+  },
+  {
     id: 'break-and-rack',
     title: 'Break & Rack',
     tagline: 'Pool hall pressure',

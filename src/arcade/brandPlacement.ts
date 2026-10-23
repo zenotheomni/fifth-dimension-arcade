@@ -27,6 +27,10 @@ export const END_DOORS = {
     { id: 'challenge', label: 'Challenge a friend' },
     { id: 'record-store', label: 'Enter record store' },
   ],
+  streetShift: [
+    { id: 'challenge', label: 'Challenge a friend' },
+    { id: 'record-store', label: 'Enter record store' },
+  ],
 } as const
 
 /** In-world placement knobs used by Court Vision canvas (M2) */
