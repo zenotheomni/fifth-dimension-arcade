@@ -18,9 +18,10 @@ const GUTTER_Z = 1.08
 
 /** Classic ten-pin triangle, tip toward bowler (lower z). */
 function pinHomes(): { x: number; z: number }[] {
-  const rowGap = 0.058
-  const colGap = 0.062
-  const z0 = 0.82
+  // Closer deck so pins read as big targets (Court Vision hoop energy)
+  const rowGap = 0.052
+  const colGap = 0.068
+  const z0 = 0.48
   const out: { x: number; z: number }[] = []
   for (let row = 0; row < 4; row++) {
     const n = row + 1
@@ -160,7 +161,7 @@ export function scoreGame(pinfalls: number[][]): { frames: FrameMark[]; total: n
 
 export class FifthFrameEngine {
   phase: Phase = 'howto'
-  ball: Ball = { x: 0, z: 0.08, vx: 0, vz: 0, alive: true, rolling: false }
+  ball: Ball = { x: 0, z: 0.04, vx: 0, vz: 0, alive: true, rolling: false }
   pins: Pin[] = []
   frame = 1
   ballInFrame = 1
@@ -260,7 +261,7 @@ export class FifthFrameEngine {
   }
 
   private resetBall() {
-    this.ball = { x: 0, z: 0.08, vx: 0, vz: 0, alive: true, rolling: false }
+    this.ball = { x: 0, z: 0.04, vx: 0, vz: 0, alive: true, rolling: false }
     this.aimX = 0
     this.aimPower = 0
     this.samples = []
@@ -317,7 +318,7 @@ export class FifthFrameEngine {
     const vz = 0.62 + power * 1.28 // world units / s — toy punch
     const vx = assist * vz * 0.85
     this.ball.x = Math.max(-0.18, Math.min(0.18, assist * 0.15))
-    this.ball.z = 0.08
+    this.ball.z = 0.04
     this.ball.vx = vx
     this.ball.vz = vz
     this.ball.rolling = true
@@ -591,15 +592,16 @@ function analyzeFlick(samples: FlickSample[], release: FlickSample): { speed: nu
 }
 
 /** Perspective project world (x,z) → canvas.
- * Low / first-person from behind the ball — long glossy lane taper (Lets Bowl vibe).
+ * Full-screen behind-the-ball cam — Court Vision / Glide presence (Fifth Floor bar).
  */
 export function project(x: number, z: number, W: number, H: number) {
   const t = Math.max(0, Math.min(1.2, z))
-  // near (z=0) huge at bottom; far (z=1) small under neon back wall
-  const yN = 0.90
+  // Full-screen presence (Fifth Floor bar): near owns bottom like CV ball;
+  // far stays BIG — pins/deck are hero targets, not tiny toys in a void.
+  const yN = 0.78
   const yF = 0.30
-  const sN = 1.28
-  const sF = 0.28
+  const sN = 1.38
+  const sF = 1.02
   const y = H * (yN + (yF - yN) * t)
   const scale = sN + (sF - sN) * t
   const cx = W * 0.5 + (x * W * 0.5 * scale) / LANE_HALF
