@@ -4,12 +4,13 @@ import {
   generateMaze,
   ensureExits,
   isOpen,
-  openNeighbors,
   nearestOpen,
   powerSpots,
   key,
   mulberry32,
   reachable,
+  nextStyle,
+  type MazeStyle,
 } from './maze'
 import {
   type Cell,
@@ -21,11 +22,13 @@ import {
   DX,
   DY,
   OPP,
+  DIRS,
   STAR_PTS,
   TAG_BASE,
   POWER_S,
   SHIFT_EVERY_S,
   SHIFT_WARN_S,
+  MORPH_S,
   START_LIVES,
   PLAYER_SPEED,
   GHOST_SPEED,
@@ -53,11 +56,13 @@ export type Hud = {
   callout: string | null
   combo: number
   queued: Dir | null
+  /** 0..1 while walls morph between shapes */
+  morph: number
 }
 
 export type Listener = (h: Hud) => void
 
-const GHOST_COLORS = ['#FF5A3C', '#00C8C4', '#FF8C28', '#C77DFF']
+const GHOST_COLORS = ['#FF5A3C', '#00C8C4', '#7B3FE4', '#FFC83C']
 
 function loadPb(): number {
   try {
@@ -90,6 +95,11 @@ function snap(v: number) {
 
 export class StreetShiftEngine {
   grid: Cell[] = []
+  /** Previous maze during soft morph (walls slide/reform). */
+  prevGrid: Cell[] | null = null
+  morphT = 0
+  morphing = false
+  mazeStyle: MazeStyle | null = null
   stars = new Set<number>()
   powers = new Set<number>()
   px = 1
@@ -148,6 +158,7 @@ export class StreetShiftEngine {
       callout: this.callout,
       combo: this.tagChain,
       queued: this.queued,
+      morph: this.morphing ? Math.min(1, this.morphT / MORPH_S) : 0,
     }
   }
 
@@ -186,6 +197,10 @@ export class StreetShiftEngine {
     this.queueAge = 0
     this.seed = (Math.random() * 1e9) | 0
     this.rng = mulberry32(this.seed)
+    this.prevGrid = null
+    this.morphT = 0
+    this.morphing = false
+    this.mazeStyle = null
     this.buildLevel(true)
     this.phase = 'playing'
     this.last = performance.now()
@@ -219,7 +234,11 @@ export class StreetShiftEngine {
   }
 
   private buildLevel(placePlayer: boolean) {
-    this.grid = generateMaze(this.rng)
+    this.mazeStyle = nextStyle(this.mazeStyle, this.rng)
+    this.grid = generateMaze(this.rng, this.mazeStyle)
+    this.prevGrid = null
+    this.morphing = false
+    this.morphT = 0
     const spawn = nearestOpen(this.grid, Math.floor(COLS / 2), Math.floor(ROWS / 2) + 2)
     if (placePlayer) {
       this.px = spawn.x
@@ -283,39 +302,36 @@ export class StreetShiftEngine {
   private mazeShift() {
     const px = Math.round(this.px)
     const py = Math.round(this.py)
-    const keptStars = new Set<number>()
-    // Full regen — real corridor rewrite (not a cosmetic pulse).
-    this.grid = generateMaze(this.rng)
-    // Extra chaos punches so successive mazes look obviously different.
-    const chaos = Math.floor(COLS * ROWS * 0.08)
+    this.prevGrid = this.grid.slice()
+    this.mazeStyle = nextStyle(this.mazeStyle, this.rng)
+    const next = generateMaze(this.rng, this.mazeStyle)
+    // light chaos so successive morphs still feel distinct
+    const chaos = Math.floor(COLS * ROWS * 0.05)
     for (let i = 0; i < chaos; i++) {
       const x = 1 + Math.floor(this.rng() * (COLS - 2))
       const y = 1 + Math.floor(this.rng() * (ROWS - 2))
-      if (x === 0 || y === 0 || x === COLS - 1 || y === ROWS - 1) continue
       const k = key(x, y)
-      this.grid[k] = this.grid[k] === 1 ? 0 : 1
+      next[k] = next[k] === 1 ? 0 : 1
     }
-    // keep border solid except wrap tunnels
     for (let x = 0; x < COLS; x++) {
-      this.grid[key(x, 0)] = 1
-      this.grid[key(x, ROWS - 1)] = 1
+      next[key(x, 0)] = 1
+      next[key(x, ROWS - 1)] = 1
     }
     for (let y = 0; y < ROWS; y++) {
-      this.grid[key(0, y)] = 1
-      this.grid[key(COLS - 1, y)] = 1
+      next[key(0, y)] = 1
+      next[key(COLS - 1, y)] = 1
     }
     const mid = Math.floor(ROWS / 2)
     if (mid % 2 === 1) {
-      this.grid[key(0, mid)] = 0
-      this.grid[key(COLS - 1, mid)] = 0
-      this.grid[key(1, mid)] = 0
-      this.grid[key(COLS - 2, mid)] = 0
+      next[key(0, mid)] = 0
+      next[key(COLS - 1, mid)] = 0
+      next[key(1, mid)] = 0
+      next[key(COLS - 2, mid)] = 0
     }
-    const n = nearestOpen(this.grid, px, py)
-    this.px = n.x
-    this.py = n.y
-    ensureExits(this.grid, n.x, n.y, 55, this.rng)
-    const reach = reachable(this.grid, n.x, n.y)
+    const n = nearestOpen(next, px, py)
+    ensureExits(next, n.x, n.y, 55, this.rng)
+    const reach = reachable(next, n.x, n.y)
+    const keptStars = new Set<number>()
     for (const k of this.stars) {
       if (reach.has(k)) keptStars.add(k)
     }
@@ -329,13 +345,29 @@ export class StreetShiftEngine {
     }
     this.stars = keptStars
     this.powers = new Set()
-    for (const p of powerSpots(this.grid, n.x, n.y)) {
+    for (const p of powerSpots(next, n.x, n.y)) {
       const k = key(p.x, p.y)
       if (reach.has(k)) {
         this.powers.add(k)
         this.stars.delete(k)
       }
     }
+    this.grid = next
+    this.morphT = 0
+    this.morphing = true
+    this.shifts++
+    this.say('DIMENSION MORPH', 1.4)
+    this.invulnT = Math.max(this.invulnT, 0.9)
+  }
+
+  /** Finish morph — snap actors onto the new shape. */
+  private finishMorph() {
+    this.morphing = false
+    this.morphT = 0
+    this.prevGrid = null
+    const n = nearestOpen(this.grid, Math.round(this.px), Math.round(this.py))
+    this.px = n.x
+    this.py = n.y
     for (const g of this.ghosts) {
       const gn = nearestOpen(this.grid, Math.round(g.x), Math.round(g.y))
       g.x = gn.x
@@ -343,9 +375,26 @@ export class StreetShiftEngine {
       g.trail = []
       if (g.mode !== 'frightened' && g.mode !== 'eaten') g.mode = this.globalMode()
     }
-    this.shifts++
-    this.say('DIMENSION SHIFT', 1.4)
-    this.invulnT = Math.max(this.invulnT, 0.85)
+  }
+
+  /** Walkable during morph = open in old OR new (never trap the runner). */
+  private openAt(x: number, y: number): boolean {
+    if (this.morphing && this.prevGrid) {
+      return isOpen(this.grid, x, y) || isOpen(this.prevGrid, x, y)
+    }
+    return isOpen(this.grid, x, y)
+  }
+
+  private neighborsAt(x: number, y: number): Dir[] {
+    const out: Dir[] = []
+    for (const d of DIRS) {
+      let nx = x + DX[d]
+      let ny = y + DY[d]
+      if (nx < 0) nx = COLS - 1
+      if (nx >= COLS) nx = 0
+      if (this.openAt(nx, ny)) out.push(d)
+    }
+    return out
   }
 
   private loop = () => {
@@ -414,12 +463,18 @@ export class StreetShiftEngine {
       }
     }
 
-    // maze shift
+    // soft morph progress
+    if (this.morphing) {
+      this.morphT += dt
+      if (this.morphT >= MORPH_S) this.finishMorph()
+    }
+
+    // maze morph timer
     this.shiftT += dt
     const until = SHIFT_EVERY_S - this.shiftT
     if (until <= SHIFT_WARN_S && until > 0) this.warnT = until
     else this.warnT = 0
-    if (this.shiftT >= SHIFT_EVERY_S) {
+    if (this.shiftT >= SHIFT_EVERY_S && !this.morphing) {
       this.shiftT = 0
       this.warnT = 0
       this.mazeShift()
@@ -456,7 +511,7 @@ export class StreetShiftEngine {
     if (!atCenter(this.px, TURN_EARLY) || !atCenter(this.py, TURN_EARLY)) return false
     const cx = snap(this.px)
     const cy = snap(this.py)
-    const opts = openNeighbors(this.grid, cx, cy)
+    const opts = this.neighborsAt(cx, cy)
     if (!opts.includes(this.queued)) return false
     // only commit when close enough to center (or early window toward the turn)
     const along =
@@ -481,14 +536,14 @@ export class StreetShiftEngine {
     if (tx < 0) tx = COLS - 1
     if (tx >= COLS) tx = 0
 
-    if (!isOpen(this.grid, tx, ty)) {
+    if (!this.openAt(tx, ty)) {
       // approach wall — snap to center, try queue, or auto-pick sole exit
       this.px = snap(this.px)
       this.py = snap(this.py)
       if (this.tryApplyQueue()) {
         /* turned */
       } else {
-        const opts = openNeighbors(this.grid, this.px, this.py)
+        const opts = this.neighborsAt(this.px, this.py)
         const forward = opts.filter((d) => d !== OPP[this.pDir])
         if (forward.length === 1) {
           this.pDir = forward[0]!
@@ -567,7 +622,7 @@ export class StreetShiftEngine {
   private pickGhostDir(g: Ghost, tx: number, ty: number) {
     const cx = snap(g.x)
     const cy = snap(g.y)
-    let opts = openNeighbors(this.grid, cx, cy)
+    let opts = this.neighborsAt(cx, cy)
     const noRev = opts.filter((d) => d !== OPP[g.dir])
     if (noRev.length) opts = noRev
     if (!opts.length) return
@@ -604,7 +659,7 @@ export class StreetShiftEngine {
     let lookY = snap(g.y) + DY[g.dir]
     if (lookX < 0) lookX = COLS - 1
     if (lookX >= COLS) lookX = 0
-    if (!isOpen(this.grid, lookX, lookY)) {
+    if (!this.openAt(lookX, lookY)) {
       // Hit a wall mid-tile or chose a dead end: snap + rechoose, then re-check.
       g.x = snap(g.x)
       g.y = snap(g.y)
@@ -613,7 +668,7 @@ export class StreetShiftEngine {
       lookY = snap(g.y) + DY[g.dir]
       if (lookX < 0) lookX = COLS - 1
       if (lookX >= COLS) lookX = 0
-      if (!isOpen(this.grid, lookX, lookY)) return
+      if (!this.openAt(lookX, lookY)) return
     }
 
     // Don't overshoot the next center — stop exactly on it so the next tick can turn.
