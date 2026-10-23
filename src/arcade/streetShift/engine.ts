@@ -17,6 +17,7 @@ import {
   type Ghost,
   type GamePhase,
   type EndStats,
+  type PickupFx,
   DX,
   DY,
   OPP,
@@ -30,7 +31,11 @@ import {
   GHOST_SPEED,
   FRIGHT_SPEED,
   EATEN_SPEED,
+  INPUT_BUFFER_S,
+  TURN_SNAP,
+  TURN_EARLY,
   PB_KEY,
+  MODE_PHASES,
 } from './types'
 
 export type Hud = {
@@ -39,15 +44,20 @@ export type Hud = {
   lives: number
   starsLeft: number
   powerLeft: number
-  shiftWarn: number // 0..1 during warning, else 0
+  /** 0..1 during warning (1 = imminent) */
+  shiftWarn: number
+  /** seconds until next shift */
+  shiftIn: number
   shifts: number
   pb: number
   callout: string | null
+  combo: number
+  queued: Dir | null
 }
 
 export type Listener = (h: Hud) => void
 
-const GHOST_COLORS = ['#FF5A3C', '#00C8C4', '#FF8C28', '#7DFFC3']
+const GHOST_COLORS = ['#FF5A3C', '#00C8C4', '#FF8C28', '#C77DFF']
 
 function loadPb(): number {
   try {
@@ -70,8 +80,12 @@ function wrapX(x: number) {
   return x
 }
 
-function atCenter(v: number, eps = 0.12) {
+function atCenter(v: number, eps = TURN_SNAP) {
   return Math.abs(v - Math.round(v)) < eps
+}
+
+function snap(v: number) {
+  return Math.round(v)
 }
 
 export class StreetShiftEngine {
@@ -82,6 +96,7 @@ export class StreetShiftEngine {
   py = 1
   pDir: Dir = 1
   queued: Dir | null = null
+  queueAge = 0
   ghosts: Ghost[] = []
   score = 0
   lives = START_LIVES
@@ -100,11 +115,17 @@ export class StreetShiftEngine {
   calloutT = 0
   pb = loadPb()
   seed = (Math.random() * 1e9) | 0
+  fx: PickupFx[] = []
+  /** player trail */
+  pTrail: { x: number; y: number }[] = []
+  private modeT = 0
+  private modeIdx = 0
   private rng = mulberry32(this.seed)
   private listeners = new Set<Listener>()
   private raf = 0
   private last = 0
   private ended: EndStats | null = null
+  private trailAcc = 0
 
   on(fn: Listener) {
     this.listeners.add(fn)
@@ -113,6 +134,7 @@ export class StreetShiftEngine {
   }
 
   hud(): Hud {
+    const until = Math.max(0, SHIFT_EVERY_S - this.shiftT)
     return {
       phase: this.phase,
       score: this.score,
@@ -120,9 +142,12 @@ export class StreetShiftEngine {
       starsLeft: this.stars.size,
       powerLeft: this.powerT,
       shiftWarn: this.warnT > 0 ? 1 - this.warnT / SHIFT_WARN_S : 0,
+      shiftIn: until,
       shifts: this.shifts,
       pb: this.pb,
       callout: this.callout,
+      combo: this.tagChain,
+      queued: this.queued,
     }
   }
 
@@ -131,9 +156,13 @@ export class StreetShiftEngine {
     for (const fn of this.listeners) fn(h)
   }
 
-  private say(msg: string, s = 1.4) {
+  private say(msg: string, s = 1.35) {
     this.callout = msg
     this.calloutT = s
+  }
+
+  globalMode(): 'scatter' | 'chase' {
+    return MODE_PHASES[Math.min(this.modeIdx, MODE_PHASES.length - 1)]!.mode
   }
 
   start() {
@@ -148,7 +177,13 @@ export class StreetShiftEngine {
     this.powerT = 0
     this.tagChain = 0
     this.invulnT = 0
+    this.modeT = 0
+    this.modeIdx = 0
+    this.fx = []
+    this.pTrail = []
     this.ended = null
+    this.queued = null
+    this.queueAge = 0
     this.seed = (Math.random() * 1e9) | 0
     this.rng = mulberry32(this.seed)
     this.buildLevel(true)
@@ -167,15 +202,20 @@ export class StreetShiftEngine {
     return this.ended
   }
 
+  /** Queue next turn. Opposite = instant reverse. Buffer refreshed every press. */
   queueDir(d: Dir) {
     if (this.phase !== 'playing') return
-    // reverse immediately when opposite
     if (d === OPP[this.pDir]) {
       this.pDir = d
       this.queued = null
+      this.queueAge = 0
+      // snap onto axis so reverse feels instant
+      if (d === 0 || d === 2) this.px = snap(this.px)
+      else this.py = snap(this.py)
       return
     }
     this.queued = d
+    this.queueAge = 0
   }
 
   private buildLevel(placePlayer: boolean) {
@@ -186,14 +226,14 @@ export class StreetShiftEngine {
       this.py = spawn.y
       this.pDir = 1
       this.queued = null
+      this.queueAge = 0
     } else {
       const n = nearestOpen(this.grid, Math.round(this.px), Math.round(this.py))
       this.px = n.x
       this.py = n.y
     }
-    ensureExits(this.grid, Math.round(this.px), Math.round(this.py), 45, this.rng)
+    ensureExits(this.grid, Math.round(this.px), Math.round(this.py), 50, this.rng)
     const reach = reachable(this.grid, Math.round(this.px), Math.round(this.py))
-    // stars on reachable cells except spawn neighborhood
     this.stars = new Set()
     for (const k of reach) {
       const x = k % COLS
@@ -236,6 +276,7 @@ export class StreetShiftEngine {
       homeY: h.y,
       scatterX: scatters[i]!.x,
       scatterY: scatters[i]!.y,
+      trail: [],
     }))
   }
 
@@ -247,12 +288,11 @@ export class StreetShiftEngine {
     const n = nearestOpen(this.grid, px, py)
     this.px = n.x
     this.py = n.y
-    ensureExits(this.grid, n.x, n.y, 45, this.rng)
+    ensureExits(this.grid, n.x, n.y, 50, this.rng)
     const reach = reachable(this.grid, n.x, n.y)
     for (const k of this.stars) {
       if (reach.has(k)) keptStars.add(k)
     }
-    // refill a bit so shift doesn't empty the board
     for (const k of reach) {
       if (keptStars.size >= Math.floor(reach.size * 0.55)) break
       const x = k % COLS
@@ -262,7 +302,6 @@ export class StreetShiftEngine {
       keptStars.add(k)
     }
     this.stars = keptStars
-    // re-place powers on open corners
     this.powers = new Set()
     for (const p of powerSpots(this.grid, n.x, n.y)) {
       const k = key(p.x, p.y)
@@ -275,11 +314,12 @@ export class StreetShiftEngine {
       const gn = nearestOpen(this.grid, Math.round(g.x), Math.round(g.y))
       g.x = gn.x
       g.y = gn.y
-      if (g.mode === 'frightened') continue
-      g.mode = 'scatter'
+      g.trail = []
+      if (g.mode !== 'frightened' && g.mode !== 'eaten') g.mode = this.globalMode()
     }
     this.shifts++
-    this.say('MAZE SHIFT', 1.2)
+    this.say('DIMENSION SHIFT', 1.4)
+    this.invulnT = Math.max(this.invulnT, 0.85)
   }
 
   private loop = () => {
@@ -296,6 +336,14 @@ export class StreetShiftEngine {
       this.calloutT -= dt
       if (this.calloutT <= 0) this.callout = null
     }
+    // fx decay
+    if (this.fx.length) {
+      this.fx = this.fx.filter((f) => {
+        f.t -= dt
+        return f.t > 0
+      })
+    }
+
     if (this.phase === 'dying') {
       this.dyingT -= dt
       if (this.dyingT <= 0) {
@@ -309,25 +357,42 @@ export class StreetShiftEngine {
 
     this.livedS += dt
     if (this.invulnT > 0) this.invulnT -= dt
+
+    // classic mode clock (paused while power active)
+    if (this.powerT <= 0) {
+      this.modeT += dt
+      const cur = MODE_PHASES[Math.min(this.modeIdx, MODE_PHASES.length - 1)]!
+      if (this.modeT >= cur.dur) {
+        this.modeT = 0
+        this.modeIdx = Math.min(this.modeIdx + 1, MODE_PHASES.length - 1)
+      }
+    }
+
     if (this.powerT > 0) {
       this.powerT -= dt
       if (this.powerT <= 0) {
         this.powerT = 0
         this.tagChain = 0
         for (const g of this.ghosts) {
-          if (g.mode === 'frightened') g.mode = 'chase'
+          if (g.mode === 'frightened') g.mode = this.globalMode()
         }
       }
     }
 
-    // maze shift timer
+    // input buffer expiry
+    if (this.queued != null) {
+      this.queueAge += dt
+      if (this.queueAge > INPUT_BUFFER_S) {
+        this.queued = null
+        this.queueAge = 0
+      }
+    }
+
+    // maze shift
     this.shiftT += dt
     const until = SHIFT_EVERY_S - this.shiftT
-    if (until <= SHIFT_WARN_S && until > 0) {
-      this.warnT = until
-    } else {
-      this.warnT = 0
-    }
+    if (until <= SHIFT_WARN_S && until > 0) this.warnT = until
+    else this.warnT = 0
     if (this.shiftT >= SHIFT_EVERY_S) {
       this.shiftT = 0
       this.warnT = 0
@@ -339,106 +404,132 @@ export class StreetShiftEngine {
     this.collect()
     this.collisions()
 
-    // refill if cleared
+    // trails
+    this.trailAcc += dt
+    if (this.trailAcc > 0.028) {
+      this.trailAcc = 0
+      this.pTrail.push({ x: this.px, y: this.py })
+      if (this.pTrail.length > 10) this.pTrail.shift()
+      for (const g of this.ghosts) {
+        g.trail.push({ x: g.x, y: g.y })
+        if (g.trail.length > 7) g.trail.shift()
+      }
+    }
+
     if (this.stars.size === 0 && this.powers.size === 0) {
       this.score += 500
-      this.say('STREET CLEARED +500', 1.5)
+      this.say('LAYER CLEARED +500', 1.5)
       this.buildLevel(false)
     }
 
     this.emit()
   }
 
+  private tryApplyQueue(): boolean {
+    if (this.queued == null) return false
+    if (!atCenter(this.px, TURN_EARLY) || !atCenter(this.py, TURN_EARLY)) return false
+    const cx = snap(this.px)
+    const cy = snap(this.py)
+    const opts = openNeighbors(this.grid, cx, cy)
+    if (!opts.includes(this.queued)) return false
+    // only commit when close enough to center (or early window toward the turn)
+    const along =
+      this.pDir === 1 || this.pDir === 3 ? Math.abs(this.px - cx) : Math.abs(this.py - cy)
+    if (along > TURN_EARLY) return false
+    this.px = cx
+    this.py = cy
+    this.pDir = this.queued
+    this.queued = null
+    this.queueAge = 0
+    return true
+  }
+
   private movePlayer(dt: number) {
-    // try queued turn at cell centers
-    if (this.queued != null && atCenter(this.px) && atCenter(this.py)) {
-      const cx = Math.round(this.px)
-      const cy = Math.round(this.py)
-      const opts = openNeighbors(this.grid, cx, cy)
-      if (opts.includes(this.queued)) {
-        this.px = cx
-        this.py = cy
-        this.pDir = this.queued
-        this.queued = null
-      }
-    }
-    // forgiving: also allow turn slightly before center if next cell in queued dir is open
-    if (this.queued != null) {
-      const cx = Math.round(this.px)
-      const cy = Math.round(this.py)
-      const q = this.queued
-      let nx = cx + DX[q]
-      let ny = cy + DY[q]
-      if (nx < 0) nx = COLS - 1
-      if (nx >= COLS) nx = 0
-      if (isOpen(this.grid, nx, ny)) {
-        const along = this.pDir === 1 || this.pDir === 3 ? this.px - cx : this.py - cy
-        if (Math.abs(along) < 0.35) {
-          this.px = cx
-          this.py = cy
-          this.pDir = q
+    this.tryApplyQueue()
+
+    const step = PLAYER_SPEED * dt
+    // probe next cell
+    const look = 0.5
+    let tx = snap(this.px + DX[this.pDir] * look)
+    let ty = snap(this.py + DY[this.pDir] * look)
+    if (tx < 0) tx = COLS - 1
+    if (tx >= COLS) tx = 0
+
+    if (!isOpen(this.grid, tx, ty)) {
+      // approach wall — snap to center, try queue, or auto-pick sole exit
+      this.px = snap(this.px)
+      this.py = snap(this.py)
+      if (this.tryApplyQueue()) {
+        /* turned */
+      } else {
+        const opts = openNeighbors(this.grid, this.px, this.py)
+        const forward = opts.filter((d) => d !== OPP[this.pDir])
+        if (forward.length === 1) {
+          this.pDir = forward[0]!
+        } else if (this.queued != null && opts.includes(this.queued)) {
+          this.pDir = this.queued
           this.queued = null
+          this.queueAge = 0
         }
+        // else stop at center until input — no corner stick by sliding into wall
       }
+      return
     }
 
-    let speed = PLAYER_SPEED
-    const step = speed * dt
     let nx = this.px + DX[this.pDir] * step
     let ny = this.py + DY[this.pDir] * step
     nx = wrapX(nx)
 
-    // wall stop: if next cell blocked, snap to center and wait
-    const tx = Math.round(this.px + DX[this.pDir] * 0.55)
-    const ty = Math.round(this.py + DY[this.pDir] * 0.55)
-    let checkX = tx
-    if (checkX < 0) checkX = COLS - 1
-    if (checkX >= COLS) checkX = 0
-    if (!isOpen(this.grid, checkX, ty) && inFrontWall()) {
-      this.px = Math.round(this.px)
-      this.py = Math.round(this.py)
-      // auto-pick if only one way (besides reverse) — keeps flow on phone
-      const opts = openNeighbors(this.grid, this.px, this.py).filter((d) => d !== OPP[this.pDir])
-      if (opts.length === 1) this.pDir = opts[0]!
-      else if (this.queued != null && opts.includes(this.queued)) {
-        this.pDir = this.queued
-        this.queued = null
-      }
-      return
-    }
-    this.px = nx
-    this.py = ny
-
-    function inFrontWall() {
-      return true
+    if (this.pDir === 1 || this.pDir === 3) {
+      this.px = nx
+      this.py = snap(this.py)
+    } else {
+      this.py = ny
+      this.px = snap(this.px)
     }
   }
 
   private moveGhosts(dt: number) {
-    const chase = this.livedS % 12 > 5 // alternate scatter/chase
+    const gMode = this.globalMode()
     for (const g of this.ghosts) {
       if (g.mode === 'eaten') {
-        // return home
         const dx = g.homeX - g.x
         const dy = g.homeY - g.y
         if (dx * dx + dy * dy < 0.04) {
           g.x = g.homeX
           g.y = g.homeY
-          g.mode = this.powerT > 0 ? 'frightened' : chase ? 'chase' : 'scatter'
+          g.mode = this.powerT > 0 ? 'frightened' : gMode
         } else {
           this.stepActor(g, EATEN_SPEED * dt, g.homeX, g.homeY)
         }
         continue
       }
-      if (g.mode !== 'frightened') {
-        g.mode = chase ? 'chase' : 'scatter'
-      }
+      if (g.mode !== 'frightened') g.mode = gMode
+
       const spd = g.mode === 'frightened' ? FRIGHT_SPEED : GHOST_SPEED
       let tx = g.scatterX
       let ty = g.scatterY
       if (g.mode === 'chase') {
-        tx = this.px
-        ty = this.py
+        // blinky-like + slight offsets per ghost (inky/pinky/clyde-lite)
+        if (g.id === 0) {
+          tx = this.px
+          ty = this.py
+        } else if (g.id === 1) {
+          tx = this.px + DX[this.pDir] * 4
+          ty = this.py + DY[this.pDir] * 4
+        } else if (g.id === 2) {
+          tx = this.px * 2 - g.x
+          ty = this.py * 2 - g.y
+        } else {
+          const d2 = (g.x - this.px) ** 2 + (g.y - this.py) ** 2
+          if (d2 > 64) {
+            tx = this.px
+            ty = this.py
+          } else {
+            tx = g.scatterX
+            ty = g.scatterY
+          }
+        }
       } else if (g.mode === 'frightened') {
         tx = g.x - (this.px - g.x)
         ty = g.y - (this.py - g.y)
@@ -448,15 +539,13 @@ export class StreetShiftEngine {
   }
 
   private stepActor(g: Ghost, step: number, tx: number, ty: number) {
-    if (atCenter(g.x, 0.15) && atCenter(g.y, 0.15)) {
-      g.x = Math.round(g.x)
-      g.y = Math.round(g.y)
+    if (atCenter(g.x, 0.18) && atCenter(g.y, 0.18)) {
+      g.x = snap(g.x)
+      g.y = snap(g.y)
       let opts = openNeighbors(this.grid, g.x, g.y)
-      // no reverse unless dead-end
       const noRev = opts.filter((d) => d !== OPP[g.dir])
       if (noRev.length) opts = noRev
       if (!opts.length) return
-      // pick dir that minimizes / maximizes distance to target
       let best = opts[0]!
       let bestScore = Infinity
       for (const d of opts) {
@@ -466,8 +555,7 @@ export class StreetShiftEngine {
         if (nx >= COLS) nx = 0
         const dist = (nx - tx) ** 2 + (ny - ty) ** 2
         const score = g.mode === 'frightened' ? -dist : dist
-        // tiny jitter
-        const j = this.rng() * 0.01
+        const j = this.rng() * 0.02
         if (score + j < bestScore) {
           bestScore = score + j
           best = d
@@ -478,35 +566,41 @@ export class StreetShiftEngine {
     let nx = g.x + DX[g.dir] * step
     let ny = g.y + DY[g.dir] * step
     nx = wrapX(nx)
-    const cx = Math.round(g.x + DX[g.dir] * 0.55)
-    const cy = Math.round(g.y + DY[g.dir] * 0.55)
-    let checkX = cx
-    if (checkX < 0) checkX = COLS - 1
-    if (checkX >= COLS) checkX = 0
-    if (!isOpen(this.grid, checkX, cy)) {
-      g.x = Math.round(g.x)
-      g.y = Math.round(g.y)
+    let cx = snap(g.x + DX[g.dir] * 0.55)
+    const cy = snap(g.y + DY[g.dir] * 0.55)
+    if (cx < 0) cx = COLS - 1
+    if (cx >= COLS) cx = 0
+    if (!isOpen(this.grid, cx, cy)) {
+      g.x = snap(g.x)
+      g.y = snap(g.y)
       return
     }
-    g.x = nx
-    g.y = ny
+    if (g.dir === 1 || g.dir === 3) {
+      g.x = nx
+      g.y = snap(g.y)
+    } else {
+      g.y = ny
+      g.x = snap(g.x)
+    }
   }
 
   private collect() {
-    const cx = Math.round(this.px)
-    const cy = Math.round(this.py)
-    if (!atCenter(this.px, 0.35) || !atCenter(this.py, 0.35)) return
+    if (!atCenter(this.px, 0.38) || !atCenter(this.py, 0.38)) return
+    const cx = snap(this.px)
+    const cy = snap(this.py)
     const k = key(cx, cy)
     if (this.stars.has(k)) {
       this.stars.delete(k)
       this.score += STAR_PTS
       this.starsCollected++
+      this.fx.push({ x: cx, y: cy, t: 0.35, kind: 'star' })
     }
     if (this.powers.has(k)) {
       this.powers.delete(k)
       this.powerT = POWER_S
       this.tagChain = 0
       this.say('5D POWER', 1.2)
+      this.fx.push({ x: cx, y: cy, t: 0.55, kind: 'power' })
       for (const g of this.ghosts) {
         if (g.mode !== 'eaten') {
           g.mode = 'frightened'
@@ -521,14 +615,15 @@ export class StreetShiftEngine {
     for (const g of this.ghosts) {
       const dx = g.x - this.px
       const dy = g.y - this.py
-      if (dx * dx + dy * dy > 0.35) continue
+      if (dx * dx + dy * dy > 0.32) continue
       if (g.mode === 'frightened') {
         g.mode = 'eaten'
         const pts = TAG_BASE * Math.pow(2, this.tagChain)
         this.tagChain = Math.min(this.tagChain + 1, 3)
         this.score += pts
         this.tags++
-        this.say(`TAG +${pts}`, 1)
+        this.say(`TAG +${pts}`, 0.95)
+        this.fx.push({ x: g.x, y: g.y, t: 0.7, kind: 'tag', pts })
       } else if (g.mode !== 'eaten') {
         this.hit()
         return
@@ -539,9 +634,10 @@ export class StreetShiftEngine {
   private hit() {
     this.lives--
     this.phase = 'dying'
-    this.dyingT = 1.1
+    this.dyingT = 1.15
     this.powerT = 0
-    this.say(this.lives > 0 ? 'GLITCH' : 'RUN OVER', 1.1)
+    this.pTrail = []
+    this.say(this.lives > 0 ? 'PHASE BREAK' : 'SIGNAL LOST', 1.1)
     this.emit()
   }
 
@@ -551,7 +647,8 @@ export class StreetShiftEngine {
     this.py = n.y
     this.pDir = 1
     this.queued = null
-    this.invulnT = 2
+    this.queueAge = 0
+    this.invulnT = 2.4
     this.spawnGhosts()
     this.phase = 'playing'
     this.say("YOU'RE IN", 1)

@@ -19,9 +19,19 @@ export type Ghost = {
   homeY: number
   scatterX: number
   scatterY: number
+  /** trail samples for chrome afterimage */
+  trail: { x: number; y: number }[]
 }
 
 export type GamePhase = 'howto' | 'playing' | 'dying' | 'ended'
+
+export type PickupFx = {
+  x: number
+  y: number
+  t: number
+  kind: 'star' | 'tag' | 'power'
+  pts?: number
+}
 
 export type EndStats = {
   score: number
@@ -34,12 +44,28 @@ export type EndStats = {
 
 export const STAR_PTS = 10
 export const TAG_BASE = 200
-export const POWER_S = 6
-export const SHIFT_EVERY_S = 10
-export const SHIFT_WARN_S = 1
+export const POWER_S = 7
+export const SHIFT_EVERY_S = 12
+export const SHIFT_WARN_S = 2.2
 export const START_LIVES = 3
-export const PLAYER_SPEED = 5.2 // cells / s
-export const GHOST_SPEED = 4.4
-export const FRIGHT_SPEED = 2.8
-export const EATEN_SPEED = 9
+/** cells / s — player slightly faster than chase ghosts */
+export const PLAYER_SPEED = 6.1
+export const GHOST_SPEED = 5.35
+export const FRIGHT_SPEED = 3.2
+export const EATEN_SPEED = 10
+/** how long a queued turn stays buffered (seconds) */
+export const INPUT_BUFFER_S = 0.18
+/** center snap / turn window in cells */
+export const TURN_SNAP = 0.22
+export const TURN_EARLY = 0.42
 export const PB_KEY = 'fd_street_shift_pb'
+
+/** Classic-ish phase table (seconds): scatter, chase, scatter, chase, scatter, chase forever */
+export const MODE_PHASES: { mode: 'scatter' | 'chase'; dur: number }[] = [
+  { mode: 'scatter', dur: 7 },
+  { mode: 'chase', dur: 20 },
+  { mode: 'scatter', dur: 7 },
+  { mode: 'chase', dur: 20 },
+  { mode: 'scatter', dur: 5 },
+  { mode: 'chase', dur: 1e9 },
+]
