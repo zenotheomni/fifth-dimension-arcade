@@ -4,7 +4,7 @@
  *
  * Owner rule: "ZENO 5" (court-vision-theme) plays ONLY inside Court Vision.
  */
-export type MusicScene = 'lobby' | 'court-vision' | 'fifth-run' | 'street-shift' | 'nova-slide' | 'nova-5' | 'none'
+export type MusicScene = 'lobby' | 'court-vision' | 'fifth-run' | 'street-shift' | 'nova-slide' | 'nova-5' | 'fifth-frame' | 'none'
 
 export type MusicTrack = {
   id: string
@@ -106,6 +106,7 @@ export const SCENE_TRACKS: Record<MusicScene, MusicTrack | null> = {
   'street-shift': STREET_SHIFT_THEME,
   'nova-slide': STREET_SHIFT_THEME,
   'nova-5': STREET_SHIFT_THEME,
+  'fifth-frame': STREET_SHIFT_THEME,
   none: null,
 }
 

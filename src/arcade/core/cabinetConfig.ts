@@ -32,12 +32,12 @@ export const cabinets: Cabinet[] = [
     route: '/fifth-run',
   },
   {
-    id: 'street-shift',
-    title: 'NOVA 5',
-    tagline: 'Pac-Man DNA. Maze Shift every 20s.',
+    id: 'fifth-frame',
+    title: 'FIFTH FRAME',
+    tagline: 'Neon alley. Finger-flick. Ten frames.',
     status: 'lit',
     badge: 'NEW',
-    route: '/nova-5',
+    route: '/fifth-frame',
   },
   {
     id: 'break-and-rack',

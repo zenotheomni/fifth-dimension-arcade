@@ -25,6 +25,7 @@ const GAME_TITLES: Record<string, string> = {
   'court-vision': 'COURT VISION',
   'fifth-run': 'FIFTH GLIDE',
   'street-shift': 'NOVA 5',
+  'fifth-frame': 'FIFTH FRAME',
   'nova-slide': 'NOVA 5',
   'nova-5': 'NOVA 5',
 }
