@@ -48,7 +48,7 @@ export const GAMES: ArcadeGame[] = [
   },
   {
     id: 'street-shift',
-    title: 'Nova 5',
+    title: 'NOVA 5',
     tagline: 'Pac-Man DNA. Fifth Dimension maze. It shifts.',
     status: 'new',
     boxArt: art('box-street-shift.webp'),

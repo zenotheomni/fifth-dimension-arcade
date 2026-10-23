@@ -1,15 +1,21 @@
 .ss-root {
+  --teal: #00c8c4;
+  --coral: #ff5a3c;
+  --purple: #7b3fe4;
+  --gold: #ffc83c;
+  --line: linear-gradient(90deg, var(--teal), var(--purple) 38%, var(--coral) 70%, var(--gold));
   position: relative;
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
-  background: radial-gradient(ellipse at 50% 20%, #1a0a38 0%, #0a0618 55%, #05020e 100%);
-  color: #f2f0ea;
+  background: #120c24;
+  color: #f6f4ef;
   overflow: hidden;
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
+  font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
 .ss-top {
@@ -43,12 +49,12 @@
 }
 
 .ss-score {
-  font-family: Bungee, sans-serif;
-  font-size: 1.25rem;
-  letter-spacing: 0.04em;
-  color: #ffc83c;
+  font-family: Inter, system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 1.2rem;
+  letter-spacing: 0.02em;
+  color: var(--gold);
   line-height: 1;
-  text-shadow: 0 0 18px rgba(255, 200, 60, 0.35);
 }
 
 .ss-hud__row {
@@ -58,7 +64,7 @@
 }
 
 .ss-lives {
-  color: #00e5ff;
+  color: var(--teal);
   letter-spacing: 0.14em;
   font-size: 0.72rem;
   text-shadow: 0 0 10px rgba(0, 200, 196, 0.55);
@@ -68,9 +74,10 @@
 }
 
 .ss-combo {
-  font-family: Bungee, sans-serif;
-  font-size: 0.75rem;
-  color: #7dffc3;
+  font-family: Inter, system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 0.72rem;
+  color: var(--teal);
   letter-spacing: 0.04em;
 }
 
@@ -94,6 +101,13 @@
   font-weight: 600;
 }
 
+.ss-brandline {
+  height: 2px;
+  margin: 0 0.75rem 0.25rem;
+  border-radius: 999px;
+  background: var(--line);
+  opacity: 0.85;
+}
 .ss-shiftbar {
   height: 3px;
   margin: 0 0.75rem 0.35rem;
@@ -208,8 +222,8 @@
   height: 3.15rem;
   border-radius: 1rem;
   border: 1px solid rgba(0, 200, 196, 0.4);
-  background: linear-gradient(160deg, rgba(40, 20, 70, 0.95), rgba(12, 6, 28, 0.95));
-  color: #00e5ff;
+  background: linear-gradient(160deg, rgba(18, 12, 36, 0.96), rgba(10, 8, 22, 0.98));
+  color: var(--teal);
   font-size: 1rem;
   box-shadow: 0 0 16px rgba(0, 200, 196, 0.2), inset 0 0 12px rgba(0, 200, 196, 0.08);
   -webkit-tap-highlight-color: transparent;
