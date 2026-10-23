@@ -310,7 +310,7 @@
 .ffa-select__heading {
   margin: 0;
   flex: 1;
-  text-align: center;
+  text-align: left;
   font-size: 0.78rem;
   letter-spacing: 0.28em;
   text-transform: uppercase;
@@ -703,7 +703,8 @@
   padding: 0.45rem 1.1rem 0.55rem;
 }
 .ffa-select--social .ffa-card {
-  flex-basis: min(44vw, 190px);
+  /* Fit Court Vision + Fifth Glide + NOVA 5 in the rail on a phone */
+  flex-basis: min(30vw, 148px);
 }
 .ffa-select--social .ffa-card__meta {
   padding: 0.5rem 0.6rem 0.6rem;
@@ -725,7 +726,7 @@
   margin-bottom: 0.55rem;
 }
 .ffa-select--social.has-contest .ffa-card {
-  flex-basis: min(36vw, 160px);
+  flex-basis: min(28vw, 138px);
 }
 .ffa-select--social.has-contest .ffa-card__tag {
   display: none;

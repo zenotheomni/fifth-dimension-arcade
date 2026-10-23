@@ -263,6 +263,12 @@ export default function LobbyPage() {
     if (g.id !== game.id) setBoardWin(contestFor(g.id) && boardWin === 'contest' ? 'contest' : 'alltime')
     playSelect()
     track('arcade_game_focus', { game: g.id })
+    // Bring the cabinet into the rail so NOVA 5 (3rd live game) is never off-screen after a tab tap
+    requestAnimationFrame(() => {
+      const rail = cardsRef.current
+      const c = rail?.querySelectorAll<HTMLElement>('.ffa-card')[index]
+      if (rail && c) rail.scrollLeft = c.offsetLeft - (rail.clientWidth - c.offsetWidth) / 2
+    })
   }
 
   // Tapping a playable cabinet opens it straight away (a tap that only highlighted the card read as
@@ -395,11 +401,6 @@ export default function LobbyPage() {
         ) : (
           <div className={`ffa-select ffa-select--social${contest ? ' has-contest' : ''}`}>
             <header className="ffa-select__header">
-              <img
-                className="ffa-select__wordmark"
-                src={`${BASE}art/wordmark-280.webp`}
-                alt="Fifth Dimension"
-              />
               <h2 className="ffa-select__heading">Select Game</h2>
               <button
                 type="button"
@@ -517,7 +518,7 @@ export default function LobbyPage() {
               {game.route ? `Play ${game.title}` : 'Coming Up'}
             </button>
 
-            {game.id === 'court-vision' || game.id === 'fifth-run' ? (
+            {game.id === 'court-vision' || game.id === 'fifth-run' || game.id === 'street-shift' ? (
               <div className="soc-actions">
                 <button
                   type="button"
@@ -563,7 +564,7 @@ export default function LobbyPage() {
 
             {rivalsOpen ? (
               <RivalsSheet
-                gameId={game.id === 'fifth-run' ? 'fifth-run' : 'court-vision'}
+                gameId={game.id === 'fifth-run' || game.id === 'street-shift' ? game.id : 'court-vision'}
                 onClose={() => {
                   setRivalsOpen(false)
                   if (params.get('rivals')) setParams({}, { replace: true })

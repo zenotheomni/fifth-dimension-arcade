@@ -32,6 +32,14 @@ export const cabinets: Cabinet[] = [
     route: '/fifth-run',
   },
   {
+    id: 'street-shift',
+    title: 'NOVA 5',
+    tagline: 'Pac-Man DNA. Maze Shift every 20s.',
+    status: 'lit',
+    badge: 'NEW',
+    route: '/nova-5',
+  },
+  {
     id: 'break-and-rack',
     title: 'Break & Rack',
     tagline: 'Table games. Coming to the floor.',
