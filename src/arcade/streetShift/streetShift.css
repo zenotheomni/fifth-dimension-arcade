@@ -134,10 +134,11 @@
   margin: 0 0.45rem 0.35rem;
   border-radius: 18px;
   overflow: hidden;
-  border: 1px solid rgba(0, 200, 196, 0.32);
+  border: 1px solid rgba(0, 200, 196, 0.28);
   box-shadow:
-    0 0 40px rgba(72, 32, 120, 0.45),
-    inset 0 0 60px rgba(0, 0, 0, 0.4);
+    0 0 48px rgba(72, 32, 120, 0.5),
+    0 0 80px rgba(0, 200, 196, 0.08),
+    inset 0 0 70px rgba(0, 0, 0, 0.45);
 }
 .ss-board.is-warn {
   border-color: rgba(255, 90, 60, 0.9);
@@ -209,18 +210,18 @@
   display: grid;
   grid-template-rows: auto auto auto;
   justify-items: center;
-  gap: 0.28rem;
-  padding: 0.15rem 0.75rem max(0.55rem, env(safe-area-inset-bottom));
+  gap: 0.35rem;
+  padding: 0.2rem 0.75rem max(0.65rem, env(safe-area-inset-bottom));
   z-index: 4;
 }
 .ss-pad__mid {
   display: flex;
-  gap: 2.6rem;
+  gap: 3.1rem;
 }
 .ss-pad__btn {
-  width: 3.15rem;
-  height: 3.15rem;
-  border-radius: 1rem;
+  width: 3.65rem;
+  height: 3.65rem;
+  border-radius: 1.15rem;
   border: 1px solid rgba(0, 200, 196, 0.4);
   background: linear-gradient(160deg, rgba(18, 12, 36, 0.96), rgba(10, 8, 22, 0.98));
   color: var(--teal);
