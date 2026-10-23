@@ -518,7 +518,7 @@ export default function LobbyPage() {
               {game.route ? `Play ${game.title}` : 'Coming Up'}
             </button>
 
-            {game.id === 'court-vision' || game.id === 'fifth-run' || game.id === 'street-shift' ? (
+            {game.id === 'court-vision' || game.id === 'fifth-run' || game.id === 'fifth-frame' ? (
               <div className="soc-actions">
                 <button
                   type="button"
@@ -564,7 +564,7 @@ export default function LobbyPage() {
 
             {rivalsOpen ? (
               <RivalsSheet
-                gameId={game.id === 'fifth-run' || game.id === 'street-shift' ? game.id : 'court-vision'}
+                gameId={game.id === 'fifth-run' || game.id === 'fifth-frame' ? game.id : 'court-vision'}
                 onClose={() => {
                   setRivalsOpen(false)
                   if (params.get('rivals')) setParams({}, { replace: true })

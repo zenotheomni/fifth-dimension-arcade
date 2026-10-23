@@ -2,7 +2,7 @@ import { challengePublicUrl } from './config'
 
 export { challengePublicUrl }
 
-export const GAME_TITLES: Record<string, string> = { 'court-vision': 'COURT VISION', 'fifth-run': 'FIFTH GLIDE', 'street-shift': 'NOVA 5', 'nova-slide': 'NOVA 5', 'nova-5': 'NOVA 5' }
+export const GAME_TITLES: Record<string, string> = { 'court-vision': 'COURT VISION', 'fifth-run': 'FIFTH GLIDE', 'fifth-frame': 'FIFTH FRAME', 'street-shift': 'NOVA 5', 'nova-slide': 'NOVA 5', 'nova-5': 'NOVA 5' }
 
 export const gameTitle = (game?: string | null) => GAME_TITLES[game ?? ''] ?? 'COURT VISION'
 

@@ -31,6 +31,10 @@ export const END_DOORS = {
     { id: 'challenge', label: 'Challenge a friend' },
     { id: 'record-store', label: 'Enter record store' },
   ],
+  fifthFrame: [
+    { id: 'challenge', label: 'Challenge a friend' },
+    { id: 'boutique', label: 'Enter boutique' },
+  ],
 } as const
 
 /** In-world placement knobs used by Court Vision canvas (M2) */
