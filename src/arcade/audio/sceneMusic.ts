@@ -93,7 +93,7 @@ export function holdMusicDecode(ms: number) {
 }
 /** decode a scene's first song now (call on a how-to / intro screen, before gameplay starts) */
 export function prepareSceneMusic(scene: MusicScene) {
-  const t = SCENE_TRACKS[scene]
+  const t = sceneTrack(scene)
   if (!t || noBuf || typeof window === 'undefined') return
   void loadBuffer(t)
 }
@@ -165,11 +165,44 @@ function isLoopTrack(d: Deck) {
   return nextTrack(d) === d.track
 }
 
+/**
+ * Shuffle bag per playlist scene: every song plays once (random order) before any repeats, and a
+ * refilled bag never starts with the song that just played. peekBag is pure (safe to call often);
+ * takeBag consumes the head when a song actually starts.
+ */
+const bags = new Map<MusicScene, string[]>()
+function playlist(sc: MusicScene) {
+  return (SCENE_PLAYLISTS[sc] ?? []).filter((x) => !badTracks.has(x.id))
+}
+function peekBag(sc: MusicScene, currentId: string | null): MusicTrack | null {
+  const list = playlist(sc)
+  if (list.length < 2) return null
+  let bag = (bags.get(sc) ?? []).filter((id) => list.some((x) => x.id === id))
+  if (!bag.length) {
+    bag = list.map((x) => x.id)
+    for (let i = bag.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[bag[i], bag[j]] = [bag[j], bag[i]]
+    }
+    if (currentId && bag[0] === currentId) [bag[0], bag[bag.length - 1]] = [bag[bag.length - 1], bag[0]]
+  }
+  bags.set(sc, bag)
+  return list.find((x) => x.id === bag[0]) ?? null
+}
+function takeBag(sc: MusicScene, id: string) {
+  const bag = bags.get(sc)
+  if (bag && bag[0] === id) bag.shift()
+}
+/** a scene's opening song: the bag head for playlist scenes, else its fixed track */
+function sceneTrack(sc: MusicScene): MusicTrack | null {
+  return peekBag(sc, null) ?? SCENE_TRACKS[sc]
+}
+
 function nextTrack(d: Deck): MusicTrack | null {
-  const list = (SCENE_PLAYLISTS[scene] ?? []).filter((x) => !badTracks.has(x.id))
+  const list = playlist(scene)
   if (!d.track || list.length < 2) return d.track
-  const i = list.findIndex((x) => x.id === d.track!.id)
-  return i < 0 ? d.track : list[(i + 1) % list.length]
+  if (!list.some((x) => x.id === d.track!.id)) return d.track
+  return peekBag(scene, d.track.id) ?? d.track
 }
 
 function announce(t: MusicTrack, unlocked: boolean) {
@@ -274,6 +307,7 @@ function nextSong(d: Deck) {
   const next = nextTrack(d)
   if (!next) return
   if (next !== d.track) {
+    takeBag(scene, next.id)
     const seen = playedIds.has(next.id)
     playedIds.add(next.id)
     d.track = next
@@ -526,7 +560,7 @@ export function setMusicScene(next: MusicScene) {
   ensureDecks()
   if (!decks.length) return
   scene = next
-  const track = SCENE_TRACKS[next]
+  const track = sceneTrack(next)
   if (active && active.track?.id === track?.id) {
     kick()
     return
@@ -562,6 +596,7 @@ export function setMusicScene(next: MusicScene) {
   }
   ducked = false
   active = d
+  takeBag(next, track.id)
   playedIds.add(track.id)
   keepBuffers()
   kick()
@@ -609,7 +644,7 @@ export function musicDebugState() {
  *  never touches playback. */
 const prefetched = new Set<string>()
 export function prefetchSceneMusic(next: MusicScene) {
-  const t = SCENE_TRACKS[next]
+  const t = sceneTrack(next)
   if (!t || typeof window === 'undefined') return
   const src = pickSrc(t)
   if (prefetched.has(src) || active?.track?.id === t.id) return

@@ -59,7 +59,8 @@ export const FIFTH_GLIDE_THEME: MusicTrack = {
 }
 
 /**
- * Fifth Glide song rotation — edit this list to add songs. The run starts on the first one; when a
+ * Fifth Glide song rotation — edit this list to add songs. Played as a shuffle bag with the theme: random
+ * order, all songs once before any repeat, never the same song twice in a row. When a
  * run outlasts a song the next one "unlocks" (Now Playing toast) and the list keeps alternating.
  * A single entry just loops. Drop the file in public/audio/ and add an entry, e.g.:
  *   { id: 'fifth-glide-2', title: 'Jenks - <title>', file: 'fifth-glide-2' }  (needs .m4a + .mp3)
@@ -67,6 +68,8 @@ export const FIFTH_GLIDE_THEME: MusicTrack = {
 const FIFTH_GLIDE_SONGS: { id: string; title: string; file: string }[] = [
   // song 2 (Oct 2026): "Wattup Yo" — unlocks when a run outlasts Thousand Yard Stare
   { id: 'fifth-glide-2', title: 'Jenks - Wattup Yo', file: 'fifth-glide-2' },
+  // song 3 (Oct 2026): "We Got Now" (clean). Rotation is a shuffle bag (see sceneMusic.ts).
+  { id: 'fifth-glide-3', title: 'Jenks - We Got Now', file: 'fifth-glide-3' },
 ]
 
 const fromFile = (x: { id: string; title: string; file: string }): MusicTrack => ({
