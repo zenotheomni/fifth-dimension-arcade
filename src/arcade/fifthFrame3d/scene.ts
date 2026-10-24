@@ -4,6 +4,7 @@
  * Renderer / post follow the Court Vision + Fifth Glide pattern (ACES, PMREM env, restrained bloom, SMAA).
  */
 import * as THREE from 'three'
+import { Reflector } from 'three/examples/jsm/objects/Reflector.js'
 import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLightUniformsLib.js'
 import { BloomEffect, BrightnessContrastEffect, HueSaturationEffect, VignetteEffect, EffectComposer, EffectPass, RenderPass, SMAAEffect, SMAAPreset, ToneMappingEffect, ToneMappingMode } from 'postprocessing'
 
@@ -322,7 +323,7 @@ export class FfScene {
     const s = this.scene
     s.add(new THREE.HemisphereLight(0x8a7ac0, 0x140a20, 0.55))
     // soft overhead key (recessed ceiling cans) — casts the ball/pin shadows
-    const key = new THREE.DirectionalLight(0xf4ecff, 0.7)
+    const key = new THREE.DirectionalLight(0xf4ecff, 0.5)
     key.position.set(-1.2, 9, 3)
     key.target.position.set(0, 0, -LANE_L * 0.6)
     key.castShadow = true
@@ -353,9 +354,16 @@ export class FfScene {
     lane.position.set(0, -T / 2, -L / 2)
     lane.receiveShadow = true
     s.add(lane)
+    wood.transparent = true; wood.opacity = 0.86; wood.depthWrite = false
+    const dpr = Math.min(2, window.devicePixelRatio || 1)
+    const mirror = new Reflector(new THREE.PlaneGeometry(LANE_W, L), {
+      textureWidth: Math.round(window.innerWidth * dpr * 0.5), textureHeight: Math.round(window.innerHeight * dpr * 0.5), color: 0x5c5a66, clipBias: 0.003,
+    })
+    mirror.rotation.x = -Math.PI / 2; mirror.position.set(0, -0.002, -L / 2)
+    s.add(mirror)
 
     // approach (bowler side) 4.6 m
-    const ap = new THREE.Mesh(new THREE.BoxGeometry(LANE_W + GUTTER_R * 2 + 0.06, T, 4.6), [0, 0, 0, 0, 0, 0].map((_, i) => (i === 2 ? new THREE.MeshPhysicalMaterial({ map: approachTex(), roughness: 0.42, clearcoat: 0.6, clearcoatRoughness: 0.2 }) : new THREE.MeshStandardMaterial({ color: 0x4a2e1a }))))
+    const ap = new THREE.Mesh(new THREE.BoxGeometry(LANE_W + GUTTER_R * 2 + 0.06, T, 4.6), [0, 0, 0, 0, 0, 0].map((_, i) => (i === 2 ? new THREE.MeshPhysicalMaterial({ map: approachTex(), color: 0x8a6650, roughness: 0.42, clearcoat: 0.6, clearcoatRoughness: 0.2 }) : new THREE.MeshStandardMaterial({ color: 0x4a2e1a }))))
     ap.position.set(0, -T / 2, 2.3)
     ap.receiveShadow = true
     s.add(ap)
@@ -390,8 +398,8 @@ export class FfScene {
     s.add(pit)
     const kick = new THREE.MeshPhysicalMaterial({ color: 0x1b1428, roughness: 0.3, metalness: 0.6, clearcoat: 1 })
     for (const sgn of [-1, 1]) {
-      const kb = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.6, 1.6), kick)
-      kb.position.set(sgn * (LANE_W / 2 + GUTTER_R * 2 + 0.02), 0.3, -L + 0.3)
+      const kb = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.22, 1.6), kick)
+      kb.position.set(sgn * (LANE_W / 2 + GUTTER_R * 2 + 0.02), 0.11, -L + 0.3)
       kb.castShadow = kb.receiveShadow = true
       s.add(kb)
     }
@@ -503,8 +511,8 @@ export class FfScene {
         const m = new THREE.Mesh(pinGeo, pinMat)
         m.position.set(x + p.x, 0, -LANE_L + p.z); m.rotation.y = p.x * 9; m.castShadow = true; s.add(m)
       }
-      const sp = new THREE.SpotLight(0xfff6ee, 5, 6, 0.6, 0.5, 1.6)
-      sp.position.set(x, 0.68, -LANE_L + 0.6); sp.target.position.set(x, 0, -LANE_L - 0.6); s.add(sp, sp.target)
+      const deck = new THREE.Mesh(new THREE.PlaneGeometry(LANE_W, 0.05), neon(0xfff4e8, 2.2))
+      deck.position.set(x, 0.74, -LANE_L - 0.85); s.add(deck)
     }
     // dividers (capping) between every lane, neon-capped
     for (let k = -3; k <= 3; k++) {
@@ -536,12 +544,12 @@ export class FfScene {
     }
     // masking wall over the pin decks (dark, with neon trims + per-lane panels)
     const MZ = -LANE_L - 1.05
-    const wall = new THREE.Mesh(new THREE.BoxGeometry(16, 2.6, 0.3), new THREE.MeshPhysicalMaterial({ color: 0x08060e, roughness: 0.5, clearcoat: 0.4 }))
-    wall.position.set(0, 0.78 + 1.3, MZ); s.add(wall)
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(16, 2.0, 0.3), new THREE.MeshPhysicalMaterial({ color: 0x08060e, roughness: 0.5, clearcoat: 0.4 }))
+    wall.position.set(0, 0.78 + 1.0, MZ); s.add(wall)
     const lip = new THREE.Mesh(new THREE.BoxGeometry(16, 0.03, 0.04), neon(CY, 2.6)); lip.position.set(0, 0.78, MZ + 0.16); s.add(lip)
-    const lip2 = new THREE.Mesh(new THREE.BoxGeometry(16, 0.02, 0.04), neon(MG, 2.4)); lip2.position.set(0, 2.3, MZ + 0.16); s.add(lip2)
+    const lip2 = new THREE.Mesh(new THREE.BoxGeometry(16, 0.02, 0.04), neon(MG, 2.4)); lip2.position.set(0, 2.5, MZ + 0.16); s.add(lip2)
     for (let k = -3; k <= 3; k++) {
-      if (k === 0) continue
+      if (Math.abs(k) < 2) continue
       const x = k * PITCH
       // per-lane neon panel: ring + 5
       const ring = new THREE.Mesh(new THREE.TorusGeometry(0.26, 0.018, 8, 64), neon(k % 2 ? MG : CY, 2.2))
@@ -560,15 +568,15 @@ export class FfScene {
     const sun = new THREE.Mesh(new THREE.RingGeometry(0.6, 0.64, 64, 1, 0, Math.PI), neon(0xff7a3a, 1.8))
     sun.position.set(-7.28, 1.7, -4); sun.rotation.y = Math.PI / 2; s.add(sun)
     // ceiling: perforated acoustic tiles, recessed light panels, beams, neon runs
-    const CH = 3.0
+    const CH = 2.75
     const ct = document.createElement('canvas'); ct.width = ct.height = 256
     const cg = ct.getContext('2d')!
-    cg.fillStyle = '#3a3448'; cg.fillRect(0, 0, 256, 256)
+    cg.fillStyle = '#4a4058'; cg.fillRect(0, 0, 256, 256)
     cg.fillStyle = '#07060a'
     for (let y = 6; y < 256; y += 10) for (let x = 6; x < 256; x += 10) { cg.beginPath(); cg.arc(x, y, 1.6, 0, 7); cg.fill() }
     cg.fillStyle = '#050408'; cg.fillRect(0, 0, 256, 3); cg.fillRect(0, 0, 3, 256)
     const tile = new THREE.CanvasTexture(ct); tile.wrapS = tile.wrapT = THREE.RepeatWrapping; tile.repeat.set(24, 30); tile.colorSpace = THREE.SRGBColorSpace; tile.anisotropy = 8
-    const ceil = new THREE.Mesh(new THREE.PlaneGeometry(16, 20), new THREE.MeshStandardMaterial({ map: tile, roughness: 0.9 }))
+    const ceil = new THREE.Mesh(new THREE.PlaneGeometry(16, 20), new THREE.MeshStandardMaterial({ map: tile, roughness: 0.9, emissiveMap: tile, emissive: 0x9a88c0, emissiveIntensity: 0.55 }))
     ceil.rotation.x = Math.PI / 2; ceil.position.set(0, CH, -3); s.add(ceil)
     const beamMat = new THREE.MeshStandardMaterial({ color: 0x0c0a12, roughness: 0.6 })
     const panelMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xe8f0ff).multiplyScalar(2.2) })
@@ -577,8 +585,12 @@ export class FfScene {
       const nb = new THREE.Mesh(new THREE.BoxGeometry(16, 0.015, 0.02), neon(Math.round(z * 10) % 2 ? MG : CY, 1.8)); nb.position.set(0, CH - 0.225, z + 0.06); s.add(nb)
     }
     for (let k = -3; k <= 3; k++) for (let z = 2.2; z > -LANE_L - 0.5; z -= 1.6) {
-      const pn = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.5), panelMat)
-      pn.rotation.x = Math.PI / 2; pn.position.set(k * PITCH, CH - 0.005, z); s.add(pn)
+      for (const dx of [-0.48, 0.48]) {
+        const pn = new THREE.Mesh(new THREE.CircleGeometry(0.07, 20), panelMat)
+        pn.rotation.x = Math.PI / 2; pn.position.set(k * PITCH + dx, CH - 0.005, z + 0.8); s.add(pn)
+        const can = new THREE.Mesh(new THREE.TorusGeometry(0.085, 0.012, 6, 24), beamMat)
+        can.rotation.x = Math.PI / 2; can.position.set(k * PITCH + dx, CH - 0.01, z + 0.8); s.add(can)
+      }
     }
     // neon runs down each divider line on the ceiling
     for (let k = -3; k <= 3; k++) {
@@ -593,6 +605,27 @@ export class FfScene {
     ra(0xff3ad8, 1.6, 0.95, -2.2, 0.15, 9)
     ra(0xe6ecff, 1.4, 0, -1.0, 1.2, 4)
     for (const k of [-2, -1, 1, 2]) ra(k % 2 ? 0xff60e0 : 0x50e0ff, 3.0, k * PITCH, -2.5, 1.0, 8)
+    // bright neon coves along wall/ceiling edges and the masking-wall top
+    for (const sg of [-1, 1]) {
+      const cv = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 18), neon(sg < 0 ? MG : CY, 4))
+      cv.position.set(sg * 7.25, CH - 0.06, -3); s.add(cv)
+      const cv2 = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 18), neon(sg < 0 ? PK : 0x7a5cff, 3))
+      cv2.position.set(sg * 4.8, CH - 0.04, -3); s.add(cv2)
+    }
+    const cvb = new THREE.Mesh(new THREE.BoxGeometry(16, 0.06, 0.06), neon(MG, 4)); cvb.position.set(0, 2.76, MZ + 0.18); s.add(cvb)
+    const script = (txt: string, col: string, x: number, w: number) => {
+      const c = document.createElement('canvas'); c.width = 1024; c.height = 256
+      const g = c.getContext('2d')!
+      g.font = 'italic 600 120px "Brush Script MT", "Segoe Script", cursive'
+      g.textAlign = 'center'; g.textBaseline = 'middle'
+      g.shadowColor = col; g.shadowBlur = 28; g.fillStyle = col; g.fillText(txt, 512, 132)
+      g.shadowBlur = 6; g.fillStyle = '#ffffff'; g.fillText(txt, 512, 132)
+      const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, w / 4), new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, color: new THREE.Color(1.6, 1.6, 1.6) }))
+      m.position.set(x, 2.08, MZ + 0.17); s.add(m)
+    }
+    script('Fifth Frame', '#28e8ff', 0, 1.6)
+
     // bowler seating silhouettes behind the approach
     const seat = new THREE.MeshPhysicalMaterial({ color: 0x1a1030, roughness: 0.4, clearcoat: 0.8 })
     for (let k = -3; k <= 3; k++) {
@@ -627,10 +660,10 @@ export class FfScene {
       cam.lookAt(0, 0.11, 0.58)
     } else {
       // low cinematic third-person behind the ball; portrait needs a wider vertical FOV
-      cam.fov = aspect < 0.7 ? 40 : 32
+      cam.fov = aspect < 0.7 ? 50 : 38
       const sway = Math.sin(t * 0.25) * 0.015
-      cam.position.set(sway, 0.46, 2.0)
-      cam.lookAt(0, -0.18, -LANE_L)
+      cam.position.set(sway, 0.38, 1.7)
+      cam.lookAt(0, 0.12, -LANE_L)
     }
     cam.updateProjectionMatrix()
   }
