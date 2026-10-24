@@ -10,6 +10,7 @@ import ClaimPage from './pages/ClaimPage'
 import AlertsCenter from './arcade/social/AlertsCenter'
 
 const AdminPage = lazy(() => import('./pages/AdminPage'))
+const FifthFrame3DPreview = lazy(() => import('./arcade/fifthFrame3d/Preview'))
 
 export default function App() {
   return (
@@ -24,6 +25,14 @@ export default function App() {
         <Route path="nova-slide" element={<Navigate to="/" replace />} />
         <Route path="nova-5" element={<Navigate to="/" replace />} />
         <Route path="fifth-frame" element={<FifthFramePage />} />
+        <Route
+          path="fifth-frame/preview"
+          element={
+            <Suspense fallback={null}>
+              <FifthFrame3DPreview />
+            </Suspense>
+          }
+        />
         <Route path="challenge/:id" element={<ChallengePage />} />
         <Route path="claim" element={<ClaimPage />} />
         <Route path="key" element={<KeyPage />} />
