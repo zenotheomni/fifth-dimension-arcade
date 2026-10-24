@@ -7,6 +7,6 @@
 .ff3-title { display: grid; justify-items: center; line-height: 1.05; }
 .ff3-title__eyebrow { font-size: .56rem; letter-spacing: .22em; text-transform: uppercase; color: rgba(0,220,220,.85); }
 .ff3-title__name { font-weight: 900; font-size: 1.1rem; letter-spacing: .1em; background: linear-gradient(90deg,#00c8c4,#b56cff 45%,#ff7a59 75%,#ffc83c); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.ff3-views { position: absolute; left: 50%; bottom: max(1rem, env(safe-area-inset-bottom)); transform: translateX(-50%); display: flex; gap: .35rem; padding: .3rem; border-radius: 999px; background: rgba(10,6,24,.6); border: 1px solid rgba(255,255,255,.1); backdrop-filter: blur(8px); }
+.ff3-views { position: absolute; left: 50%; top: calc(max(.75rem, env(safe-area-inset-top)) + 3.2rem); transform: translateX(-50%); display: flex; gap: .35rem; padding: .3rem; border-radius: 999px; background: rgba(10,6,24,.6); border: 1px solid rgba(255,255,255,.1); backdrop-filter: blur(8px); }
 .ff3-view { border: 0; background: transparent; color: rgba(255,255,255,.75); font-weight: 700; font-size: .74rem; letter-spacing: .08em; text-transform: uppercase; padding: .45rem .9rem; border-radius: 999px; }
 .ff3-view.is-on { background: linear-gradient(90deg,#ffc83c,#ff7a59); color: #160a1e; }

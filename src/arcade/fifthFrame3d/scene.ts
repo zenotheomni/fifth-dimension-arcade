@@ -8,7 +8,8 @@ import { BloomEffect, EffectComposer, EffectPass, RenderPass, SMAAEffect, SMAAPr
 
 const BASE = import.meta.env.BASE_URL
 export const LANE_W = 1.066
-export const LANE_L = 18.29 // foul line → head pin
+// Hero-game cheat: lane shortened from regulation 18.29 m so the rack reads large in portrait (refs do the same).
+export const LANE_L = 6.6 // foul line → head pin
 const GUTTER_R = 0.118
 const BALL_R = 0.109
 const PIN_SPACING = 0.3048
@@ -39,7 +40,7 @@ function maple(): { map: THREE.CanvasTexture; rough: THREE.CanvasTexture } {
   const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647)
   for (let b = 0; b < boards; b++) {
     const t = rnd()
-    const base = [214 + t * 22, 160 + t * 22, 104 + t * 18]
+    const base = [222 + t * 24, 150 + t * 26, 82 + t * 20]
     g.fillStyle = `rgb(${base[0] | 0},${base[1] | 0},${base[2] | 0})`
     g.fillRect(b * bw, 0, bw + 1, H)
     // long grain streaks
@@ -52,8 +53,8 @@ function maple(): { map: THREE.CanvasTexture; rough: THREE.CanvasTexture } {
       g.stroke()
     }
     // board seam
-    g.fillStyle = 'rgba(60,32,14,0.35)'
-    g.fillRect(b * bw, 0, 1, H)
+    g.fillStyle = 'rgba(60,30,10,0.55)'
+    g.fillRect(b * bw, 0, 1.6, H)
     // butt joints
     for (let y = rnd() * 600; y < H; y += 500 + rnd() * 900) { g.fillStyle = 'rgba(70,36,14,0.28)'; g.fillRect(b * bw, y, bw, 1.2) }
   }
@@ -71,7 +72,7 @@ function maple(): { map: THREE.CanvasTexture; rough: THREE.CanvasTexture } {
   const boardX = (n: number) => W - (n - 0.5) * bw // board 1 on the right
   const yAt = (m: number) => H - (m / (LANE_L + 0.9)) * H
   for (const n of [3, 5, 8, 11, 14, 26, 29, 32, 35, 37]) {
-    g.fillStyle = 'rgba(28,14,40,0.85)'; g.beginPath(); g.ellipse(boardX(n), yAt(2.13), 3.2, 3.2 * (H / W) / 8, 0, 0, 7); g.fill()
+    g.fillStyle = 'rgba(28,14,40,0.85)'; g.beginPath(); g.ellipse(boardX(n), yAt(2.13), 4.5, 9, 0, 0, 7); g.fill()
   }
   const arrowRow = [5, 10, 15, 20, 25, 30, 35]
   arrowRow.forEach((n) => {
@@ -79,9 +80,9 @@ function maple(): { map: THREE.CanvasTexture; rough: THREE.CanvasTexture } {
     const y = yAt(4.57 + (3 - off) * 0.3)
     const x = boardX(n)
     g.fillStyle = 'rgba(26,12,40,0.9)'
-    g.beginPath(); g.moveTo(x, y - 46); g.lineTo(x - bw * 0.55, y + 20); g.lineTo(x + bw * 0.55, y + 20); g.closePath(); g.fill()
+    g.beginPath(); g.moveTo(x, y - 90); g.lineTo(x - bw * 0.7, y + 30); g.lineTo(x + bw * 0.7, y + 30); g.closePath(); g.fill()
     g.fillStyle = 'rgba(0,214,210,0.55)'
-    g.beginPath(); g.moveTo(x, y - 36); g.lineTo(x - bw * 0.3, y + 12); g.lineTo(x + bw * 0.3, y + 12); g.closePath(); g.fill()
+    g.beginPath(); g.moveTo(x, y - 70); g.lineTo(x - bw * 0.35, y + 18); g.lineTo(x + bw * 0.35, y + 18); g.closePath(); g.fill()
   })
   // foul line is drawn on the approach, not here
   const map = new THREE.CanvasTexture(c)
@@ -91,7 +92,7 @@ function maple(): { map: THREE.CanvasTexture; rough: THREE.CanvasTexture } {
   const r = document.createElement('canvas'); r.width = 64; r.height = 512
   const rg = r.getContext('2d')!
   const grad = rg.createLinearGradient(0, 512, 0, 0)
-  grad.addColorStop(0, 'rgb(40,40,40)'); grad.addColorStop(0.62, 'rgb(52,52,52)'); grad.addColorStop(0.72, 'rgb(110,110,110)'); grad.addColorStop(1, 'rgb(120,120,120)')
+  grad.addColorStop(0, 'rgb(110,110,110)'); grad.addColorStop(0.62, 'rgb(120,120,120)'); grad.addColorStop(0.72, 'rgb(150,150,150)'); grad.addColorStop(1, 'rgb(160,160,160)')
   rg.fillStyle = grad; rg.fillRect(0, 0, 64, 512)
   const rough = new THREE.CanvasTexture(r)
   return { map, rough }
@@ -138,10 +139,11 @@ async function ballTex(): Promise<THREE.CanvasTexture> {
   }
   // Circle 5 decal on the equator facing camera (u=0.75 → +Z after our rotation)
   try {
-    const logo = await loadImg(`${BASE}art/5d-logo-exact.png`)
-    const sz = 300
+    const logo = await loadImg(`${BASE}art/logo-5-emblem-circle.png`)
+    const sz = 330
     const cx = W * 0.75, cy = H * 0.5
     g.save()
+    g.fillStyle = '#f2eef8'; g.beginPath(); g.ellipse(cx, cy, sz * 0.47, sz * 0.47, 0, 0, 7); g.fill()
     // equirect: compensate horizontal stretch at equator (2:1 map) — width = sz, height = sz
     g.drawImage(logo, cx - sz / 2, cy - sz / 2, sz, sz)
     g.restore()
@@ -159,13 +161,13 @@ function frondTex(): THREE.CanvasTexture {
   for (let y = 20; y < H - 10; y += 9) {
     const f = y / H
     const len = Math.sin(Math.PI * Math.min(1, f * 1.15)) * (W * 0.48)
-    const col = `rgba(${30 + f * 20 | 0},${60 + f * 30 | 0},${40 + f * 10 | 0},1)`
+    const col = `rgba(${40 + f * 40 | 0},${120 + f * 50 | 0},${70 + f * 20 | 0},1)`
     g.strokeStyle = col; g.lineWidth = 5
     for (const sgn of [-1, 1]) {
       g.beginPath(); g.moveTo(W / 2, y); g.quadraticCurveTo(W / 2 + sgn * len * 0.6, y + 10, W / 2 + sgn * len, y + 34); g.stroke()
     }
   }
-  g.strokeStyle = 'rgba(40,40,30,1)'; g.lineWidth = 6; g.beginPath(); g.moveTo(W / 2, 0); g.lineTo(W / 2, H); g.stroke()
+  g.strokeStyle = 'rgba(90,110,50,1)'; g.lineWidth = 6; g.beginPath(); g.moveTo(W / 2, 0); g.lineTo(W / 2, H); g.stroke()
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace
   return t
 }
@@ -298,7 +300,7 @@ export class FfScene {
     const pm = new THREE.PMREMGenerator(this.renderer)
     s.environment = pm.fromScene(this.skyOnlyScene(), 0.04).texture
     s.environmentIntensity = 0.85
-    s.fog = new THREE.FogExp2(0x5a2a5e, 0.0016)
+    s.fog = new THREE.FogExp2(0x4a1e58, 0.0011)
 
     this.lights()
     this.lane()
@@ -327,13 +329,13 @@ export class FfScene {
         void main(){
           vec3 d = normalize(vDir);
           float y = d.y;
-          vec3 peach = vec3(0.95,0.5,0.32);
-          vec3 pink  = vec3(0.78,0.22,0.42);
-          vec3 viol  = vec3(0.36,0.16,0.52);
-          vec3 deep  = vec3(0.05,0.03,0.13);
-          vec3 c = mix(peach, pink, smoothstep(0.0, 0.05, y));
-          c = mix(c, viol, smoothstep(0.04, 0.17, y));
-          c = mix(c, deep, smoothstep(0.15, 0.48, y));
+          vec3 peach = vec3(1.0,0.48,0.22);
+          vec3 pink  = vec3(0.9,0.16,0.48);
+          vec3 viol  = vec3(0.34,0.08,0.55);
+          vec3 deep  = vec3(0.03,0.01,0.1);
+          vec3 c = mix(peach, pink, smoothstep(0.0, 0.03, y));
+          c = mix(c, viol, smoothstep(0.03, 0.14, y));
+          c = mix(c, deep, smoothstep(0.18, 0.42, y));
           // horizon band glow toward the sun
           float sd = max(dot(d, uSun), 0.0);
           c += vec3(1.0,0.55,0.35) * pow(sd, 18.0) * 0.9 * min(1.0, uDisc);
@@ -344,7 +346,7 @@ export class FfScene {
           vec3 sp = floor(d * 420.0);
           float st = step(0.9965, h(sp)) * smoothstep(0.2, 0.55, y);
           c += vec3(0.9,0.9,1.0) * st * (0.55 + 0.45 * sin(uTime*1.7 + h(sp)*40.0));
-          gl_FragColor = vec4(c, 1.0);
+          gl_FragColor = vec4(c * 0.72, 1.0);
         }`,
     })
   }
@@ -416,7 +418,7 @@ export class FfScene {
   private lane() {
     const s = this.scene
     const { map, rough } = maple()
-    const wood = new THREE.MeshPhysicalMaterial({ map, roughnessMap: rough, roughness: 1, metalness: 0, clearcoat: 0.8, clearcoatRoughness: 0.14, envMapIntensity: 0.55 })
+    const wood = new THREE.MeshPhysicalMaterial({ map, roughnessMap: rough, roughness: 1, metalness: 0, clearcoat: 0.45, clearcoatRoughness: 0.22, envMapIntensity: 0.18 })
     const L = LANE_L + 0.9 // include pin deck
     const T = 0.07
     const laneGeo = new THREE.BoxGeometry(LANE_W, T, L)
@@ -528,40 +530,40 @@ export class FfScene {
   /* masking-unit sign: Circle 5 + FIFTH DIMENSION wordmark, near the pin end */
   private async sign() {
     const s = this.scene
-    const W = 3.2, H = 0.9
-    const z = -LANE_L - 1.15
+    const W = 2.5, H = 0.7
+    const z = -LANE_L - 1.25
     const arch = new THREE.Group()
     const frameMat = new THREE.MeshPhysicalMaterial({ color: 0x120d1c, roughness: 0.28, metalness: 0.7, clearcoat: 1 })
     const header = new THREE.Mesh(new THREE.BoxGeometry(W, H, 0.2), frameMat)
-    header.position.set(0, 1.35, z)
+    header.position.set(0, 1.3, z)
     arch.add(header)
     for (const sgn of [-1, 1]) {
-      const post = new THREE.Mesh(new THREE.BoxGeometry(0.22, 1.9, 0.22), frameMat)
-      post.position.set(sgn * (W / 2 - 0.11), 0.55, z)
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.16, 2.2, 0.16), frameMat)
+      post.position.set(sgn * (W / 2 - 0.08), 0.6, z)
       post.castShadow = true
       arch.add(post)
     }
     // thin cyan/violet edge light on the arch (restrained)
     const edge = new THREE.Mesh(new THREE.BoxGeometry(W, 0.018, 0.02), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x00e0e8).multiplyScalar(2) }))
-    edge.position.set(0, 1.35 - H / 2 - 0.01, z + 0.11)
+    edge.position.set(0, 1.3 - H / 2 - 0.01, z + 0.11)
     arch.add(edge)
-    const edge2 = edge.clone(); (edge2.material as THREE.MeshBasicMaterial) = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xc04cff).multiplyScalar(2) }); edge2.position.y = 1.35 + H / 2 + 0.01
+    const edge2 = edge.clone(); (edge2.material as THREE.MeshBasicMaterial) = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xc04cff).multiplyScalar(2) }); edge2.position.y = 1.3 + H / 2 + 0.01
     arch.add(edge2)
     // face texture: logo + wordmark
     const c = document.createElement('canvas'); c.width = 2048; c.height = 576
     const g = c.getContext('2d')!
     g.fillStyle = '#0b0814'; g.fillRect(0, 0, c.width, c.height)
     try {
-      const [logo, word] = await Promise.all([loadImg(`${BASE}art/5d-logo-exact.png`), loadImg(`${BASE}art/5d-wordmark-white.png`)])
-      g.drawImage(logo, 80, 48, 480, 480)
+      const [logo, word] = await Promise.all([loadImg(`${BASE}art/logo-5-emblem-circle.png`), loadImg(`${BASE}art/5d-wordmark-white.png`)])
+      g.fillStyle = '#f4f0f8'; g.beginPath(); g.arc(320, 288, 236, 0, 7); g.fill(); g.drawImage(logo, 80, 48, 480, 480)
       const ww = 1260, wh = ww * (word.height / word.width)
       g.drawImage(word, 640, (c.height - wh) / 2, ww, wh)
     } catch {
       g.fillStyle = '#fff'; g.font = 'bold 150px Inter, sans-serif'; g.fillText('FIFTH DIMENSION', 600, 340)
     }
     const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8
-    const face = new THREE.Mesh(new THREE.PlaneGeometry(W - 0.1, (W - 0.1) * (576 / 2048)), new THREE.MeshBasicMaterial({ map: tex, toneMapped: true, color: new THREE.Color(1.15, 1.15, 1.15) }))
-    face.position.set(0, 1.35, z + 0.105)
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(W - 0.1, (W - 0.1) * (576 / 2048)), new THREE.MeshBasicMaterial({ map: tex, toneMapped: true, color: new THREE.Color(0.85, 0.85, 0.85) }))
+    face.position.set(0, 1.3, z + 0.105)
     arch.add(face)
     s.add(arch)
   }
@@ -569,25 +571,25 @@ export class FfScene {
   /* resort framing: palms in lit planters both sides, low glass rails */
   private resort() {
     const s = this.scene
-    const frondMat = new THREE.MeshStandardMaterial({ map: frondTex(), alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.7, color: 0x9a6a7a })
+    const frondMat = new THREE.MeshStandardMaterial({ map: frondTex(), alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.7, color: 0xffffff, emissive: 0x1a3020 })
     const trunkMat = new THREE.MeshStandardMaterial({ color: 0x3a2a26, roughness: 0.9 })
     const planterMat = new THREE.MeshPhysicalMaterial({ color: 0x15101e, roughness: 0.3, metalness: 0.3, clearcoat: 1 })
     const rimCyan = new THREE.MeshBasicMaterial({ color: new THREE.Color(0x00d8e4).multiplyScalar(1.6) })
-    const zs = [-4.5, -9.5, -14.5, -19.8]
+    const zs = [-2.6, -LANE_L - 2.0, -LANE_L - 4.2]
     zs.forEach((z, i) => {
       for (const sgn of [-1, 1]) {
-        const x = sgn * 2.75
-        const pl = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.45, 0.7, 40), planterMat)
-        pl.position.set(x, 0.35, z)
+        const x = sgn * (i === 0 ? 2.15 : 1.75 + i * 0.35)
+        const pl = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.3, 0.55, 40), planterMat)
+        pl.position.set(x, 0.27, z)
         pl.castShadow = pl.receiveShadow = true
         s.add(pl)
-        const rim = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.012, 8, 64), rimCyan)
-        rim.rotation.x = Math.PI / 2; rim.position.set(x, 0.7, z)
+        const rim = new THREE.Mesh(new THREE.TorusGeometry(0.38, 0.012, 8, 64), rimCyan)
+        rim.rotation.x = Math.PI / 2; rim.position.set(x, 0.55, z)
         s.add(rim)
         const glow = new THREE.PointLight(0x40e0e8, 1.2, 2.4, 2); glow.position.set(x, 0.9, z); s.add(glow)
-        const h = 6.2 + ((i * 3 + (sgn > 0 ? 1 : 0)) % 3) * 0.7
-        const p = palm(h, sgn * (0.9 + (i % 2) * 0.5), frondMat, trunkMat)
-        p.position.set(x, 0.65, z)
+        const h = 3.6 + ((i * 3 + (sgn > 0 ? 1 : 0)) % 3) * 0.5
+        const p = palm(h, -sgn * (0.35 + (i % 2) * 0.2), frondMat, trunkMat)
+        p.position.set(x, 0.5, z)
         s.add(p)
       }
     })
@@ -603,7 +605,7 @@ export class FfScene {
   private ocean() {
     const s = this.scene
     const geo = new THREE.PlaneGeometry(2400, 2400, 1, 1)
-    const mat = new THREE.MeshPhysicalMaterial({ color: 0x1a0f2a, roughness: 0.09, metalness: 0.85, envMapIntensity: 1.25 })
+    const mat = new THREE.MeshPhysicalMaterial({ color: 0x140624, roughness: 0.08, metalness: 0.9, envMapIntensity: 1.1 })
     // ripple normals
     const c = document.createElement('canvas'); c.width = c.height = 256
     const g = c.getContext('2d')!
@@ -619,12 +621,12 @@ export class FfScene {
     mat.normalMap = n; mat.normalScale.set(0.35, 0.35)
     const sea = new THREE.Mesh(geo, mat)
     sea.rotation.x = -Math.PI / 2
-    sea.position.y = -14
+    sea.position.y = -2.2
     s.add(sea)
     this.dynamic.push({ tick: (t) => { n.offset.set(t * 0.004, t * 0.006) } })
     // sun glitter path on the water toward the horizon
     const gl = new THREE.Mesh(new THREE.PlaneGeometry(60, 900), new THREE.MeshBasicMaterial({ color: 0xff9a70, transparent: true, opacity: 0.18, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }))
-    gl.rotation.x = -Math.PI / 2; gl.position.set(30, -13.9, -500)
+    gl.rotation.x = -Math.PI / 2; gl.position.set(12, -2.15, -480); (gl.material as THREE.MeshBasicMaterial).opacity = 0.3
     s.add(gl)
   }
 
@@ -642,18 +644,18 @@ export class FfScene {
         const w = 9 + ((i * 5) % 4) * 3
         const geo = new THREE.CylinderGeometry(w * 0.42, w * 0.55, h, 6, 1)
         const m = new THREE.Mesh(geo, towerMat)
-        m.position.set(cx + (i - count / 2) * 13, -14 + h / 2, -430 - ((i * 13) % 5) * 22)
+        m.position.set(cx + (i - count / 2) * 13, -2.2 + h / 2, -300 - ((i * 13) % 5) * 22)
         m.rotation.y = i * 0.4
         g.add(m)
         if (h > maxH * 0.7) {
           const spire = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 1.2, h * 0.25, 6), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xff8fd0).multiplyScalar(1.2) }))
-          spire.position.set(m.position.x, -14 + h + h * 0.12, m.position.z)
+          spire.position.set(m.position.x, -2.2 + h + h * 0.12, m.position.z)
           g.add(spire)
         }
       }
     }
-    cluster(-175, 13, 150)
-    cluster(170, 11, 120)
+    cluster(-120, 10, 70)
+    cluster(115, 9, 58)
     s.add(g)
   }
 
@@ -674,19 +676,19 @@ export class FfScene {
     const cam = this.camera
     const aspect = cam.aspect
     if (this.view === 'pins') {
-      cam.fov = 30
-      cam.position.set(0.18, 0.62, -LANE_L + 3.6)
-      cam.lookAt(0, 0.2, -LANE_L - 0.45)
+      cam.fov = 40
+      cam.position.set(0.1, 0.8, -LANE_L + 4.6)
+      cam.lookAt(0, 0.42, -LANE_L - 1.0)
     } else if (this.view === 'ball') {
       cam.fov = 34
       cam.position.set(0.3, 0.3, 1.45)
       cam.lookAt(0, 0.11, 0.58)
     } else {
       // low cinematic third-person behind the ball; portrait needs a wider vertical FOV
-      cam.fov = aspect < 0.7 ? 52 : 42
+      cam.fov = aspect < 0.7 ? 40 : 32
       const sway = Math.sin(t * 0.25) * 0.015
-      cam.position.set(sway, 0.5, 1.55)
-      cam.lookAt(0, -0.12, -LANE_L * 0.62)
+      cam.position.set(sway, 0.5, 2.0)
+      cam.lookAt(0, -0.42, -LANE_L)
     }
     cam.updateProjectionMatrix()
   }
