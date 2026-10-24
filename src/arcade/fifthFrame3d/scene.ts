@@ -4,7 +4,7 @@
  * Renderer / post follow the Court Vision + Fifth Glide pattern (ACES, PMREM env, restrained bloom, SMAA).
  */
 import * as THREE from 'three'
-import { BloomEffect, EffectComposer, EffectPass, RenderPass, SMAAEffect, SMAAPreset, ToneMappingEffect, ToneMappingMode } from 'postprocessing'
+import { BloomEffect, BrightnessContrastEffect, HueSaturationEffect, VignetteEffect, EffectComposer, EffectPass, RenderPass, SMAAEffect, SMAAPreset, ToneMappingEffect, ToneMappingMode } from 'postprocessing'
 
 const BASE = import.meta.env.BASE_URL
 export const LANE_W = 1.066
@@ -300,7 +300,7 @@ export class FfScene {
     const pm = new THREE.PMREMGenerator(this.renderer)
     s.environment = pm.fromScene(this.skyOnlyScene(), 0.04).texture
     s.environmentIntensity = 0.85
-    s.fog = new THREE.FogExp2(0x4a1e58, 0.0011)
+    s.fog = new THREE.FogExp2(0x3a1050, 0.0005)
 
     this.lights()
     this.lane()
@@ -316,12 +316,12 @@ export class FfScene {
 
   /* sky dome: peach horizon → pink → violet → cosmic, stars, sun */
   private skyMat?: THREE.ShaderMaterial
-  private makeSkyMat(disc = 2.4) {
+  private makeSkyMat(disc = 1.1) {
     return new THREE.ShaderMaterial({
       side: THREE.BackSide,
       depthWrite: false,
       fog: false,
-      uniforms: { uTime: { value: 0 }, uSun: { value: new THREE.Vector3(0.05, 0.035, -1).normalize() }, uDisc: { value: disc } },
+      uniforms: { uTime: { value: 0 }, uSun: { value: new THREE.Vector3(0.0, 0.03, -1).normalize() }, uDisc: { value: disc } },
       vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
       fragmentShader: `
         varying vec3 vDir; uniform float uTime; uniform vec3 uSun; uniform float uDisc;
@@ -329,24 +329,24 @@ export class FfScene {
         void main(){
           vec3 d = normalize(vDir);
           float y = d.y;
-          vec3 peach = vec3(1.0,0.48,0.22);
-          vec3 pink  = vec3(0.9,0.16,0.48);
-          vec3 viol  = vec3(0.34,0.08,0.55);
+          vec3 peach = vec3(1.0,0.38,0.06);
+          vec3 pink  = vec3(0.92,0.06,0.42);
+          vec3 viol  = vec3(0.26,0.04,0.48);
           vec3 deep  = vec3(0.03,0.01,0.1);
           vec3 c = mix(peach, pink, smoothstep(0.0, 0.03, y));
           c = mix(c, viol, smoothstep(0.03, 0.14, y));
           c = mix(c, deep, smoothstep(0.18, 0.42, y));
           // horizon band glow toward the sun
           float sd = max(dot(d, uSun), 0.0);
-          c += vec3(1.0,0.55,0.35) * pow(sd, 18.0) * 0.9 * min(1.0, uDisc);
+          c += vec3(1.0,0.55,0.35) * pow(sd, 40.0) * 0.55 * min(1.0, uDisc);
           c += vec3(1.0,0.82,0.6) * smoothstep(0.9994, 0.99975, sd) * uDisc; // sun disc
           // below horizon: dark sea haze (dome only, water reflects env)
           c = mix(c, vec3(0.16,0.08,0.2), smoothstep(0.0, -0.08, y));
           // stars only high up
           vec3 sp = floor(d * 420.0);
-          float st = step(0.9965, h(sp)) * smoothstep(0.2, 0.55, y);
+          float st = step(0.9965, h(sp)) * smoothstep(0.1, 0.35, y);
           c += vec3(0.9,0.9,1.0) * st * (0.55 + 0.45 * sin(uTime*1.7 + h(sp)*40.0));
-          gl_FragColor = vec4(c * 0.72, 1.0);
+          gl_FragColor = vec4(c * 0.82, 1.0);
         }`,
     })
   }
@@ -575,10 +575,10 @@ export class FfScene {
     const trunkMat = new THREE.MeshStandardMaterial({ color: 0x3a2a26, roughness: 0.9 })
     const planterMat = new THREE.MeshPhysicalMaterial({ color: 0x15101e, roughness: 0.3, metalness: 0.3, clearcoat: 1 })
     const rimCyan = new THREE.MeshBasicMaterial({ color: new THREE.Color(0x00d8e4).multiplyScalar(1.6) })
-    const zs = [-2.6, -LANE_L - 2.0, -LANE_L - 4.2]
+    const zs = [-0.6, -LANE_L - 3.0, -LANE_L - 6.0]
     zs.forEach((z, i) => {
       for (const sgn of [-1, 1]) {
-        const x = sgn * (i === 0 ? 2.15 : 1.75 + i * 0.35)
+        const x = sgn * [2.15, 1.85, 2.5][i]
         const pl = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.3, 0.55, 40), planterMat)
         pl.position.set(x, 0.27, z)
         pl.castShadow = pl.receiveShadow = true
@@ -588,7 +588,7 @@ export class FfScene {
         s.add(rim)
         const glow = new THREE.PointLight(0x40e0e8, 1.2, 2.4, 2); glow.position.set(x, 0.9, z); s.add(glow)
         const h = 3.6 + ((i * 3 + (sgn > 0 ? 1 : 0)) % 3) * 0.5
-        const p = palm(h, -sgn * (0.35 + (i % 2) * 0.2), frondMat, trunkMat)
+        const p = palm(h, i === 0 ? -sgn * 0.45 : sgn * 0.5, frondMat, trunkMat)
         p.position.set(x, 0.5, z)
         s.add(p)
       }
@@ -605,7 +605,7 @@ export class FfScene {
   private ocean() {
     const s = this.scene
     const geo = new THREE.PlaneGeometry(2400, 2400, 1, 1)
-    const mat = new THREE.MeshPhysicalMaterial({ color: 0x140624, roughness: 0.08, metalness: 0.9, envMapIntensity: 1.1 })
+    const mat = new THREE.MeshPhysicalMaterial({ color: 0x0a0418, roughness: 0.05, metalness: 1.0, envMapIntensity: 1.4 })
     // ripple normals
     const c = document.createElement('canvas'); c.width = c.height = 256
     const g = c.getContext('2d')!
@@ -625,8 +625,8 @@ export class FfScene {
     s.add(sea)
     this.dynamic.push({ tick: (t) => { n.offset.set(t * 0.004, t * 0.006) } })
     // sun glitter path on the water toward the horizon
-    const gl = new THREE.Mesh(new THREE.PlaneGeometry(60, 900), new THREE.MeshBasicMaterial({ color: 0xff9a70, transparent: true, opacity: 0.18, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }))
-    gl.rotation.x = -Math.PI / 2; gl.position.set(12, -2.15, -480); (gl.material as THREE.MeshBasicMaterial).opacity = 0.3
+    const gl = new THREE.Mesh(new THREE.PlaneGeometry(14, 900), new THREE.MeshBasicMaterial({ color: 0xffa060, transparent: true, opacity: 0.18, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }))
+    gl.rotation.x = -Math.PI / 2; gl.position.set(0, -2.15, -470); (gl.material as THREE.MeshBasicMaterial).opacity = 0.75
     s.add(gl)
   }
 
@@ -634,7 +634,7 @@ export class FfScene {
   private skyline() {
     const s = this.scene
     const wt = windowsTex()
-    const towerMat = new THREE.MeshStandardMaterial({ color: 0x1a1028, roughness: 0.5, metalness: 0.4, emissive: 0xffffff, emissiveMap: wt, emissiveIntensity: 0.55 })
+    const towerMat = new THREE.MeshStandardMaterial({ color: 0x1a1028, roughness: 0.5, metalness: 0.4, emissive: 0xffffff, emissiveMap: wt, emissiveIntensity: 1.4 })
     const g = new THREE.Group()
     // two clusters left and right of the vanishing point keep the pins' backdrop clean
     const cluster = (cx: number, count: number, maxH: number) => {
@@ -644,7 +644,7 @@ export class FfScene {
         const w = 9 + ((i * 5) % 4) * 3
         const geo = new THREE.CylinderGeometry(w * 0.42, w * 0.55, h, 6, 1)
         const m = new THREE.Mesh(geo, towerMat)
-        m.position.set(cx + (i - count / 2) * 13, -2.2 + h / 2, -300 - ((i * 13) % 5) * 22)
+        m.position.set(cx + (i - count / 2) * 13, -2.2 + h / 2, -330 - ((i * 13) % 5) * 18)
         m.rotation.y = i * 0.4
         g.add(m)
         if (h > maxH * 0.7) {
@@ -654,8 +654,8 @@ export class FfScene {
         }
       }
     }
-    cluster(-120, 10, 70)
-    cluster(115, 9, 58)
+    cluster(-82, 7, 38)
+    cluster(80, 7, 32)
     s.add(g)
   }
 
@@ -664,7 +664,7 @@ export class FfScene {
     const composer = new EffectComposer(this.renderer, { frameBufferType: THREE.HalfFloatType, multisampling: 4 })
     composer.addPass(new RenderPass(this.scene, this.camera))
     this.bloom = new BloomEffect({ intensity: 0.55, luminanceThreshold: 0.86, luminanceSmoothing: 0.12, mipmapBlur: true, radius: 0.55 })
-    composer.addPass(new EffectPass(this.camera, this.bloom, new ToneMappingEffect({ mode: ToneMappingMode.ACES_FILMIC })))
+    composer.addPass(new EffectPass(this.camera, this.bloom, new ToneMappingEffect({ mode: ToneMappingMode.ACES_FILMIC }), new BrightnessContrastEffect({ contrast: 0.14 }), new HueSaturationEffect({ saturation: 0.08 }), new VignetteEffect({ offset: 0.3, darkness: 0.55 })))
     composer.addPass(new EffectPass(this.camera, new SMAAEffect({ preset: SMAAPreset.HIGH })))
     this.renderer.toneMapping = THREE.NoToneMapping
     this.composer = composer
@@ -677,8 +677,8 @@ export class FfScene {
     const aspect = cam.aspect
     if (this.view === 'pins') {
       cam.fov = 40
-      cam.position.set(0.1, 0.8, -LANE_L + 4.6)
-      cam.lookAt(0, 0.42, -LANE_L - 1.0)
+      cam.position.set(0.0, 0.95, -LANE_L + 6.6)
+      cam.lookAt(0, 0.55, -LANE_L - 1.2)
     } else if (this.view === 'ball') {
       cam.fov = 34
       cam.position.set(0.3, 0.3, 1.45)
